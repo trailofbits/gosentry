@@ -514,80 +514,36 @@ func moduleTypelinks(md *moduledata) []*_type {
 	}
 
 	// Allocate a very rough estimate of the number of types.
-	ret := make([]*_type, 0, (md.etypedesc-md.types)/(2*unsafe.Sizeof(_type{})))
+	ret := make([]*_type, 0, md.typedesclen/(2*unsafe.Sizeof(_type{})))
 
 	td := md.types
 
 	// We have to increment by 1 to match the increment done in
 	// cmd/link/internal/data.go createRelroSect in allocateDataSections.
+	//
+	// We don't do that increment on AIX, but on AIX we need to adjust
+	// for the fact that the runtime.types symbol has a size of 8,
+	// and the type descriptors will follow that. This increment,
+	// followed by the forced alignment to 8, will do that.
 	td++
 
-	for td < md.etypedesc {
+	etypedesc := md.types + md.typedesclen
+	for td < etypedesc {
 		// TODO: The fact that type descriptors are aligned to
 		// 0x20 does not make sense.
-		td = alignUp(td, 0x20)
-
-		// This code must match the data structures built by
-		// cmd/compile/internal/reflectdata/reflect.go:writeType.
+		if GOARCH == "arm" {
+			td = alignUp(td, 0x8)
+		} else if GOOS == "aix" {
+			// The alignment of 8 is forced in the linker on AIX.
+			td = alignUp(td, 0x8)
+		} else {
+			td = alignUp(td, 0x20)
+		}
 
 		typ := (*_type)(unsafe.Pointer(td))
-
 		ret = append(ret, typ)
 
-		var typSize, add uintptr
-		switch typ.Kind_ {
-		case abi.Array:
-			typSize = unsafe.Sizeof(abi.ArrayType{})
-		case abi.Chan:
-			typSize = unsafe.Sizeof(abi.ChanType{})
-		case abi.Func:
-			typSize = unsafe.Sizeof(abi.FuncType{})
-			ft := (*abi.FuncType)(unsafe.Pointer(typ))
-			add = uintptr(ft.NumIn()+ft.NumOut()) * goarch.PtrSize
-		case abi.Interface:
-			typSize = unsafe.Sizeof(abi.InterfaceType{})
-			it := (*abi.InterfaceType)(unsafe.Pointer(typ))
-			add = uintptr(len(it.Methods)) * unsafe.Sizeof(abi.Imethod{})
-		case abi.Map:
-			typSize = unsafe.Sizeof(abi.MapType{})
-		case abi.Pointer:
-			typSize = unsafe.Sizeof(abi.PtrType{})
-		case abi.Slice:
-			typSize = unsafe.Sizeof(abi.SliceType{})
-		case abi.Struct:
-			typSize = unsafe.Sizeof(abi.StructType{})
-			st := (*abi.StructType)(unsafe.Pointer(typ))
-			add = uintptr(len(st.Fields)) * unsafe.Sizeof(abi.StructField{})
-
-		case abi.Bool,
-			abi.Int, abi.Int8, abi.Int16, abi.Int32, abi.Int64,
-			abi.Uint, abi.Uint8, abi.Uint16, abi.Uint32, abi.Uint64, abi.Uintptr,
-			abi.Float32, abi.Float64,
-			abi.Complex64, abi.Complex128,
-			abi.String,
-			abi.UnsafePointer:
-
-			typSize = unsafe.Sizeof(_type{})
-
-		default:
-			println("type descriptor at", hex(td), "is kind", typ.Kind_)
-			throw("invalid type descriptor")
-		}
-
-		td += typSize
-
-		mcount := uintptr(0)
-		if typ.TFlag&abi.TFlagUncommon != 0 {
-			ut := (*abi.UncommonType)(unsafe.Pointer(td))
-			mcount = uintptr(ut.Mcount)
-			td += unsafe.Sizeof(abi.UncommonType{})
-		}
-
-		td += add
-
-		if mcount > 0 {
-			td += mcount * unsafe.Sizeof(abi.Method{})
-		}
+		td += uintptr(typ.DescriptorSize())
 	}
 
 	if moduleToTypelinks == nil {

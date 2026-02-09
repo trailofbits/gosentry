@@ -19,7 +19,7 @@ func (x Uint8x16) AESDecryptLastRound(y Uint32x4) Uint8x16
 // y is the chunk of dw array in use.
 // result = AddRoundKey(InvShiftRows(InvSubBytes(x)), y)
 //
-// Asm: VAESDECLAST, CPU Feature: AVX512VAES
+// Asm: VAESDECLAST, CPU Feature: VAES
 func (x Uint8x32) AESDecryptLastRound(y Uint32x8) Uint8x32
 
 // AESDecryptLastRound performs a series of operations in AES cipher algorithm defined in FIPS 197.
@@ -45,7 +45,7 @@ func (x Uint8x16) AESDecryptOneRound(y Uint32x4) Uint8x16
 // y is the chunk of dw array in use.
 // result = AddRoundKey(InvMixColumns(InvShiftRows(InvSubBytes(x))), y)
 //
-// Asm: VAESDEC, CPU Feature: AVX512VAES
+// Asm: VAESDEC, CPU Feature: VAES
 func (x Uint8x32) AESDecryptOneRound(y Uint32x8) Uint8x32
 
 // AESDecryptOneRound performs a series of operations in AES cipher algorithm defined in FIPS 197.
@@ -71,7 +71,7 @@ func (x Uint8x16) AESEncryptLastRound(y Uint32x4) Uint8x16
 // y is the chunk of w array in use.
 // result = AddRoundKey((ShiftRows(SubBytes(x))), y)
 //
-// Asm: VAESENCLAST, CPU Feature: AVX512VAES
+// Asm: VAESENCLAST, CPU Feature: VAES
 func (x Uint8x32) AESEncryptLastRound(y Uint32x8) Uint8x32
 
 // AESEncryptLastRound performs a series of operations in AES cipher algorithm defined in FIPS 197.
@@ -97,7 +97,7 @@ func (x Uint8x16) AESEncryptOneRound(y Uint32x4) Uint8x16
 // y is the chunk of w array in use.
 // result = AddRoundKey(MixColumns(ShiftRows(SubBytes(x))), y)
 //
-// Asm: VAESENC, CPU Feature: AVX512VAES
+// Asm: VAESENC, CPU Feature: VAES
 func (x Uint8x32) AESEncryptOneRound(y Uint32x8) Uint8x32
 
 // AESEncryptOneRound performs a series of operations in AES cipher algorithm defined in FIPS 197.
@@ -5359,7 +5359,7 @@ func (x Uint32x4) SHA1NextE(y Uint32x4) Uint32x4
 
 /* SHA256Message1 */
 
-// SHA256Message1 does the sigma and addtion of 1 in SHA1 algorithm defined in FIPS 180-4.
+// SHA256Message1 does the sigma and addtion of 1 in SHA256 algorithm defined in FIPS 180-4.
 // x = {W0, W1, W2, W3}
 // y = {W4, 0, 0, 0}
 // result = {W0+σ(W1), W1+σ(W2), W2+σ(W3), W3+σ(W4)}
@@ -5369,7 +5369,7 @@ func (x Uint32x4) SHA256Message1(y Uint32x4) Uint32x4
 
 /* SHA256Message2 */
 
-// SHA256Message2 does the sigma and addition of 3 in SHA1 algorithm defined in FIPS 180-4.
+// SHA256Message2 does the sigma and addition of 3 in SHA256 algorithm defined in FIPS 180-4.
 // x = result of 2
 // y = {0, 0, W14, W15}
 // result = {W16, W17, W18, W19}
@@ -5379,7 +5379,7 @@ func (x Uint32x4) SHA256Message2(y Uint32x4) Uint32x4
 
 /* SHA256TwoRounds */
 
-// SHA256TwoRounds does 2 rounds of B loop to calculate updated state variables in SHA1 algorithm defined in FIPS 180-4.
+// SHA256TwoRounds does 2 rounds of B loop to calculate updated state variables in SHA256 algorithm defined in FIPS 180-4.
 // x = {h, g, d, c}
 // y = {f, e, b, a}
 // z = {W0+K0, W1+K1}

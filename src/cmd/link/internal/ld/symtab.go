@@ -433,7 +433,6 @@ func (ctxt *Link) symtab(pcln *pclntab) []sym.SymKind {
 	ctxt.xdefine("runtime.rodata", sym.SRODATA, 0)
 	ctxt.xdefine("runtime.erodata", sym.SRODATAEND, 0)
 	ctxt.xdefine("runtime.types", sym.SRODATA, 0)
-	ctxt.xdefine("runtime.etypedesc", sym.SRODATA, 0)
 	ctxt.xdefine("runtime.etypes", sym.SRODATA, 0)
 	ctxt.xdefine("runtime.noptrdata", sym.SNOPTRDATA, 0)
 	ctxt.xdefine("runtime.enoptrdata", sym.SNOPTRDATAEND, 0)
@@ -529,6 +528,15 @@ func (ctxt *Link) symtab(pcln *pclntab) []sym.SymKind {
 			if symtype != 0 {
 				ldr.SetCarrierSym(s, symtype)
 			}
+			if ctxt.HeadType == objabi.Haix {
+				// The default alignment is currently 0x20,
+				// which the AIX external linker doesn't
+				// seem to support. To get consistent
+				// alignment on AIX, force alignment to 8.
+				if symalign(ldr, s) > 8 {
+					ldr.SetSymAlign(s, 8)
+				}
+			}
 		}
 	}
 
@@ -619,7 +627,8 @@ func (ctxt *Link) symtab(pcln *pclntab) []sym.SymKind {
 	moduledata.AddAddr(ctxt.Arch, ldr.Lookup("runtime.gcdata", 0))
 	moduledata.AddAddr(ctxt.Arch, ldr.Lookup("runtime.gcbss", 0))
 	moduledata.AddAddr(ctxt.Arch, ldr.Lookup("runtime.types", 0))
-	moduledata.AddAddr(ctxt.Arch, ldr.Lookup("runtime.etypedesc", 0))
+	ctxt.moduledataTypeDescOffset = moduledata.Size()
+	moduledata.AddUint(ctxt.Arch, 0) // filled in by dodataSect
 	moduledata.AddAddr(ctxt.Arch, ldr.Lookup("runtime.etypes", 0))
 	moduledata.AddAddr(ctxt.Arch, ldr.Lookup("runtime.rodata", 0))
 	moduledata.AddAddr(ctxt.Arch, ldr.Lookup("go:func.*", 0))

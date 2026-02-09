@@ -572,6 +572,41 @@ func TestVerifyHostname(t *testing.T) {
 	}
 }
 
+func TestRealResumption(t *testing.T) {
+	testenv.MustHaveExternalNetwork(t)
+
+	config := &Config{
+		ServerName:         "yahoo.com",
+		ClientSessionCache: NewLRUClientSessionCache(0),
+	}
+
+	for range 10 {
+		conn, err := Dial("tcp", "yahoo.com:443", config)
+		if err != nil {
+			t.Log("Dial error:", err)
+			continue
+		}
+		// Do a read to consume the NewSessionTicket messages.
+		fmt.Fprintf(conn, "GET / HTTP/1.1\r\nHost: yahoo.com\r\nConnection: close\r\n\r\n")
+		conn.Read(make([]byte, 4096))
+		conn.Close()
+
+		conn, err = Dial("tcp", "yahoo.com:443", config)
+		if err != nil {
+			t.Log("second Dial error:", err)
+			continue
+		}
+		state := conn.ConnectionState()
+		conn.Close()
+
+		if state.DidResume {
+			return
+		}
+	}
+
+	t.Fatal("no connection used session resumption")
+}
+
 func TestConnCloseBreakingWrite(t *testing.T) {
 	ln := newLocalListener(t)
 	defer ln.Close()
@@ -935,8 +970,8 @@ func TestCloneNonFuncFields(t *testing.T) {
 		}
 	}
 	// Set the unexported fields related to session ticket keys, which are copied with Clone().
+	c1.autoSessionTicketKeys = []ticketKey{c1.ticketKeyFromBytes(c1.SessionTicketKey)}
 	c1.sessionTicketKeys = []ticketKey{c1.ticketKeyFromBytes(c1.SessionTicketKey)}
-	// We explicitly don't copy autoSessionTicketKeys in Clone, so don't set it.
 
 	c2 := c1.Clone()
 	if !reflect.DeepEqual(&c1, c2) {
@@ -2460,13 +2495,4 @@ func (s messageOnlySigner) SignMessage(rand io.Reader, msg []byte, opts crypto.S
 	h.Write(msg)
 	digest := h.Sum(nil)
 	return s.Signer.Sign(rand, digest, opts)
-}
-
-func TestConfigCloneAutoSessionTicketKeys(t *testing.T) {
-	orig := &Config{}
-	orig.ticketKeys(nil)
-	clone := orig.Clone()
-	if slices.Equal(orig.autoSessionTicketKeys, clone.autoSessionTicketKeys) {
-		t.Fatal("autoSessionTicketKeys slice copied in Clone")
-	}
 }
