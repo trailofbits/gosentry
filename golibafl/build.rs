@@ -55,8 +55,22 @@ fn main() -> Result<()> {
         println!("cargo:rerun-if-env-changed=HARNESS_LINK_SEARCH");
         println!("cargo:rerun-if-env-changed=HARNESS_LINK_LIBS");
         println!("cargo:rerun-if-changed={}", harness_lib.display());
-        println!("cargo:rustc-link-search=native={}", dir.display());
-        println!("cargo:rustc-link-lib=static=harness");
+
+        // On macOS, using `-l:libharness.a` without force-loading the archive can
+        // lead to missing Go runtime metadata at link time. The resulting binary
+        // may crash during Go runtime init (e.g. in runtime.itabsinit) before the
+        // Rust `main` even runs.
+        //
+        // Use `-Wl,-force_load,<archive>` to force the linker to include all
+        // objects from the Go-produced archive.
+        #[cfg(target_os = "macos")]
+        println!("cargo:rustc-link-arg=-Wl,-force_load,{}", harness_lib.display());
+
+        #[cfg(not(target_os = "macos"))]
+        {
+            println!("cargo:rustc-link-search=native={}", dir.display());
+            println!("cargo:rustc-link-lib=static=harness");
+        }
 
         if let Ok(extra_search) = env::var("HARNESS_LINK_SEARCH") {
             for dir in extra_search
@@ -146,9 +160,19 @@ fn main() -> Result<()> {
     res?;
 
     // Tell cargo to look for the library in the output directory
-    println!("cargo:rustc-link-search=native={}", out_dir.display());
-    // Tell cargo to link the static Go library
-    println!("cargo:rustc-link-lib=static=harness");
+    let built_harness = out_dir.join("libharness.a");
+
+    #[cfg(target_os = "macos")]
+    println!(
+        "cargo:rustc-link-arg=-Wl,-force_load,{}",
+        built_harness.display()
+    );
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        println!("cargo:rustc-link-search=native={}", out_dir.display());
+        println!("cargo:rustc-link-lib=static=harness");
+    }
 
     Ok(())
 }
