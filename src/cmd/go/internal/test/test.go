@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"flag"
 	"fmt"
 	"internal/coverage"
 	"internal/platform"
@@ -265,6 +266,8 @@ control the execution of any test:
 	    that package. Fuzzing will occur after tests, benchmarks, seed corpora
 	    of other fuzz tests, and examples have completed. See the Fuzzing
 	    section of the testing package documentation for details.
+	    In gosentry, when -fuzz is set, -use-libafl defaults to true
+	    (use -use-libafl=false to opt out).
 
 	-fuzztime t
 	    Run enough iterations of the fuzz target during fuzzing to take t,
@@ -284,10 +287,12 @@ control the execution of any test:
 	-use-libafl
 	    When -fuzz is set, use the LibAFL-based runner shipped with gosentry
 	    instead of Go's native fuzzing engine.
+	    The default is true when -fuzz is set (use -use-libafl=false to opt out).
 
 	-focus-on-new-code={true|false}
 	    When -use-libafl is set, enable LibAFL's git-aware scheduling to prefer
 	    testcases that execute recently changed lines (per git blame).
+	    This flag is required when -use-libafl is set.
 
 	-libafl-config file
 	    When -use-libafl is set, pass a JSONC configuration file (JSON with // comments)
@@ -715,6 +720,24 @@ func runTest(ctx context.Context, cmd *base.Command, args []string) {
 	moduleLoaderState := modload.NewState()
 	pkgArgs, testArgs = testFlags(args)
 	moduleLoaderState.InitWorkfile() // The test command does custom flag processing; initialize workspaces after that.
+
+	// gosentry defaults:
+	// - When fuzzing, default to LibAFL mode.
+	//
+	// This default can be overridden explicitly via -use-libafl=false.
+	if testFuzz != "" {
+		flagsSet := map[string]bool{}
+		CmdTest.Flag.Visit(func(f *flag.Flag) {
+			flagsSet[f.Name] = true
+		})
+
+		// Default to LibAFL when fuzzing, unless the user (or GOFLAGS) explicitly
+		// set -use-libafl.
+		if !flagsSet["use-libafl"] {
+			testUseLibAFL = true
+		}
+
+	}
 
 	if cfg.DebugTrace != "" {
 		var close func() error

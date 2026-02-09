@@ -109,12 +109,21 @@ In practice, this makes any matched call site behave like a crash/panic for fuzz
 
 ## Feature 3: LibAFL state-of-the-art fuzzing
 
-LibAFL performs *way* better than the traditional Go fuzzer. Using the `--use-libafl` flag runs standard Go fuzz tests (`go test -fuzz=...`) **with** [LibAFL](https://github.com/AFLplusplus/LibAFL). The runner is implemented in `golibafl/`. Without `--use-libafl`, the fuzzer behaves like upstream Go. More documentation in [this Markdown file.](misc/gosentry/USE_LIBAFL.md)
+LibAFL performs *way* better than the traditional Go fuzzer. When fuzzing (`go test -fuzz=...`), gosentry uses [LibAFL](https://github.com/AFLplusplus/LibAFL) **by default** (runner in `golibafl/`).
+
+When using LibAFL (default), you must explicitly choose whether to enable git-aware scheduling:
+- `--focus-on-new-code=true`
+- `--focus-on-new-code=false`
+
+To opt out:
+- `--use-libafl=false`: use Go's native fuzzing engine instead of LibAFL.
+
+More documentation in [this Markdown file.](misc/gosentry/USE_LIBAFL.md)
 
 You can also pass an optional config. file for LibAFL, see [here.](misc/gosentry/libafl.config.jsonc)
 
 ```bash
-./bin/go test -fuzz=FuzzHarness --use-libafl --focus-on-new-code=false --libafl-config=path/to/libafl.jsonc # optionnal --libafl-config
+./bin/go test -fuzz=FuzzHarness --focus-on-new-code=false --libafl-config=path/to/libafl.jsonc # optional --libafl-config
 ```
 
 <details>
@@ -183,14 +192,14 @@ You can test it on some fuzzing harnesses in `test/gosentry/examples/`.
 
 ```bash
 cd test/gosentry/examples/reverse
-../../../../bin/go test -fuzz=FuzzReverse --use-libafl --focus-on-new-code=false
+../../../../bin/go test -fuzz=FuzzReverse --focus-on-new-code=false
 ```
 
 ## Feature 4: Git-blame-oriented fuzzing (experimental)
 
 #### Overview
 
-Coverage-guided fuzzing is great at exploring new paths, but it treats all covered code as equally interesting. When fuzzing large codebases, you may want to bias the fuzzer toward recently modified code, where regressions and bugs are more likely to be introduced. In `--use-libafl` mode, gosentry can use `git blame` to prefer inputs that execute recently changed lines (while keeping coverage guidance as the primary signal).
+Coverage-guided fuzzing is great at exploring new paths, but it treats all covered code as equally interesting. When fuzzing large codebases, you may want to bias the fuzzer toward recently modified code, where regressions and bugs are more likely to be introduced. In LibAFL mode, gosentry can use `git blame` to prefer inputs that execute recently changed lines (while keeping coverage guidance as the primary signal).
 
 This work is based on previous work from [LibAFL-git-aware](https://github.com/kevin-valerio/LibAFL-git-aware). All the technical in-depth details are documented there.
 

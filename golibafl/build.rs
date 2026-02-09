@@ -47,7 +47,7 @@ fn main() -> Result<()> {
 
     if let Ok(harness_lib) = env::var("HARNESS_LIB") {
         let harness_lib = PathBuf::from(harness_lib);
-        let dir = harness_lib
+        let _dir = harness_lib
             .parent()
             .ok_or_else(|| anyhow!("HARNESS_LIB must point to a file"))?;
 
@@ -68,7 +68,7 @@ fn main() -> Result<()> {
 
         #[cfg(not(target_os = "macos"))]
         {
-            println!("cargo:rustc-link-search=native={}", dir.display());
+            println!("cargo:rustc-link-search=native={}", _dir.display());
             println!("cargo:rustc-link-lib=static=harness");
         }
 

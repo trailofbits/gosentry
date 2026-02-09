@@ -1407,8 +1407,20 @@ fn fuzz(
     // non-fork mode. If the current working directory is deleted/unlinked (common with temp dirs),
     // this will fail with ENOENT and abort the whole fuzz run on the first crash/timeout.
     //
-    // Use a stable per-process workdir under the output directory to make respawns reliable.
-    let workdir = output.join("workdir").join(std::process::id().to_string());
+    // Use a stable workdir under the output directory to make respawns reliable.
+    //
+    // On macOS, LibAFL's shared memory provider uses a unix socket at
+    // `./libafl_unix_shmem_server` (relative path). All broker/clients must share the
+    // same working directory for this to work, so we use a shared `workdir/`.
+    //
+    // On other unix systems, the shared memory provider uses an abstract domain socket,
+    // so a per-process workdir avoids cross-process surprises if multiple fuzz runs share
+    // the same output directory.
+    let workdir = if cfg!(target_vendor = "apple") {
+        output.join("workdir")
+    } else {
+        output.join("workdir").join(std::process::id().to_string())
+    };
     let _ = fs::create_dir_all(&workdir);
     let _ = env::set_current_dir(&workdir);
 

@@ -219,10 +219,23 @@ fi
 ./cmd/dist/dist bootstrap -a $vflag $GO_DISTFLAGS "$@"
 rm -f ./cmd/dist/dist
 
-# gosentry: keep the system-wide gosentry binary in sync with the freshly-built toolchain.
-# Use an atomic replace (via rename) to avoid "Text file busy" when gosentry is currently running.
-sudo install -m 0755 "$GOROOT/bin/go" /usr/bin/gosentry.new
-sudo mv -f /usr/bin/gosentry.new /usr/bin/gosentry
+# gosentry: optionally keep a system-wide `gosentry` binary in sync with the freshly-built toolchain.
+#
+# Disabled by default because it requires elevated privileges and may not work on
+# systems where /usr/bin is read-only (e.g. macOS with SIP).
+# Enable with: GOSENTRY_INSTALL_SYSTEM_BINARY=1 ./make.bash
+if [[ "${GOSENTRY_INSTALL_SYSTEM_BINARY:-}" == "1" ]]; then
+	target="/usr/local/bin/gosentry"
+	tmp="${target}.new"
+
+	if ! sudo mkdir -p "$(dirname "$target")"; then
+		echo "gosentry: warning: failed to create $(dirname "$target"); skipping system install" >&2
+	elif ! sudo install -m 0755 "$GOROOT/bin/go" "$tmp"; then
+		echo "gosentry: warning: failed to install system-wide binary to $tmp; skipping" >&2
+	elif ! sudo mv -f "$tmp" "$target"; then
+		echo "gosentry: warning: failed to move $tmp to $target; skipping" >&2
+	fi
+fi
 
 # DO NOT ADD ANY NEW CODE BELOW THIS POINT.
 # For gosentry, the bootstrap+rm + install above are the final step of make.bash.

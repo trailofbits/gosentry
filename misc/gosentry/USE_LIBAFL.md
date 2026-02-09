@@ -1,21 +1,29 @@
-# gosentry: `go test -fuzz --use-libafl`
+# gosentry: `go test -fuzz` (LibAFL by default)
 
 gosentry contains:
 
 - `./`: a fork of the Go toolchain
 - `golibafl/`: a LibAFL-based fuzzer that can fuzz Go code in-process via a libFuzzer-style entrypoint.
 
-This repo adds a glue path so a user can keep writing **standard Go fuzz tests** (the ones used by `go test -fuzz=...`) and switch engines with a flag:
+This repo adds a glue path so a user can keep writing **standard Go fuzz tests** (the ones used by `go test -fuzz=...`) and switch engines.
+
+By default, when `-fuzz` is set, gosentry uses the LibAFL runner.
 
 ```bash
-go test -fuzz=FuzzXxx --use-libafl --focus-on-new-code=false
+go test -fuzz=FuzzXxx --focus-on-new-code=false
 ```
 
-Without the flag, `go test -fuzz` behaves like upstream Go.
+To opt out:
+
+```bash
+go test -use-libafl=false -fuzz=FuzzXxx
+```
 
 ## Git-aware scheduling (focus on new code)
 
-When `--use-libafl` is set, `--focus-on-new-code={true|false}` is **required**.
+`--focus-on-new-code={true|false}` enables git-aware scheduling to prefer inputs that execute recently changed lines (based on `git blame`).
+
+This flag only applies in LibAFL mode and is required.
 
 - `--focus-on-new-code=false`: keep the current behavior.
 - `--focus-on-new-code=true`: prefer inputs that execute recently changed lines (based on `git blame`).
@@ -49,7 +57,7 @@ A paired benchmark for `--focus-on-new-code` on a shallow clone of go-ethereum (
 gosentry can pass a JSONC configuration file (JSON with `//` comments) to the LibAFL runner:
 
 ```bash
-go test -fuzz=FuzzXxx --use-libafl --focus-on-new-code=false --libafl-config=libafl.jsonc
+go test -fuzz=FuzzXxx --focus-on-new-code=false --libafl-config=libafl.jsonc
 ```
 
 `golibafl` also needs a TCP broker port for LibAFL's internal event manager. By default, it picks a **random free port** (instead of always `1337`). If you need a fixed port, set `GOLIBAFL_BROKER_PORT=1337` (or pass `-p/--port 1337` when running `golibafl` directly).
@@ -118,7 +126,7 @@ cd src
 
 ```bash
 cd test/gosentry/examples/reverse
-CGO_ENABLED=1 ../../../../bin/go test -fuzz=FuzzReverse --use-libafl --focus-on-new-code=false
+CGO_ENABLED=1 ../../../../bin/go test -fuzz=FuzzReverse --focus-on-new-code=false
 ```
 
 Fuzzing runs until you stop it (Ctrl+C). The run prints `ok ...` on clean shutdown.
@@ -132,7 +140,7 @@ Fuzzing runs until you stop it (Ctrl+C). The run prints `ok ...` on clean shutdo
 
 ## What happens under the hood
 
-When `go test` sees `-fuzz` + `--use-libafl`, it does **not** execute Go’s native fuzzing coordinator/worker engine.
+When `go test` sees `-fuzz` (and `-use-libafl` is true, which is the default), it does **not** execute Go’s native fuzzing coordinator/worker engine.
 Instead it builds a **libFuzzer-compatible harness** and runs the Rust LibAFL runner against it.
 
 ### 1) `go test` builds a libFuzzer harness archive (`libharness.a`)
