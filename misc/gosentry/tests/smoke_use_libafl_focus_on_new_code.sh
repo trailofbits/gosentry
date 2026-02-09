@@ -93,7 +93,7 @@ fi
 output_file="${tmp_dir}/output.txt"
 
 set +e
-CGO_ENABLED=1 timeout 10m "${ROOT_DIR}/bin/go" test -fuzz=FuzzFocus --use-libafl --focus-on-new-code=true 2>&1 | tee "${output_file}"
+CGO_ENABLED=1 timeout 10m "${ROOT_DIR}/bin/go" test -fuzz=FuzzFocus --use-libafl --focus-on-new-code=true --catch-races=false 2>&1 | tee "${output_file}"
 status="${PIPESTATUS[0]}"
 set -e
 

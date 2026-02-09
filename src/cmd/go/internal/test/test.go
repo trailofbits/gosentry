@@ -294,6 +294,11 @@ control the execution of any test:
 	    testcases that execute recently changed lines (per git blame).
 	    This flag is required when -use-libafl is set.
 
+	-catch-races={true|false}
+	    When -use-libafl is set, run a race-instrumented sidecar that replays
+	    new queue seeds under the Go race detector to help catch data races.
+	    This flag is required when -use-libafl is set.
+
 	-libafl-config file
 	    When -use-libafl is set, pass a JSONC configuration file (JSON with // comments)
 	    to the LibAFL runner (implemented in $GOROOT/golibafl).
@@ -571,6 +576,7 @@ var (
 	testFuzz           string                            // -fuzz flag
 	testUseLibAFL      bool                              // -use-libafl flag
 	testFocusOnNewCode explicitBoolFlag                  // -focus-on-new-code flag (required with -use-libafl)
+	testCatchRaces     explicitBoolFlag                  // -catch-races flag (required with -use-libafl)
 	testLibAFLConfig   string                            // -libafl-config flag
 	testPanicOn        string                            // -panic-on flag
 	testJSON           bool                              // -json flag
@@ -765,9 +771,15 @@ func runTest(ctx context.Context, cmd *base.Command, args []string) {
 	if testFocusOnNewCode.set && !testUseLibAFL {
 		base.Fatalf("-focus-on-new-code requires -use-libafl")
 	}
+	if testCatchRaces.set && !testUseLibAFL {
+		base.Fatalf("-catch-races requires -use-libafl")
+	}
 	if testUseLibAFL {
 		if !testFocusOnNewCode.set {
 			base.Fatalf("-use-libafl requires -focus-on-new-code={true|false}")
+		}
+		if !testCatchRaces.set {
+			base.Fatalf("-use-libafl requires -catch-races={true|false}")
 		}
 		if testFuzz == "" {
 			base.Fatalf("-use-libafl requires -fuzz")
@@ -777,6 +789,11 @@ func runTest(ctx context.Context, cmd *base.Command, args []string) {
 		}
 		if !slices.Contains(cfg.BuildContext.BuildTags, "libfuzzer") {
 			cfg.BuildContext.BuildTags = append(cfg.BuildContext.BuildTags, "libfuzzer")
+		}
+	}
+	if testCatchRaces.set && testCatchRaces.val {
+		if !platform.RaceDetectorSupported(cfg.Goos, cfg.Goarch) {
+			base.Fatalf("-catch-races is not supported on %s/%s", cfg.Goos, cfg.Goarch)
 		}
 	}
 	work.VetFlags = testVet.flags
@@ -1478,6 +1495,8 @@ func LLVMFuzzerTestOneInput(data *C.char, size C.size_t) C.int {
 	} else {
 		// run test
 		rta := &runTestActor{
+			loaderstate:       loaderstate,
+			pkgOpts:           pkgOpts,
 			writeCoverMetaAct: writeCoverMetaAct,
 		}
 		runAction = &work.Action{
@@ -1566,6 +1585,9 @@ var tooManyFuzzTestsToFuzz = []byte("\ntesting: warning: -fuzz matches more than
 // runTestActor is the actor for running a test.
 type runTestActor struct {
 	c runCache
+
+	loaderstate *modload.State
+	pkgOpts     load.PackageOpts
 
 	// writeCoverMetaAct points to the pseudo-action for collecting
 	// coverage meta-data files for selected -cover test runs. See the
@@ -1820,12 +1842,32 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 		addEnv       []string
 		addToEnv     string
 		libaflOutDir string
+		catchRaces   bool
+		queueDir     string
+		racesDir     string
 	)
 
 	if testFuzz != "" && testUseLibAFL {
 		golibaflDir := filepath.Join(cfg.GOROOT, "golibafl")
 		if _, err := os.Stat(golibaflDir); err != nil {
 			return fmt.Errorf("golibafl not found at %s", golibaflDir)
+		}
+
+		if os.Getenv("GOSENTRY_LIBAFL_BUILD_ONLY") == "1" {
+			out := os.Getenv("GOSENTRY_LIBAFL_HARNESS_OUT")
+			if out == "" {
+				return errors.New("GOSENTRY_LIBAFL_BUILD_ONLY=1 requires GOSENTRY_LIBAFL_HARNESS_OUT")
+			}
+			if !filepath.IsAbs(out) {
+				out = filepath.Join(base.Cwd(), out)
+			}
+			if err := os.MkdirAll(filepath.Dir(out), 0777); err != nil {
+				return err
+			}
+			if err := sh.CopyFile(out, buildAction.BuiltTarget(), 0666, true); err != nil {
+				return err
+			}
+			return nil
 		}
 
 		libaflOutDir = libaflOutputDir(a.Package, testFuzz)
@@ -1892,6 +1934,11 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 		if testFocusOnNewCode.val {
 			addEnv = append(addEnv, "LIBAFL_GIT_RECENCY_MAPPING_PATH="+filepath.Join(libaflOutDir, "git_recency_map.bin"))
 		}
+		if testCatchRaces.val {
+			catchRaces = true
+			queueDir = filepath.Join(libaflOutDir, "queue")
+			racesDir = filepath.Join(libaflOutDir, "races")
+		}
 	} else {
 		execCmd := work.FindExecCmd()
 		testlogArg := []string{}
@@ -1957,6 +2004,233 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 	ctx, cancel := context.WithTimeout(ctx, testKillTimeout)
 	defer cancel()
 
+	var catchRacesDone chan struct{}
+	if catchRaces {
+		if err := sh.Mkdir(queueDir); err != nil {
+			return err
+		}
+		if err := sh.Mkdir(racesDir); err != nil {
+			return err
+		}
+
+		// Build a -race version of the libafl harness in a subprocess, then build a
+		// dedicated golibafl binary linked against it. Keep them separate from the
+		// main fuzzer binary to avoid cargo target dir conflicts.
+		catchRacesRoot := filepath.Join(libaflOutDir, "catch-races")
+		if err := os.MkdirAll(catchRacesRoot, 0777); err != nil {
+			return err
+		}
+		raceHarnessLib := filepath.Join(catchRacesRoot, "libharness_race.a")
+
+		goExe, err := os.Executable()
+		if err != nil {
+			goExe = os.Args[0]
+		}
+		goArgs := []string{
+			"test",
+			"-race",
+			"-fuzz=" + testFuzz,
+			"--use-libafl",
+			fmt.Sprintf("--focus-on-new-code=%t", testFocusOnNewCode.val),
+			"--catch-races=false",
+		}
+		if testPanicOn != "" {
+			goArgs = append(goArgs, "--panic-on="+testPanicOn)
+		}
+		goArgs = append(goArgs, ".")
+
+		goBuild := exec.CommandContext(ctx, goExe, goArgs...)
+		goBuild.Dir = a.Package.Dir
+		goBuild.Env = slices.Clip(cfg.OrigEnv)
+		goBuild.Env = base.AppendPATH(goBuild.Env)
+		goBuild.Env = base.AppendPWD(goBuild.Env, goBuild.Dir)
+		goBuild.Env = append(goBuild.Env, "GOSENTRY_LIBAFL_BUILD_ONLY=1")
+		goBuild.Env = append(goBuild.Env, "GOSENTRY_LIBAFL_HARNESS_OUT="+raceHarnessLib)
+		goBuild.Stdout = stdout
+		goBuild.Stderr = stdout
+		if err := goBuild.Run(); err != nil {
+			return err
+		}
+		if _, err := os.Stat(raceHarnessLib); err != nil {
+			return fmt.Errorf("catch-races: race harness not found at %s", raceHarnessLib)
+		}
+
+		raceCargoTargetDir := filepath.Join(catchRacesRoot, "cargo-target")
+		if err := os.MkdirAll(raceCargoTargetDir, 0777); err != nil {
+			return err
+		}
+
+		envBase := slices.Clip(cfg.OrigEnv)
+		envBase = base.AppendPATH(envBase)
+		envBase = base.AppendPWD(envBase, cmdDir)
+		if addToEnv != "" {
+			envBase = append(envBase, addToEnv)
+		}
+
+		cargoBuild := exec.CommandContext(ctx, "cargo", "build", "--release")
+		cargoBuild.Dir = cmdDir
+		cargoBuild.Env = slices.Clip(envBase)
+		cargoBuild.Env = append(cargoBuild.Env, "HARNESS_LIB="+raceHarnessLib)
+		cargoBuild.Env = append(cargoBuild.Env, "CARGO_TARGET_DIR="+raceCargoTargetDir)
+		cargoBuild.Stdout = stdout
+		cargoBuild.Stderr = stdout
+		if err := cargoBuild.Run(); err != nil {
+			return err
+		}
+
+		raceRunner := filepath.Join(raceCargoTargetDir, "release", "golibafl"+cfg.ExeSuffix)
+		if _, err := os.Stat(raceRunner); err != nil {
+			return fmt.Errorf("catch-races: race runner not found at %s", raceRunner)
+		}
+
+		catchRacesDone = make(chan struct{})
+		go func() {
+			defer close(catchRacesDone)
+
+			isSeedFile := func(path string, d fs.DirEntry) bool {
+				if d.IsDir() {
+					return false
+				}
+				name := d.Name()
+				if strings.HasPrefix(name, ".") {
+					return false
+				}
+				if strings.HasSuffix(name, ".metadata") {
+					return false
+				}
+				// Skip common OS noise.
+				if name == "Thumbs.db" || name == "Desktop.ini" {
+					return false
+				}
+				if name == ".DS_Store" {
+					return false
+				}
+				_ = path // for future filters
+				return true
+			}
+
+			seen := map[string]struct{}{}
+			_ = filepath.WalkDir(queueDir, func(path string, d fs.DirEntry, err error) error {
+				if err != nil {
+					return nil
+				}
+				if !isSeedFile(path, d) {
+					return nil
+				}
+				seen[path] = struct{}{}
+				return nil
+			})
+
+			copySeed := func(src string) (string, error) {
+				baseName := filepath.Base(src)
+				dst := filepath.Join(racesDir, baseName)
+				if _, err := os.Stat(dst); err == nil {
+					dst = filepath.Join(racesDir, fmt.Sprintf("%s-%d", baseName, time.Now().UnixNano()))
+				}
+
+				in, err := os.Open(src)
+				if err != nil {
+					return "", err
+				}
+				defer in.Close()
+
+				out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
+				if err != nil {
+					return "", err
+				}
+				_, werr := io.Copy(out, in)
+				cerr := out.Close()
+				if werr != nil {
+					return "", werr
+				}
+				if cerr != nil {
+					return "", cerr
+				}
+				return dst, nil
+			}
+
+			runOne := func(seedPath string) ([]byte, error) {
+				var buf bytes.Buffer
+				cmd := exec.CommandContext(ctx, raceRunner, "run", "--input", seedPath)
+				cmd.Dir = cmdDir
+				cmd.Env = slices.Clip(envBase)
+				cmd.Env = append(cmd.Env, "GORACE=halt_on_error=1")
+				cmd.Stdout = &buf
+				cmd.Stderr = &buf
+				err := cmd.Run()
+				return buf.Bytes(), err
+			}
+
+			const workers = 2
+			const repeats = 3
+
+			ticker := time.NewTicker(1 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+				}
+
+				var newSeeds []string
+				_ = filepath.WalkDir(queueDir, func(path string, d fs.DirEntry, err error) error {
+					if err != nil {
+						return nil
+					}
+					if !isSeedFile(path, d) {
+						return nil
+					}
+					if _, ok := seen[path]; ok {
+						return nil
+					}
+					seen[path] = struct{}{}
+					newSeeds = append(newSeeds, path)
+					return nil
+				})
+
+				for _, seedPath := range newSeeds {
+					raceDetected := false
+					for rep := 0; rep < repeats && !raceDetected; rep++ {
+						type res struct {
+							out []byte
+							err error
+						}
+						ch := make(chan res, workers)
+						for i := 0; i < workers; i++ {
+							go func() {
+								out, err := runOne(seedPath)
+								ch <- res{out: out, err: err}
+							}()
+						}
+						for i := 0; i < workers; i++ {
+							r := <-ch
+							if r.err != nil && bytes.Contains(r.out, []byte("DATA RACE")) {
+								raceDetected = true
+							}
+						}
+					}
+
+					if !raceDetected {
+						continue
+					}
+
+					dst, err := copySeed(seedPath)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "catch-races: detected data race on %s (copy failed: %v)\n", seedPath, err)
+					} else {
+						fmt.Fprintf(os.Stderr, "catch-races: detected data race on %s (copied to %s)\n", seedPath, dst)
+						fmt.Fprintf(os.Stderr, "catch-races: repro: GORACE=halt_on_error=1 %s run --input %s\n", raceRunner, dst)
+					}
+
+					// Stop the main fuzzing run; treat data races like bugs/crashes.
+					cancel()
+					return
+				}
+			}
+		}()
+	}
+
 	// Now we're ready to actually run the command.
 	//
 	// If the -o flag is set, or if at some point we change cmd/go to start
@@ -2021,6 +2295,11 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 			break
 		}
 	}
+	// Stop any background catch-races work once the main fuzzer command exits.
+	cancel()
+	if catchRacesDone != nil {
+		<-catchRacesDone
+	}
 
 	out := buf.Bytes()
 	a.TestOutput = &buf
@@ -2056,9 +2335,17 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 
 		base.SetExitStatus(1)
 		if cancelSignaled {
-			fmt.Fprintf(cmd.Stdout, "*** Test killed with %v: ran too long (%v).\n", base.SignalTrace, testKillTimeout)
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				fmt.Fprintf(cmd.Stdout, "*** Test killed with %v: ran too long (%v).\n", base.SignalTrace, testKillTimeout)
+			} else {
+				fmt.Fprintf(cmd.Stdout, "*** Test killed with %v.\n", base.SignalTrace)
+			}
 		} else if cancelKilled {
-			fmt.Fprintf(cmd.Stdout, "*** Test killed: ran too long (%v).\n", testKillTimeout)
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				fmt.Fprintf(cmd.Stdout, "*** Test killed: ran too long (%v).\n", testKillTimeout)
+			} else {
+				fmt.Fprintf(cmd.Stdout, "*** Test killed.\n")
+			}
 		} else if errors.Is(err, exec.ErrWaitDelay) {
 			fmt.Fprintf(cmd.Stdout, "*** Test I/O incomplete %v after exiting.\n", cmd.WaitDelay)
 		}

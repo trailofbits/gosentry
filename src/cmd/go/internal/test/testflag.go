@@ -71,6 +71,7 @@ func init() {
 	cf.String("fuzzminimizetime", "", "")
 	cf.BoolVar(&testUseLibAFL, "use-libafl", false, "")
 	cf.Var(&testFocusOnNewCode, "focus-on-new-code", "")
+	cf.Var(&testCatchRaces, "catch-races", "")
 	cf.StringVar(&testLibAFLConfig, "libafl-config", "", "")
 	cf.StringVar(&testPanicOn, "panic-on", "", "")
 	cf.StringVar(&testTrace, "trace", "", "")

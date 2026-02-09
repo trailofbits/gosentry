@@ -10,7 +10,7 @@ This repo adds a glue path so a user can keep writing **standard Go fuzz tests**
 By default, when `-fuzz` is set, gosentry uses the LibAFL runner.
 
 ```bash
-go test -fuzz=FuzzXxx --focus-on-new-code=false
+go test -fuzz=FuzzXxx --focus-on-new-code=false --catch-races=false
 ```
 
 To opt out:
@@ -29,6 +29,16 @@ This flag only applies in LibAFL mode and is required.
 - `--focus-on-new-code=true`: prefer inputs that execute recently changed lines (based on `git blame`).
 
 Note: `--focus-on-new-code=true` needs `git` (to run `git blame`) and `go tool addr2line` to map coverage counters back to source `file:line`.
+
+## Catching data races (optional)
+
+`--catch-races={true|false}` enables a separate `-race` replay loop that watches the LibAFL `queue/` corpus directory and replays only newly discovered seeds with `GORACE=halt_on_error=1`.
+
+When a race is detected, gosentry prints the exact seed path, copies the seed into `output/races/` (under the LibAFL output directory), and stops the fuzz campaign (treats it like a bug/crash).
+
+This flag only applies in LibAFL mode and is required.
+
+Note: the Go race detector only reports unsynchronized concurrent access between goroutines in a single process. If the target has no concurrency / shared mutable state during the replay run, there may be no races to catch.
 
 `golibafl` stores the generated mapping file under the LibAFL output directory as `git_recency_map.bin` (path provided to the runner via `LIBAFL_GIT_RECENCY_MAPPING_PATH`).
 On large targets, generating this file can take several minutes because it needs to run `go tool addr2line` and `git blame` for many coverage counters.
@@ -57,7 +67,7 @@ A paired benchmark for `--focus-on-new-code` on a shallow clone of go-ethereum (
 gosentry can pass a JSONC configuration file (JSON with `//` comments) to the LibAFL runner:
 
 ```bash
-go test -fuzz=FuzzXxx --focus-on-new-code=false --libafl-config=libafl.jsonc
+go test -fuzz=FuzzXxx --focus-on-new-code=false --catch-races=false --libafl-config=libafl.jsonc
 ```
 
 `golibafl` also needs a TCP broker port for LibAFL's internal event manager. By default, it picks a **random free port** (instead of always `1337`). If you need a fixed port, set `GOLIBAFL_BROKER_PORT=1337` (or pass `-p/--port 1337` when running `golibafl` directly).
@@ -126,7 +136,7 @@ cd src
 
 ```bash
 cd test/gosentry/examples/reverse
-CGO_ENABLED=1 ../../../../bin/go test -fuzz=FuzzReverse --focus-on-new-code=false
+CGO_ENABLED=1 ../../../../bin/go test -fuzz=FuzzReverse --focus-on-new-code=false --catch-races=false
 ```
 
 Fuzzing runs until you stop it (Ctrl+C). The run prints `ok ...` on clean shutdown.

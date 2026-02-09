@@ -77,7 +77,7 @@ However, these errors are usually handled internally (e.g., through retry or pau
 Compile gosentry, then use the `--panic-on` flag.
 
 ```bash
-./bin/go test -fuzz=FuzzHarness --use-libafl --focus-on-new-code=false --panic-on="test_go_panicon.(*Logger).Warning,test_go_panicon.(*Logger).Error"
+./bin/go test -fuzz=FuzzHarness --use-libafl --focus-on-new-code=false --catch-races=false --panic-on="test_go_panicon.(*Logger).Warning,test_go_panicon.(*Logger).Error"
 ```
 
 The example above would panic when either `(*Logger).Warning` or `(*Logger).Error` is called (comma-separated list).
@@ -111,9 +111,11 @@ In practice, this makes any matched call site behave like a crash/panic for fuzz
 
 LibAFL performs *way* better than the traditional Go fuzzer. When fuzzing (`go test -fuzz=...`), gosentry uses [LibAFL](https://github.com/AFLplusplus/LibAFL) **by default** (runner in `golibafl/`).
 
-When using LibAFL (default), you must explicitly choose whether to enable git-aware scheduling:
-- `--focus-on-new-code=true`
-- `--focus-on-new-code=false`
+When using LibAFL (default), you must explicitly choose whether to enable git-aware scheduling: `--focus-on-new-code=true|false`.
+
+You must also explicitly choose whether to enable data race catching: `--catch-races=true|false`.
+
+When `--catch-races=true`, gosentry starts a separate `-race` replay loop that watches the LibAFL `queue/` directory and replays only newly discovered seeds with `GORACE=halt_on_error=1`. On a detected race, gosentry prints the exact seed path and copies the seed into `output/races/` (under the LibAFL output directory) for easy repro.
 
 To opt out:
 - `--use-libafl=false`: use Go's native fuzzing engine instead of LibAFL.
@@ -123,7 +125,7 @@ More documentation in [this Markdown file.](misc/gosentry/USE_LIBAFL.md)
 You can also pass an optional config. file for LibAFL, see [here.](misc/gosentry/libafl.config.jsonc)
 
 ```bash
-./bin/go test -fuzz=FuzzHarness --focus-on-new-code=false --libafl-config=path/to/libafl.jsonc # optional --libafl-config
+./bin/go test -fuzz=FuzzHarness --focus-on-new-code=false --catch-races=false --libafl-config=path/to/libafl.jsonc # optional --libafl-config
 ```
 
 <details>
@@ -192,7 +194,7 @@ You can test it on some fuzzing harnesses in `test/gosentry/examples/`.
 
 ```bash
 cd test/gosentry/examples/reverse
-../../../../bin/go test -fuzz=FuzzReverse --focus-on-new-code=false
+../../../../bin/go test -fuzz=FuzzReverse --focus-on-new-code=false --catch-races=false
 ```
 
 ## Feature 4: Git-blame-oriented fuzzing (experimental)
@@ -208,7 +210,7 @@ This work is based on previous work from [LibAFL-git-aware](https://github.com/k
 Enable git-aware scheduling with `--focus-on-new-code=true`:
 
 ```bash
-./bin/go test -fuzz=FuzzHarness --use-libafl --focus-on-new-code=true
+./bin/go test -fuzz=FuzzHarness --use-libafl --focus-on-new-code=true --catch-races=false
 ```
 
 This mode needs `git` (to run `git blame`) and `go tool addr2line` to map coverage counters back to source `file:line`.
