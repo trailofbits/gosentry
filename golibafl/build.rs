@@ -171,6 +171,7 @@ fn main() -> Result<()> {
     res?;
 
     // Tell cargo to look for the library in the output directory
+    #[cfg(target_os = "macos")]
     let built_harness = out_dir.join("libharness.a");
 
     #[cfg(target_os = "macos")]
