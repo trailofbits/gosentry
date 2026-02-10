@@ -10,7 +10,7 @@ For now, it focuses on five things:
 - Integrating [LibAFL](https://github.com/AFLplusplus/LibAFL) fuzzer: run Go fuzzing harnesses with **LibAFL** for better fuzzing performances.
 - Panicking on [user-provided function call](https://github.com/kevin-valerio/gosentry?tab=readme-ov-file#feature-2-panic-on-selected-functions): catching targeted bugs when certains functions are called (eg., `myapp.(*Logger).Error`).
 - Git-blame-oriented fuzzing (based on [this work](https://github.com/kevin-valerio/LibAFL-git-aware)): when fuzzing with LibAFL mode, you can orientate the fuzzer towards **recently added/edited lines**.
-- Detect **race conditions** at fuzz-time: when fuzzing with LibAFL, gosentry can replay newly found seeds with the Go race detector and treat data races like bugs.
+- Detect **race conditions** and **goroutine leaks** at fuzz-time: when fuzzing with LibAFL, gosentry can replay newly found seeds with the Go race detector (or goleak) and treat findings like bugs.
 
 It especially has **two** objectives:
 - Being easy to use and UX-friendly (_we're tired of complex tools_),
@@ -79,7 +79,7 @@ However, these errors are usually handled internally (e.g., through retry or pau
 Compile gosentry, then use the `--panic-on` flag.
 
 ```bash
-./bin/go test -fuzz=FuzzHarness --use-libafl --focus-on-new-code=false --catch-races=false --panic-on="test_go_panicon.(*Logger).Warning,test_go_panicon.(*Logger).Error"
+./bin/go test -fuzz=FuzzHarness --use-libafl --focus-on-new-code=false --catch-races=false --catch-leaks=false --panic-on="test_go_panicon.(*Logger).Warning,test_go_panicon.(*Logger).Error"
 ```
 
 The example above would panic when either `(*Logger).Warning` or `(*Logger).Error` is called (comma-separated list).
@@ -117,6 +117,8 @@ When using LibAFL (default), you must explicitly choose whether to enable git-aw
 
 You must also explicitly choose whether to enable data race catching: `--catch-races=true|false` (see Feature 5).
 
+You must also explicitly choose whether to enable goroutine leak catching: `--catch-leaks=true|false` (see Feature 5).
+
 To opt out:
 - `--use-libafl=false`: use Go's native fuzzing engine instead of LibAFL.
 
@@ -125,7 +127,7 @@ More documentation in [this Markdown file.](misc/gosentry/USE_LIBAFL.md)
 You can also pass an optional config. file for LibAFL, see [here.](misc/gosentry/libafl.config.jsonc)
 
 ```bash
-./bin/go test -fuzz=FuzzHarness --focus-on-new-code=false --catch-races=false --libafl-config=path/to/libafl.jsonc # optional --libafl-config
+./bin/go test -fuzz=FuzzHarness --focus-on-new-code=false --catch-races=false --catch-leaks=false --libafl-config=path/to/libafl.jsonc # optional --libafl-config
 ```
 
 <details>
@@ -194,7 +196,7 @@ You can test it on some fuzzing harnesses in `test/gosentry/examples/`.
 
 ```bash
 cd test/gosentry/examples/reverse
-../../../../bin/go test -fuzz=FuzzReverse --focus-on-new-code=false --catch-races=false
+../../../../bin/go test -fuzz=FuzzReverse --focus-on-new-code=false --catch-races=false --catch-leaks=false
 ```
 
 ## Feature 4: Git-blame-oriented fuzzing (experimental)
@@ -210,7 +212,7 @@ This work is based on previous work from [LibAFL-git-aware](https://github.com/k
 Enable git-aware scheduling with `--focus-on-new-code=true`:
 
 ```bash
-./bin/go test -fuzz=FuzzHarness --use-libafl --focus-on-new-code=true --catch-races=false
+./bin/go test -fuzz=FuzzHarness --use-libafl --focus-on-new-code=true --catch-races=false --catch-leaks=false
 ```
 
 This mode needs `git` (to run `git blame`) and `go tool addr2line` to map coverage counters back to source `file:line`.
@@ -290,12 +292,24 @@ On a detected race, gosentry prints the exact seed path and copies it into `outp
 
 Note: Go’s race detector only detects data races **inside a single harness execution** (races between goroutines in the same process accessing the same memory without proper synchronization). `--catch-races` will miss races if the seed does not trigger the racy concurrency, and it does not detect cross-process races.
 
+gosentry can also optionally run a `goleak` replay loop that watches the LibAFL `queue/` directory and replays only newly discovered seeds with `go.uber.org/goleak` enabled.
+
+On a detected goroutine leak, gosentry prints the exact seed path and copies it into `output/leaks/` (under the LibAFL output directory) for easy repro.
+
+Note: `goleak` is for **goroutine leaks**, not memory leaks.
+
 #### How to use
 
 Enable race catching with `--catch-races=true` (LibAFL mode only):
 
 ```bash
-./bin/go test -fuzz=FuzzHarness --use-libafl --focus-on-new-code=false --catch-races=true
+./bin/go test -fuzz=FuzzHarness --use-libafl --focus-on-new-code=false --catch-races=true --catch-leaks=false
+```
+
+Enable goroutine leak catching with `--catch-leaks=true` (LibAFL mode only):
+
+```bash
+./bin/go test -fuzz=FuzzHarness --use-libafl --focus-on-new-code=false --catch-races=false --catch-leaks=true
 ```
 
 ## Credits

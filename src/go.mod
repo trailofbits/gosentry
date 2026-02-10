@@ -3,6 +3,7 @@ module std
 go 1.27
 
 require (
+	go.uber.org/goleak v1.3.0
 	golang.org/x/crypto v0.47.1-0.20260113154411-7d0074ccc6f1
 	golang.org/x/net v0.49.1-0.20260122225915-f2078620ee33
 )

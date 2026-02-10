@@ -18,6 +18,8 @@ import (
 	"sync"
 	"syscall"
 	"unsafe"
+
+	"go.uber.org/goleak"
 )
 
 type libaflHarness struct {
@@ -37,6 +39,7 @@ type libaflHarness struct {
 }
 
 var libafl libaflHarness
+var libaflCatchLeaks = os.Getenv("GOSENTRY_LIBAFL_CATCH_LEAKS") == "1"
 
 const (
 	libaflMaxVarLen       = 1 << 20
@@ -191,6 +194,11 @@ func LibAFLFuzzOneInput(data []byte) {
 		panic("libafl fuzz target not initialized")
 	}
 
+	var ignoreExistingGoroutines goleak.Option
+	if libaflCatchLeaks {
+		ignoreExistingGoroutines = goleak.IgnoreCurrent()
+	}
+
 	// Run the fuzz target in a test goroutine so that t.Fatal/t.FailNow
 	// (which call runtime.Goexit) don't unwind the cgo callback goroutine.
 	tstate := newTestState(1, allMatcher())
@@ -224,6 +232,15 @@ func LibAFLFuzzOneInput(data []byte) {
 		// Signal a crash to the LibAFL in-process executor.
 		_ = syscall.Kill(os.Getpid(), syscall.SIGABRT)
 		panic("fuzz target failed")
+	}
+
+	if libaflCatchLeaks {
+		if err := goleak.Find(ignoreExistingGoroutines); err != nil {
+			_, _ = os.Stderr.WriteString("catch-leaks: detected goroutine leak\n")
+			_, _ = os.Stderr.WriteString(err.Error())
+			_, _ = os.Stderr.WriteString("\n")
+			os.Exit(1)
+		}
 	}
 }
 

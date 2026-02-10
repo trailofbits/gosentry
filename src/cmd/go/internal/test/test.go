@@ -301,6 +301,11 @@ control the execution of any test:
 	    new queue seeds under the Go race detector to help catch data races.
 	    This flag is required when -use-libafl is set.
 
+	-catch-leaks={true|false}
+	    When -use-libafl is set, run a goleak sidecar that replays new queue
+	    seeds and checks for leaked goroutines.
+	    This flag is required when -use-libafl is set.
+
 	-libafl-config file
 	    When -use-libafl is set, pass a JSONC configuration file (JSON with // comments)
 	    to the LibAFL runner (implemented in $GOROOT/golibafl).
@@ -579,6 +584,7 @@ var (
 	testUseLibAFL      bool                              // -use-libafl flag
 	testFocusOnNewCode explicitBoolFlag                  // -focus-on-new-code flag (required with -use-libafl)
 	testCatchRaces     explicitBoolFlag                  // -catch-races flag (required with -use-libafl)
+	testCatchLeaks     explicitBoolFlag                  // -catch-leaks flag (required with -use-libafl)
 	testLibAFLConfig   string                            // -libafl-config flag
 	testPanicOn        string                            // -panic-on flag
 	testJSON           bool                              // -json flag
@@ -776,12 +782,18 @@ func runTest(ctx context.Context, cmd *base.Command, args []string) {
 	if testCatchRaces.set && !testUseLibAFL {
 		base.Fatalf("-catch-races requires -use-libafl")
 	}
+	if testCatchLeaks.set && !testUseLibAFL {
+		base.Fatalf("-catch-leaks requires -use-libafl")
+	}
 	if testUseLibAFL {
 		if !testFocusOnNewCode.set {
 			base.Fatalf("-use-libafl requires -focus-on-new-code={true|false}")
 		}
 		if !testCatchRaces.set {
 			base.Fatalf("-use-libafl requires -catch-races={true|false}")
+		}
+		if !testCatchLeaks.set {
+			base.Fatalf("-use-libafl requires -catch-leaks={true|false}")
 		}
 		if testFuzz == "" {
 			base.Fatalf("-use-libafl requires -fuzz")
@@ -1845,8 +1857,10 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 		addToEnv     string
 		libaflOutDir string
 		catchRaces   bool
+		catchLeaks   bool
 		queueDir     string
 		racesDir     string
+		leaksDir     string
 	)
 
 	if testFuzz != "" && testUseLibAFL {
@@ -1936,10 +1950,16 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 		if testFocusOnNewCode.val {
 			addEnv = append(addEnv, "LIBAFL_GIT_RECENCY_MAPPING_PATH="+filepath.Join(libaflOutDir, "git_recency_map.bin"))
 		}
+		if testCatchRaces.val || testCatchLeaks.val {
+			queueDir = filepath.Join(libaflOutDir, "queue")
+		}
 		if testCatchRaces.val {
 			catchRaces = true
-			queueDir = filepath.Join(libaflOutDir, "queue")
 			racesDir = filepath.Join(libaflOutDir, "races")
+		}
+		if testCatchLeaks.val {
+			catchLeaks = true
+			leaksDir = filepath.Join(libaflOutDir, "leaks")
 		}
 	} else {
 		execCmd := work.FindExecCmd()
@@ -2006,6 +2026,16 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 	ctx, cancel := context.WithTimeout(ctx, testKillTimeout)
 	defer cancel()
 
+	var envBase []string
+	if catchRaces || catchLeaks {
+		envBase = slices.Clip(cfg.OrigEnv)
+		envBase = base.AppendPATH(envBase)
+		envBase = base.AppendPWD(envBase, cmdDir)
+		if addToEnv != "" {
+			envBase = append(envBase, addToEnv)
+		}
+	}
+
 	var catchRacesDone chan struct{}
 	if catchRaces {
 		if err := sh.Mkdir(queueDir); err != nil {
@@ -2035,6 +2065,7 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 			"--use-libafl",
 			fmt.Sprintf("--focus-on-new-code=%t", testFocusOnNewCode.val),
 			"--catch-races=false",
+			"--catch-leaks=false",
 		}
 		if testPanicOn != "" {
 			goArgs = append(goArgs, "--panic-on="+testPanicOn)
@@ -2055,13 +2086,6 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 		}
 		if _, err := os.Stat(raceHarnessLib); err != nil {
 			return fmt.Errorf("catch-races: race harness not found at %s", raceHarnessLib)
-		}
-
-		envBase := slices.Clip(cfg.OrigEnv)
-		envBase = base.AppendPATH(envBase)
-		envBase = base.AppendPWD(envBase, cmdDir)
-		if addToEnv != "" {
-			envBase = append(envBase, addToEnv)
 		}
 
 		cargoBuild := exec.CommandContext(ctx, "cargo", "build", "--release")
@@ -2233,6 +2257,167 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 		}()
 	}
 
+	var catchLeaksDone chan struct{}
+	if catchLeaks {
+		if err := sh.Mkdir(queueDir); err != nil {
+			return err
+		}
+		if err := sh.Mkdir(leaksDir); err != nil {
+			return err
+		}
+
+		// Build a dedicated golibafl binary linked against the (non-race) harness.
+		// Keep it separate from the main fuzzer binary to avoid cargo target dir
+		// conflicts while the fuzz campaign is running.
+		catchLeaksRoot := filepath.Join(libaflOutDir, "catch-leaks")
+		if err := os.MkdirAll(catchLeaksRoot, 0777); err != nil {
+			return err
+		}
+
+		cargoBuild := exec.CommandContext(ctx, "cargo", "build", "--release")
+		cargoBuild.Dir = cmdDir
+		cargoBuild.Env = slices.Clip(envBase)
+		cargoBuild.Env = append(cargoBuild.Env, "HARNESS_LIB="+buildAction.BuiltTarget())
+		cargoBuild.Stdout = stdout
+		cargoBuild.Stderr = stdout
+		if err := cargoBuild.Run(); err != nil {
+			return err
+		}
+
+		builtRunner := filepath.Join(cmdDir, "target", "release", "golibafl"+cfg.ExeSuffix)
+		if _, err := os.Stat(builtRunner); err != nil {
+			return fmt.Errorf("catch-leaks: leak runner not found at %s", builtRunner)
+		}
+		leakRunner := filepath.Join(catchLeaksRoot, "golibafl-leak"+cfg.ExeSuffix)
+		if err := sh.CopyFile(leakRunner, builtRunner, 0755, true); err != nil {
+			return err
+		}
+
+		catchLeaksDone = make(chan struct{})
+		go func() {
+			defer close(catchLeaksDone)
+
+			isSeedFile := func(path string, d fs.DirEntry) bool {
+				if d.IsDir() {
+					return false
+				}
+				name := d.Name()
+				if strings.HasPrefix(name, ".") {
+					return false
+				}
+				if strings.HasSuffix(name, ".metadata") {
+					return false
+				}
+				// Skip common OS noise.
+				if name == "Thumbs.db" || name == "Desktop.ini" {
+					return false
+				}
+				if name == ".DS_Store" {
+					return false
+				}
+				_ = path // for future filters
+				return true
+			}
+
+			seen := map[string]struct{}{}
+			_ = filepath.WalkDir(queueDir, func(path string, d fs.DirEntry, err error) error {
+				if err != nil {
+					return nil
+				}
+				if !isSeedFile(path, d) {
+					return nil
+				}
+				seen[path] = struct{}{}
+				return nil
+			})
+
+			copySeed := func(src string) (string, error) {
+				baseName := filepath.Base(src)
+				dst := filepath.Join(leaksDir, baseName)
+				if _, err := os.Stat(dst); err == nil {
+					dst = filepath.Join(leaksDir, fmt.Sprintf("%s-%d", baseName, time.Now().UnixNano()))
+				}
+
+				in, err := os.Open(src)
+				if err != nil {
+					return "", err
+				}
+				defer in.Close()
+
+				out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
+				if err != nil {
+					return "", err
+				}
+				_, werr := io.Copy(out, in)
+				cerr := out.Close()
+				if werr != nil {
+					return "", werr
+				}
+				if cerr != nil {
+					return "", cerr
+				}
+				return dst, nil
+			}
+
+			runOne := func(seedPath string) ([]byte, error) {
+				var buf bytes.Buffer
+				cmd := exec.CommandContext(ctx, leakRunner, "run", "--input", seedPath)
+				cmd.Dir = cmdDir
+				cmd.Env = slices.Clip(envBase)
+				cmd.Env = append(cmd.Env, "GOSENTRY_LIBAFL_CATCH_LEAKS=1")
+				cmd.Stdout = &buf
+				cmd.Stderr = &buf
+				err := cmd.Run()
+				return buf.Bytes(), err
+			}
+
+			ticker := time.NewTicker(1 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+				}
+
+				var newSeeds []string
+				_ = filepath.WalkDir(queueDir, func(path string, d fs.DirEntry, err error) error {
+					if err != nil {
+						return nil
+					}
+					if !isSeedFile(path, d) {
+						return nil
+					}
+					if _, ok := seen[path]; ok {
+						return nil
+					}
+					seen[path] = struct{}{}
+					newSeeds = append(newSeeds, path)
+					return nil
+				})
+
+				for _, seedPath := range newSeeds {
+					out, err := runOne(seedPath)
+					if err == nil || !bytes.Contains(out, []byte("catch-leaks: detected goroutine leak")) {
+						continue
+					}
+
+					dst, err := copySeed(seedPath)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "catch-leaks: detected goroutine leak on %s (copy failed: %v)\n", seedPath, err)
+					} else {
+						fmt.Fprintf(os.Stderr, "catch-leaks: detected goroutine leak on %s (copied to %s)\n", seedPath, dst)
+						fmt.Fprintf(os.Stderr, "catch-leaks: repro: GOSENTRY_LIBAFL_CATCH_LEAKS=1 %s run --input %s\n", leakRunner, dst)
+					}
+
+					// Stop the main fuzzing run; treat goroutine leaks like bugs/crashes.
+					cancel()
+					return
+				}
+			}
+		}()
+	}
+
 	// Now we're ready to actually run the command.
 	//
 	// If the -o flag is set, or if at some point we change cmd/go to start
@@ -2353,10 +2538,13 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 			break
 		}
 	}
-	// Stop any background catch-races work once the main fuzzer command exits.
+	// Stop any background catch-races/catch-leaks work once the main fuzzer command exits.
 	cancel()
 	if catchRacesDone != nil {
 		<-catchRacesDone
+	}
+	if catchLeaksDone != nil {
+		<-catchLeaksDone
 	}
 
 	out := buf.Bytes()

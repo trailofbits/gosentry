@@ -10,7 +10,7 @@ This repo adds a glue path so a user can keep writing **standard Go fuzz tests**
 By default, when `-fuzz` is set, gosentry uses the LibAFL runner.
 
 ```bash
-go test -fuzz=FuzzXxx --focus-on-new-code=false --catch-races=false
+go test -fuzz=FuzzXxx --focus-on-new-code=false --catch-races=false --catch-leaks=false
 ```
 
 To opt out:
@@ -44,6 +44,20 @@ Note: the Go race detector only reports unsynchronized concurrent access between
 
 This repo runs the `--catch-races` smoke test in its own GitHub Actions workflow (`.github/workflows/catch_races.yml`) so it shows up as a separate check.
 
+## Catching goroutine leaks (optional)
+
+`--catch-leaks={true|false}` enables a `goleak` replay loop that watches the LibAFL `queue/` corpus directory and replays only newly discovered seeds with `go.uber.org/goleak`.
+
+When a goroutine leak is detected, gosentry prints the exact seed path, copies the seed into `output/leaks/` (under the LibAFL output directory), and stops the fuzz campaign (treats it like a bug/crash).
+
+This flag only applies in LibAFL mode and is required.
+
+Note: `goleak` is for **goroutine leaks**, not memory leaks.
+
+### CI note
+
+This repo runs the `--catch-leaks` smoke test in its own GitHub Actions workflow (`.github/workflows/catch_leaks.yml`) so it shows up as a separate check.
+
 `golibafl` stores the generated mapping file under the LibAFL output directory as `git_recency_map.bin` (path provided to the runner via `LIBAFL_GIT_RECENCY_MAPPING_PATH`).
 On large targets, generating this file can take several minutes because it needs to run `go tool addr2line` and `git blame` for many coverage counters.
 
@@ -71,7 +85,7 @@ A paired benchmark for `--focus-on-new-code` on a shallow clone of go-ethereum (
 gosentry can pass a JSONC configuration file (JSON with `//` comments) to the LibAFL runner:
 
 ```bash
-go test -fuzz=FuzzXxx --focus-on-new-code=false --catch-races=false --libafl-config=libafl.jsonc
+go test -fuzz=FuzzXxx --focus-on-new-code=false --catch-races=false --catch-leaks=false --libafl-config=libafl.jsonc
 ```
 
 `golibafl` also needs a TCP broker port for LibAFL's internal event manager. By default, it picks a **random free port** (instead of always `1337`). If you need a fixed port, set `GOLIBAFL_BROKER_PORT=1337` (or pass `-p/--port 1337` when running `golibafl` directly).
