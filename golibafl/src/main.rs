@@ -1,13 +1,15 @@
 use clap::{Parser, Subcommand};
 use libafl::{
-    corpus::{CachedOnDiskCorpus, Corpus, OnDiskCorpus},
+    corpus::{CachedOnDiskCorpus, Corpus, OnDiskCorpus, Testcase},
     events::{
         Event, EventFirer, EventManagerHook, EventWithStats, LlmpRestartingEventManager,
         ProgressReporter, SendExiting,
     },
     executors::{inprocess::InProcessExecutor, ExitKind, ShadowExecutor},
     feedback_or_fast,
-    feedbacks::{CrashFeedback, DifferentIsNovel, MapFeedback, MaxMapFeedback},
+    feedbacks::{
+        CrashFeedback, DifferentIsNovel, Feedback, MapFeedback, MaxMapFeedback, StateInitializer,
+    },
     fuzzer::{Fuzzer, StdFuzzer},
     inputs::{BytesInput, HasTargetBytes},
     mutators::scheduled::HavocScheduledMutator,
@@ -87,6 +89,9 @@ where
 struct LibAflFuzzConfig {
     cores: Option<String>,
     exec_timeout_ms: Option<u64>,
+    catch_hangs: Option<bool>,
+    hang_timeout_ms: Option<u64>,
+    hang_confirm_runs: Option<usize>,
     stop_all_fuzzers_on_panic: Option<bool>,
     power_schedule: Option<String>,
     git_recency_alpha: Option<f64>,
@@ -96,6 +101,179 @@ struct LibAflFuzzConfig {
     go_maxprocs_single: Option<bool>,
     tui_monitor: Option<bool>,
     debug_output: Option<bool>,
+}
+
+#[derive(Debug, Clone)]
+struct CrashAndHangObjective {
+    crash: CrashFeedback,
+    catch_hangs: bool,
+    timeout_candidate_path: PathBuf,
+}
+
+impl CrashAndHangObjective {
+    fn new(catch_hangs: bool, timeout_candidate_path: PathBuf) -> Self {
+        Self {
+            crash: CrashFeedback::new(),
+            catch_hangs,
+            timeout_candidate_path,
+        }
+    }
+}
+
+impl<S> StateInitializer<S> for CrashAndHangObjective {}
+
+impl libafl_bolts::Named for CrashAndHangObjective {
+    fn name(&self) -> &std::borrow::Cow<'static, str> {
+        static NAME: std::borrow::Cow<'static, str> =
+            std::borrow::Cow::Borrowed("CrashAndHangObjective");
+        &NAME
+    }
+}
+
+impl<EM, OT, S> Feedback<EM, BytesInput, OT, S> for CrashAndHangObjective {
+    fn is_interesting(
+        &mut self,
+        state: &mut S,
+        manager: &mut EM,
+        input: &BytesInput,
+        observers: &OT,
+        exit_kind: &ExitKind,
+    ) -> Result<bool, Error> {
+        if self.catch_hangs && matches!(exit_kind, ExitKind::Timeout) {
+            let bytes = input.target_bytes();
+            write_atomic_bytes_best_effort(&self.timeout_candidate_path, bytes.as_ref());
+            return Ok(false);
+        }
+
+        self.crash
+            .is_interesting(state, manager, input, observers, exit_kind)
+    }
+
+    fn append_metadata(
+        &mut self,
+        state: &mut S,
+        manager: &mut EM,
+        observers: &OT,
+        testcase: &mut Testcase<BytesInput>,
+    ) -> Result<(), Error> {
+        self.crash
+            .append_metadata(state, manager, observers, testcase)
+    }
+}
+
+fn write_atomic_bytes_best_effort(path: &Path, bytes: &[u8]) {
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+
+    let tmp = path.with_extension(format!("tmp-{}", std::process::id()));
+    if fs::write(&tmp, bytes).is_ok() {
+        let _ = fs::rename(&tmp, path);
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum RunOnceOutcome {
+    Ok,
+    Crash,
+    Timeout,
+}
+
+fn run_once_with_timeout(exe: &Path, input: &Path, timeout: Duration) -> RunOnceOutcome {
+    let mut child = Command::new(exe)
+        .args(["run", "--input"])
+        .arg(input)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap_or_else(|err| {
+            eprintln!("golibafl: failed to spawn {}: {err}", exe.display());
+            std::process::exit(2);
+        });
+
+    let deadline = Instant::now() + timeout;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                return if status.success() {
+                    RunOnceOutcome::Ok
+                } else {
+                    RunOnceOutcome::Crash
+                };
+            }
+            Ok(None) => {
+                if Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return RunOnceOutcome::Timeout;
+                }
+                std::thread::sleep(Duration::from_millis(25));
+            }
+            Err(_) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return RunOnceOutcome::Crash;
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+enum TimeoutCandidateVerdict {
+    NotHang,
+    Hang(PathBuf),
+    Crash(PathBuf),
+}
+
+fn confirm_timeout_candidate(
+    exe: &Path,
+    candidate: &Path,
+    hang_timeout: Duration,
+    hang_confirm_runs: usize,
+    hangs_dir: &Path,
+    crashes_dir: &Path,
+    client_id: &str,
+) -> TimeoutCandidateVerdict {
+    let mut saw_crash = false;
+    for _ in 0..hang_confirm_runs {
+        match run_once_with_timeout(exe, candidate, hang_timeout) {
+            RunOnceOutcome::Ok => {
+                let _ = fs::remove_file(candidate);
+                return TimeoutCandidateVerdict::NotHang;
+            }
+            RunOnceOutcome::Crash => {
+                saw_crash = true;
+                break;
+            }
+            RunOnceOutcome::Timeout => (),
+        }
+    }
+
+    fn move_file_best_effort(src: &Path, dst: &Path) {
+        if fs::rename(src, dst).is_ok() {
+            return;
+        }
+        if fs::copy(src, dst).is_ok() {
+            let _ = fs::remove_file(src);
+        }
+    }
+
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+
+    if saw_crash {
+        let _ = fs::create_dir_all(crashes_dir);
+        let dst = crashes_dir.join(format!("timeout-confirmed-crash-{ts}-client{client_id}.bin"));
+        move_file_best_effort(candidate, &dst);
+        return TimeoutCandidateVerdict::Crash(dst);
+    }
+
+    let _ = fs::create_dir_all(hangs_dir);
+    let dst = hangs_dir.join(format!("hang-{ts}-client{client_id}.bin"));
+    move_file_best_effort(candidate, &dst);
+    TimeoutCandidateVerdict::Hang(dst)
 }
 
 fn launch_diagnostics(err: &Error) -> String {
@@ -1283,6 +1461,9 @@ fn fuzz(
 
     let mut effective_cores = cores.clone();
     let mut exec_timeout = Duration::new(1, 0);
+    let mut catch_hangs = true;
+    let mut hang_timeout = Duration::from_secs(10);
+    let mut hang_confirm_runs = 3usize;
     let mut stop_all_fuzzers_on_panic = true;
     let mut power_schedule = PowerSchedule::fast();
     let mut git_recency_alpha: Option<f64> = None;
@@ -1313,6 +1494,29 @@ fn fuzz(
                 std::process::exit(2);
             }
             exec_timeout = Duration::from_millis(ms);
+        }
+        if let Some(v) = config.catch_hangs {
+            catch_hangs = v;
+        }
+        if let Some(ms) = config.hang_timeout_ms {
+            if ms == 0 {
+                eprintln!(
+                    "golibafl: hang_timeout_ms must be > 0 (config: {})",
+                    config_path.display()
+                );
+                std::process::exit(2);
+            }
+            hang_timeout = Duration::from_millis(ms);
+        }
+        if let Some(n) = config.hang_confirm_runs {
+            if n == 0 {
+                eprintln!(
+                    "golibafl: hang_confirm_runs must be > 0 (config: {})",
+                    config_path.display()
+                );
+                std::process::exit(2);
+            }
+            hang_confirm_runs = n;
         }
         if let Some(v) = config.stop_all_fuzzers_on_panic {
             stop_all_fuzzers_on_panic = v;
@@ -1384,9 +1588,12 @@ fn fuzz(
         debug_output_override = config.debug_output;
 
         println!(
-            "GOLIBAFL_CONFIG_APPLIED cores_ids={} exec_timeout_ms={}",
+            "GOLIBAFL_CONFIG_APPLIED cores_ids={} exec_timeout_ms={} catch_hangs={} hang_timeout_ms={} hang_confirm_runs={}",
             cores_ids_csv(&effective_cores),
             exec_timeout.as_millis(),
+            catch_hangs,
+            hang_timeout.as_millis(),
+            hang_confirm_runs,
         );
     }
 
@@ -1454,6 +1661,23 @@ fn fuzz(
             .unwrap_or_default()
     };
     let count_crash_inputs = |dir: &Path| -> usize { list_crash_inputs(dir).len() };
+    let hang_candidates_dir = output.join("hang_candidates");
+    let hangs_dir = output.join("hangs");
+    let list_hang_inputs = |dir: &Path| -> Vec<PathBuf> {
+        fs::read_dir(dir)
+            .ok()
+            .map(|rd| {
+                rd.filter_map(Result::ok)
+                    .filter(|e| {
+                        !e.file_name().to_string_lossy().starts_with('.')
+                            && e.file_type().is_ok_and(|t| t.is_file())
+                    })
+                    .map(|e| e.path())
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    let count_hang_inputs = |dir: &Path| -> usize { list_hang_inputs(dir).len() };
     if !is_launcher_client && count_crash_inputs(&crashes_dir) > 0 {
         // `go test -fuzz` semantics: if there are pre-existing crashing inputs, replay them.
         // If they no longer crash (because the harness was fixed/recompiled), move them aside
@@ -1547,6 +1771,22 @@ fn fuzz(
             computed_initial_crash_inputs
         }
     };
+    let computed_initial_hang_inputs = count_hang_inputs(&hangs_dir);
+    // The fuzzer process may be respawned by LibAFL's restarting manager. Propagate the initial
+    // hang count across respawns so "stop on first hang" stays correct after a restart.
+    let initial_hang_inputs = match env::var("GOLIBAFL_INITIAL_HANG_INPUTS")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+    {
+        Some(v) => v,
+        None => {
+            env::set_var(
+                "GOLIBAFL_INITIAL_HANG_INPUTS",
+                computed_initial_hang_inputs.to_string(),
+            );
+            computed_initial_hang_inputs
+        }
+    };
     // On macOS, LibAFL's `StdShMemProvider` uses a on-disk unix socket at
     // `./libafl_unix_shmem_server`. If a previous run crashed, a stale socket
     // may be left behind and prevent the shmem service from starting.
@@ -1593,6 +1833,7 @@ fn fuzz(
 	        let client_id = client_description.id().to_string();
 	        let queue_dir = output.join("queue").join(&client_id);
 	        let resume_bucket_dir = output.join("queue.resume").join(&client_id);
+	        let hang_candidate_path = hang_candidates_dir.join(format!("{client_id}.bin"));
 
 	        // Resume on Ctrl-C by re-importing the previous queue/ corpus into a fresh
 	        // on-disk corpus directory, so the fuzzer does not restart from scratch.
@@ -1640,7 +1881,14 @@ fn fuzz(
 	        if stop_all_fuzzers_on_panic && count_crash_inputs(&crashes_dir) > initial_crash_inputs {
 	            restarting_mgr.send_exiting()?;
 	            return Err(Error::shutting_down());
-        }
+	        }
+	        if catch_hangs
+	            && stop_all_fuzzers_on_panic
+	            && count_hang_inputs(&hangs_dir) > initial_hang_inputs
+	        {
+	            restarting_mgr.send_exiting()?;
+	            return Err(Error::shutting_down());
+	        }
 
         if go_maxprocs_single && effective_cores.ids.len() > 1 {
             env::set_var("GOMAXPROCS", "1");
@@ -1684,7 +1932,10 @@ fn fuzz(
                     );
 
                     // A feedback to choose if an input is a solution or not
-                    let mut objective = feedback_or_fast!(CrashFeedback::new());
+                    let mut objective = feedback_or_fast!(CrashAndHangObjective::new(
+                        catch_hangs,
+                        hang_candidate_path.clone()
+                    ));
 
 	                    // create a State from scratch
 	                    let mut state = state.unwrap_or_else(|| {
@@ -1926,6 +2177,46 @@ fn fuzz(
                             return Err(err);
                         }
 
+                        if catch_hangs && hang_candidate_path.exists() {
+                            let exe = env::current_exe().unwrap_or_else(|err| {
+                                eprintln!("golibafl: failed to get current exe path: {err}");
+                                std::process::exit(2);
+                            });
+                            match confirm_timeout_candidate(
+                                &exe,
+                                &hang_candidate_path,
+                                hang_timeout,
+                                hang_confirm_runs,
+                                &hangs_dir,
+                                &crashes_dir,
+                                &client_id,
+                            ) {
+                                TimeoutCandidateVerdict::NotHang => (),
+                                TimeoutCandidateVerdict::Hang(p)
+                                | TimeoutCandidateVerdict::Crash(p) => {
+                                    if verbose {
+                                        eprintln!(
+                                            "golibafl: timeout candidate confirmed; saved: {}",
+                                            p.display()
+                                        );
+                                    }
+                                    if stop_all_fuzzers_on_panic {
+                                        let executions = *state.executions();
+                                        restarting_mgr.fire(
+                                            &mut state,
+                                            EventWithStats::with_current_time(
+                                                Event::<BytesInput>::Stop,
+                                                executions,
+                                            ),
+                                        )?;
+                                        state.request_stop();
+                                        restarting_mgr.send_exiting()?;
+                                        return Err(Error::shutting_down());
+                                    }
+                                }
+                            }
+                        }
+
                         if stop_all_fuzzers_on_panic && state.solutions().count() > initial_solutions {
                             let executions = *state.executions();
                             restarting_mgr.fire(
@@ -2014,31 +2305,72 @@ fn fuzz(
         }
     };
 
+    let hang_inputs = list_hang_inputs(&hangs_dir);
     let crash_inputs = list_crash_inputs(&crashes_dir);
-    if crash_inputs.len() > initial_crash_inputs {
+    let new_hangs = if catch_hangs {
+        hang_inputs.len().saturating_sub(initial_hang_inputs)
+    } else {
+        0
+    };
+    let new_crashes = crash_inputs.len().saturating_sub(initial_crash_inputs);
+
+    if new_hangs > 0 || new_crashes > 0 {
         if !is_launcher_client {
-            let new_crashes = crash_inputs.len() - initial_crash_inputs;
+            if new_hangs > 0 {
+                eprintln!("Found {new_hangs} hanging input(s).");
+                eprintln!("libafl output dir: {}", output.display());
+                eprintln!("hangs dir: {}", hangs_dir.display());
 
-            eprintln!("Found {new_crashes} crashing input(s).");
-            eprintln!("libafl output dir: {}", output.display());
-            eprintln!("crashes dir: {}", crashes_dir.display());
-
-            let mut sorted = crash_inputs;
-            sorted.sort_by_key(|p| {
-                fs::metadata(p)
-                    .and_then(|m| m.modified())
-                    .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
-            });
-            for p in sorted.iter().rev().take(new_crashes) {
-                eprintln!("crash input: {}", p.display());
-                if let Ok(exe) = env::current_exe() {
-                    eprintln!("repro: {} run --input {}", exe.display(), p.display());
-                } else {
-                    eprintln!("repro: golibafl run --input {}", p.display());
+                let mut sorted = hang_inputs;
+                sorted.sort_by_key(|p| {
+                    fs::metadata(p)
+                        .and_then(|m| m.modified())
+                        .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+                });
+                for p in sorted.iter().rev().take(new_hangs) {
+                    eprintln!("hang input: {}", p.display());
+                    if let Ok(exe) = env::current_exe() {
+                        eprintln!(
+                            "repro (kill after {}ms): {} run --input {}",
+                            hang_timeout.as_millis(),
+                            exe.display(),
+                            p.display()
+                        );
+                    } else {
+                        eprintln!(
+                            "repro (kill after {}ms): golibafl run --input {}",
+                            hang_timeout.as_millis(),
+                            p.display()
+                        );
+                    }
                 }
             }
 
-            eprintln!("(Crash output is printed above; rerun the repro command to see it again.)");
+            if new_crashes > 0 {
+                eprintln!("Found {new_crashes} crashing input(s).");
+                eprintln!("libafl output dir: {}", output.display());
+                eprintln!("crashes dir: {}", crashes_dir.display());
+
+                let mut sorted = crash_inputs;
+                sorted.sort_by_key(|p| {
+                    fs::metadata(p)
+                        .and_then(|m| m.modified())
+                        .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+                });
+                for p in sorted.iter().rev().take(new_crashes) {
+                    eprintln!("crash input: {}", p.display());
+                    if let Ok(exe) = env::current_exe() {
+                        eprintln!("repro: {} run --input {}", exe.display(), p.display());
+                    } else {
+                        eprintln!("repro: golibafl run --input {}", p.display());
+                    }
+                }
+
+                eprintln!(
+                    "(Crash output is printed above; rerun the repro command to see it again.)"
+                );
+            }
+
             if stop_all_fuzzers_on_panic {
                 notify_restarting_mgr_exit();
                 std::process::exit(1);

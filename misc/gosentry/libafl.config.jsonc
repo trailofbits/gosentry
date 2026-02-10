@@ -11,6 +11,18 @@
   // default: 1000
   "exec_timeout_ms": 1000,
 
+  // catch_hangs: confirm per-execution timeouts as definitive hangs by replaying the timed-out input.
+  // default: true
+  "catch_hangs": true,
+
+  // hang_timeout_ms: wall-clock timeout for hang confirmation replays (`golibafl run --input ...`).
+  // default: 10000
+  "hang_timeout_ms": 10000,
+
+  // hang_confirm_runs: number of confirmation replays for a timed-out input.
+  // default: 3
+  "hang_confirm_runs": 3,
+
   // stop_all_fuzzers_on_panic: stop the whole fuzzing run on the first crash/panic.
   // default: true
   "stop_all_fuzzers_on_panic": true,

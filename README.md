@@ -10,7 +10,7 @@ For now, it focuses on five things:
 - Integrating [LibAFL](https://github.com/AFLplusplus/LibAFL) fuzzer: run Go fuzzing harnesses with **LibAFL** for better fuzzing performances.
 - Panicking on [user-provided function call](https://github.com/kevin-valerio/gosentry?tab=readme-ov-file#feature-2-panic-on-selected-functions): catching targeted bugs when certains functions are called (eg., `myapp.(*Logger).Error`).
 - Git-blame-oriented fuzzing (based on [this work](https://github.com/kevin-valerio/LibAFL-git-aware)): when fuzzing with LibAFL mode, you can orientate the fuzzer towards **recently added/edited lines**.
-- Detect **race conditions** and **goroutine leaks** at fuzz-time: when fuzzing with LibAFL, gosentry can replay newly found seeds with the Go race detector (or goleak) and treat findings like bugs.
+- Detect **race conditions**, **goroutine leaks**, and **confirmed hangs** at fuzz-time: when fuzzing with LibAFL, gosentry can replay newly found seeds (or timed-out executions) and treat findings like bugs.
 
 It especially has **two** objectives:
 - Being easy to use and UX-friendly (_we're tired of complex tools_),
@@ -23,7 +23,7 @@ It especially has **two** objectives:
   - [Feature 2: Panic on selected functions](#feature-2-panic-on-selected-functions)
   - [Feature 3: LibAFL state-of-the-art fuzzing](#feature-3-libafl-state-of-the-art-fuzzing)
   - [Feature 4: Git-blame-oriented fuzzing (experimental)](#feature-4-git-blame-oriented-fuzzing-experimental)
-  - [Feature 5: Detect race conditions and goroutine leaks at fuzz-time](#feature-5-detect-race-conditions-and-goroutine-leaks-at-fuzz-time)
+  - [Feature 5: Detect race conditions, goroutine leaks, and hangs at fuzz-time](#feature-5-detect-race-conditions-goroutine-leaks-and-hangs-at-fuzz-time)
 - [Credits](#credits)
 
 ## Build
@@ -282,7 +282,18 @@ git-aware median (capped to timeout): 87.432s
 ```
 </details>
 
-## Feature 5: Detect race conditions and goroutine leaks at fuzz-time
+## Feature 5: Detect race conditions, goroutine leaks, and hangs at fuzz-time
+
+##### Catching confirmed hangs (LibAFL timeouts)
+
+When fuzzing with LibAFL, a harness execution can **timeout** (for example because of a deadlock / goroutines stuck waiting, or an extremely slow path).
+
+To reduce false positives, gosentry treats a timeout as a hang candidate and confirms it by replaying the timed-out input a few times with a larger timeout. On a confirmed hang, gosentry writes the input to `output/hangs/` and stops the fuzz campaign (treats it like a bug/crash).
+
+This is configured via `--libafl-config`:
+- `catch_hangs` (default: `true`)
+- `hang_timeout_ms` (default: `10000`)
+- `hang_confirm_runs` (default: `3`)
 
 ##### Catching data races (`--catch-races`)
 

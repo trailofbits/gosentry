@@ -60,6 +60,20 @@ Note: `goleak` is for **goroutine leaks**, not memory leaks.
 
 This repo runs the `--catch-leaks` smoke test in its own GitHub Actions workflow (`.github/workflows/catch_leaks.yml`) so it shows up as a separate check.
 
+## Catching confirmed hangs (optional)
+
+When fuzzing with LibAFL, a harness execution may **timeout** (for example because of a deadlock / goroutines waiting forever, or an extremely slow path).
+
+gosentry can treat a timeout as a **hang candidate**, replay it a few times with a larger timeout to confirm it is a **definitive hang**, then stop the fuzz campaign like a bug/crash.
+
+This is configured via the LibAFL runner JSONC config:
+
+- `catch_hangs` (default: `true`): enable/disable hang confirmation.
+- `hang_timeout_ms` (default: `10000`): wall-clock timeout for each confirmation replay.
+- `hang_confirm_runs` (default: `3`): number of confirmation replays.
+
+On a confirmed hang, `golibafl` writes the input to `output/hangs/` (under the LibAFL output directory) and stops the fuzz campaign when `stop_all_fuzzers_on_panic=true`.
+
 `golibafl` stores the generated mapping file under the LibAFL output directory as `git_recency_map.bin` (path provided to the runner via `LIBAFL_GIT_RECENCY_MAPPING_PATH`).
 On large targets, generating this file can take several minutes because it needs to run `go tool addr2line` and `git blame` for many coverage counters.
 
@@ -103,6 +117,18 @@ Example `libafl.jsonc` (all fields optional; defaults shown in comments):
   // exec_timeout_ms: per-execution timeout for the in-process harness
   // default: 1000
   "exec_timeout_ms": 1000,
+
+  // catch_hangs: confirm per-execution timeouts as definitive hangs by replaying the timed-out input
+  // default: true
+  "catch_hangs": true,
+
+  // hang_timeout_ms: wall-clock timeout for hang confirmation replays (`golibafl run --input ...`)
+  // default: 10000
+  "hang_timeout_ms": 10000,
+
+  // hang_confirm_runs: number of confirmation replays for a timed-out input
+  // default: 3
+  "hang_confirm_runs": 3,
 
   // git_recency_alpha: bias strength for git-aware scheduling when --focus-on-new-code=true
   // min: 0.0
