@@ -284,42 +284,96 @@ git-aware median (capped to timeout): 87.432s
 
 ## Feature 5: Detect race conditions and goroutine leaks at fuzz-time
 
-#### Overview
-
 ##### Catching data races (`--catch-races`)
 
-When fuzzing with LibAFL, gosentry can optionally run a separate `-race` replay loop that watches the LibAFL `queue/` directory and replays only newly discovered seeds with `GORACE=halt_on_error=1`.
+gosentry can run a separate `-race` replay loop that watches the LibAFL `queue/` directory and replays newly discovered seeds with `GORACE=halt_on_error=1`.
 
-On a detected race, gosentry prints the exact seed path and copies it into `output/races/` (under the LibAFL output directory) for easy repro.
-
-Implementation note: the replay loop builds a separate `-race` harness archive for replay-only (no fuzz coverage instrumentation).
+The replay loop builds a separate `-race` harness archive for replay-only (no fuzz coverage instrumentation).
 
 Note: Go’s race detector only detects data races **inside a single harness execution** (races between goroutines in the same process accessing the same memory without proper synchronization). `--catch-races` will miss races if the seed does not trigger the racy concurrency, and it does not detect cross-process races.
 
+<details>
+<summary><strong>How data race mode works</strong></summary>
+
+This mode starts a small monitor inside `go test` (same parent process), and it runs for the whole fuzz campaign.
+
+- When: before the main LibAFL fuzzing process is started, gosentry builds the replay harness + runner.
+- Monitoring: a goroutine polls `<libafl output dir>/queue/` every ~1s, keeps a `seen` set of files, and only replays newly created seeds (skips dotfiles and `*.metadata`).
+
+```text
+┌───────────────────────────────────────────────────────────────────────────┐
+│ 1) Main LibAFL fuzzing run                                                 │
+│    - `golibafl` writes new seeds to `output/queue/`                        │
+└───────────────┬───────────────────────────────────────────────────────────┘
+                v
+┌───────────────────────────────────────────────────────────────────────────┐
+│ 2) `--catch-races` sidecar setup                                           │
+│    - builds replay harness: `libharness_race.a` (`go test -race ...`)      │
+│    - builds replay runner: `golibafl-race` (linked against race harness)   │
+└───────────────┬───────────────────────────────────────────────────────────┘
+                v
+┌───────────────────────────────────────────────────────────────────────────┐
+│ 3) Replay loop                                                             │
+│    - polls `output/queue/` for new seeds                                   │
+│    - runs: `GORACE=halt_on_error=1 golibafl-race run --input <seed>`       │
+│      (2 workers × 3 repeats per seed)                                      │
+└───────────────┬───────────────────────────────────────────────────────────┘
+                v
+┌───────────────────────────────────────────────────────────────────────────┐
+│ 4) On "DATA RACE"                                                          │
+│    - copies seed to `output/races/`                                        │
+│    - stops the fuzz campaign (treat as bug/crash)                          │
+└───────────────────────────────────────────────────────────────────────────┘
+```
+</details>
+
 ##### Catching goroutine leaks (`--catch-leaks`)
 
-When fuzzing with LibAFL, gosentry can also optionally run a `goleak` replay loop that watches the LibAFL `queue/` directory and replays only newly discovered seeds with `go.uber.org/goleak` enabled.
+gosentry can also run a `goleak` replay loop that watches the LibAFL `queue/` directory and replays newly discovered seeds with `go.uber.org/goleak` enabled.
 
-On a detected goroutine leak, gosentry prints the exact seed path and copies it into `output/leaks/` (under the LibAFL output directory) for easy repro.
+On a detected goroutine leak, gosentry prints the exact seed path and copies it into `output/leaks/`.
 
 Note: `goleak` is for **goroutine leaks**, not memory leaks.
 
+<details>
+<summary><strong>How goroutine leaks mode works</strong></summary>
+
+This mode also starts a small monitor inside `go test` (same parent process), and it runs for the whole fuzz campaign.
+- Monitoring: a goroutine polls `<libafl output dir>/queue/` every ~1s and replays each new seed with `GOSENTRY_LIBAFL_CATCH_LEAKS=1` (enables `go.uber.org/goleak` after each execution).
+
+```text
+┌───────────────────────────────────────────────────────────────────────────┐
+│ 1) Main LibAFL fuzzing run                                                 │
+│    - `golibafl` writes new seeds to `output/queue/`                        │
+└───────────────┬───────────────────────────────────────────────────────────┘
+                v
+┌───────────────────────────────────────────────────────────────────────────┐
+│ 2) `--catch-leaks` sidecar setup                                           │
+│    - builds replay runner: `golibafl-leak` (linked against the harness)    │
+└───────────────┬───────────────────────────────────────────────────────────┘
+                v
+┌───────────────────────────────────────────────────────────────────────────┐
+│ 3) Replay loop                                                             │
+│    - polls `output/queue/` for new seeds                                   │
+│    - runs: `GOSENTRY_LIBAFL_CATCH_LEAKS=1 golibafl-leak run --input <seed>`│
+│      (enables `go.uber.org/goleak` checks after each execution)            │
+└───────────────┬───────────────────────────────────────────────────────────┘
+                v
+┌───────────────────────────────────────────────────────────────────────────┐
+│ 4) On "catch-leaks: detected goroutine leak"                               │
+│    - copies seed to `output/leaks/`                                        │
+│    - stops the fuzz campaign (treat as bug/crash)                          │
+└───────────────────────────────────────────────────────────────────────────┘
+```
+</details>
+
+
 #### How to use
 
-##### Data races
-
-Enable race catching with `--catch-races=true` (LibAFL mode only):
+Enable goroutine leak catching with `--catch-leaks=true` or race catching with `--catch-races=true`
 
 ```bash
-./bin/go test -fuzz=FuzzHarness --use-libafl --focus-on-new-code=false --catch-races=true --catch-leaks=false
-```
-
-##### Goroutine leaks
-
-Enable goroutine leak catching with `--catch-leaks=true` (LibAFL mode only):
-
-```bash
-./bin/go test -fuzz=FuzzHarness --use-libafl --focus-on-new-code=false --catch-races=false --catch-leaks=true
+./bin/go test -fuzz=FuzzHarness --use-libafl --focus-on-new-code=false --catch-races=true --catch-leaks=true
 ```
 
 ## Credits

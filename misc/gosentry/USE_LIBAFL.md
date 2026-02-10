@@ -146,6 +146,10 @@ If you see a panic like `BUG: The current message never got committed using send
 - `golibafl/build.rs` derives the `-l static=...` library name from `HARNESS_LIB` (for example `libharness_race.a` becomes `-l static=harness_race`). This matters for `--catch-races`, which builds `libharness_race.a` in a separate directory on CI/Linux.
 - `golibafl/build.rs`: `built_harness` is now declared only on macOS (`cfg(target_os = "macos")`) to avoid `unused variable` warnings on non-macOS targets (no behavior change).
 
+### Documentation notes
+
+- `README.md` now includes short flow diagrams for `--catch-races` and `--catch-leaks` (Feature 5), including when the dedicated replay runner is built, where it is copied, and how the queue monitoring works.
+
 ### Replay-only harness builds
 
 `--catch-races` needs a separate `-race` harness archive (`libharness_race.a`) to replay seeds with the Go race detector.
