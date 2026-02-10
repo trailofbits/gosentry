@@ -292,6 +292,8 @@ When fuzzing with LibAFL, gosentry can optionally run a separate `-race` replay 
 
 On a detected race, gosentry prints the exact seed path and copies it into `output/races/` (under the LibAFL output directory) for easy repro.
 
+Implementation note: the replay loop builds a separate `-race` harness archive for replay-only (no fuzz coverage instrumentation).
+
 Note: Go’s race detector only detects data races **inside a single harness execution** (races between goroutines in the same process accessing the same memory without proper synchronization). `--catch-races` will miss races if the seed does not trigger the racy concurrency, and it does not detect cross-process races.
 
 ##### Catching goroutine leaks (`--catch-leaks`)

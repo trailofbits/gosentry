@@ -146,6 +146,14 @@ If you see a panic like `BUG: The current message never got committed using send
 - `golibafl/build.rs` derives the `-l static=...` library name from `HARNESS_LIB` (for example `libharness_race.a` becomes `-l static=harness_race`). This matters for `--catch-races`, which builds `libharness_race.a` in a separate directory on CI/Linux.
 - `golibafl/build.rs`: `built_harness` is now declared only on macOS (`cfg(target_os = "macos")`) to avoid `unused variable` warnings on non-macOS targets (no behavior change).
 
+### Replay-only harness builds
+
+`--catch-races` needs a separate `-race` harness archive (`libharness_race.a`) to replay seeds with the Go race detector.
+That harness is built via a nested `go test` subprocess with `GOSENTRY_LIBAFL_BUILD_ONLY=1`.
+
+When `GOSENTRY_LIBAFL_BUILD_ONLY=1`, gosentry intentionally disables fuzz coverage instrumentation (`-d=libfuzzer`) for the harness build.
+The replay runner only needs to execute inputs, not measure coverage, and keeping the `-race` replay harness uninstrumented avoids mixing the fuzzing coverage instrumentation with the race detector build.
+
 ## Quick start
 
 1) Build the forked toolchain:

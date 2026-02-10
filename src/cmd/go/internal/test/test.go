@@ -1039,7 +1039,12 @@ func runTest(ctx context.Context, cmd *base.Command, args []string) {
 
 	// Inform the compiler that it should instrument the binary at
 	// build-time when fuzzing is enabled.
-	if testFuzz != "" {
+	//
+	// When building a LibAFL harness for replay-only (for example the
+	// `--catch-races` -race harness), we don't need coverage instrumentation.
+	// Keeping the replay harness uninstrumented avoids mixing fuzz coverage
+	// instrumentation with the race detector build.
+	if testFuzz != "" && os.Getenv("GOSENTRY_LIBAFL_BUILD_ONLY") != "1" {
 		// Don't instrument packages which may affect coverage guidance but are
 		// unlikely to be useful. Most of these are used by the testing or
 		// internal/fuzz packages concurrently with fuzzing.
