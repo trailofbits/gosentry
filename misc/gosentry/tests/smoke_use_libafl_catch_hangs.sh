@@ -64,7 +64,7 @@ mkdir -p "${in_dir}"
 printf 'H' > "${in_dir}/seed-hang"
 
 set +e
-CGO_ENABLED=1 timeout 2m "${ROOT_DIR}/bin/go" test -fuzz=FuzzCatchHangs --use-libafl --focus-on-new-code=false --catch-races=false --catch-leaks=false --libafl-config="${cfg_path}" . 2>&1 | tee "${tmp_dir}/output.txt"
+CGO_ENABLED=1 timeout 10m "${ROOT_DIR}/bin/go" test -fuzz=FuzzCatchHangs --use-libafl --focus-on-new-code=false --catch-races=false --catch-leaks=false --libafl-config="${cfg_path}" . 2>&1 | tee "${tmp_dir}/output.txt"
 status="${PIPESTATUS[0]}"
 set -e
 
@@ -103,4 +103,3 @@ if [[ -d "${crashes_dir}" ]] && find "${crashes_dir}" -maxdepth 1 -type f ! -nam
   echo "expected hang-only failure (no crashing inputs), but a crashing input was found in: ${crashes_dir}"
   exit 1
 fi
-

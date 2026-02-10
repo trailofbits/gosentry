@@ -2117,11 +2117,55 @@ fn fuzz(
 	                                    );
 	                                }
 	                            }
-	                            if disk_inputs == 0 {
-	                                // Generator of printable bytearrays of max size initial_input_max_len
-	                                let mut generator = RandBytesGenerator::new(initial_input_max_len);
+		                            if disk_inputs == 0 {
+		                                // If importing the initial corpus already produced timeouts,
+		                                // confirm them immediately. Otherwise, we may get stuck trying
+		                                // to generate a non-timing-out initial corpus for a hangy
+		                                // target.
+		                                if catch_hangs && hang_candidate_path.exists() {
+		                                    let exe = env::current_exe().unwrap_or_else(|err| {
+		                                        eprintln!("golibafl: failed to get current exe path: {err}");
+		                                        std::process::exit(2);
+		                                    });
+		                                    match confirm_timeout_candidate(
+		                                        &exe,
+		                                        &hang_candidate_path,
+		                                        hang_timeout,
+		                                        hang_confirm_runs,
+		                                        &hangs_dir,
+		                                        &crashes_dir,
+		                                        &client_id,
+		                                    ) {
+		                                        TimeoutCandidateVerdict::NotHang => (),
+		                                        TimeoutCandidateVerdict::Hang(p)
+		                                        | TimeoutCandidateVerdict::Crash(p) => {
+		                                            if verbose {
+		                                                eprintln!(
+		                                                    "golibafl: timeout candidate confirmed during init load; saved: {}",
+		                                                    p.display()
+		                                                );
+		                                            }
+		                                            if stop_all_fuzzers_on_panic {
+		                                                let executions = *state.executions();
+		                                                restarting_mgr.fire(
+		                                                    &mut state,
+		                                                    EventWithStats::with_current_time(
+		                                                        Event::<BytesInput>::Stop,
+		                                                        executions,
+		                                                    ),
+		                                                )?;
+		                                                state.request_stop();
+		                                                restarting_mgr.send_exiting()?;
+		                                                return Err(Error::shutting_down());
+		                                            }
+		                                        }
+		                                    }
+		                                }
 
-                                // Generate 8 initial inputs
+		                                // Generator of printable bytearrays of max size initial_input_max_len
+		                                let mut generator = RandBytesGenerator::new(initial_input_max_len);
+	
+	                                // Generate 8 initial inputs
                                 state
                                     .generate_initial_inputs(
                                         &mut fuzzer,
@@ -2139,25 +2183,67 @@ fn fuzz(
                         }
                     }
 
-                    if stop_all_fuzzers_on_panic && state.solutions().count() > initial_solutions {
-                        let executions = *state.executions();
-                        restarting_mgr.fire(
-                            &mut state,
-                            EventWithStats::with_current_time(
-                                Event::<BytesInput>::Stop,
-                                executions,
-                            ),
-                        )?;
-                        state.request_stop();
-                        restarting_mgr.send_exiting()?;
-                        return Err(Error::shutting_down());
-                    }
+	                    if stop_all_fuzzers_on_panic && state.solutions().count() > initial_solutions {
+	                        let executions = *state.executions();
+	                        restarting_mgr.fire(
+	                            &mut state,
+	                            EventWithStats::with_current_time(
+	                                Event::<BytesInput>::Stop,
+	                                executions,
+	                            ),
+	                        )?;
+	                        state.request_stop();
+	                        restarting_mgr.send_exiting()?;
+	                        return Err(Error::shutting_down());
+	                    }
 
-                    loop {
-                        if let Err(err) =
-                            restarting_mgr.maybe_report_progress(&mut state, monitor_timeout)
-                        {
-                            if matches!(err, Error::ShuttingDown) {
+	                    // Timeouts can occur while importing/generating the initial corpus. Confirm
+	                    // them as hangs/crashes here too, otherwise the fuzzer can get wedged before
+	                    // entering the main fuzzing loop.
+	                    if catch_hangs && hang_candidate_path.exists() {
+	                        let exe = env::current_exe().unwrap_or_else(|err| {
+	                            eprintln!("golibafl: failed to get current exe path: {err}");
+	                            std::process::exit(2);
+	                        });
+	                        match confirm_timeout_candidate(
+	                            &exe,
+	                            &hang_candidate_path,
+	                            hang_timeout,
+	                            hang_confirm_runs,
+	                            &hangs_dir,
+	                            &crashes_dir,
+	                            &client_id,
+	                        ) {
+	                            TimeoutCandidateVerdict::NotHang => (),
+	                            TimeoutCandidateVerdict::Hang(p) | TimeoutCandidateVerdict::Crash(p) => {
+	                                if verbose {
+	                                    eprintln!(
+	                                        "golibafl: timeout candidate confirmed during init; saved: {}",
+	                                        p.display()
+	                                    );
+	                                }
+	                                if stop_all_fuzzers_on_panic {
+	                                    let executions = *state.executions();
+	                                    restarting_mgr.fire(
+	                                        &mut state,
+	                                        EventWithStats::with_current_time(
+	                                            Event::<BytesInput>::Stop,
+	                                            executions,
+	                                        ),
+	                                    )?;
+	                                    state.request_stop();
+	                                    restarting_mgr.send_exiting()?;
+	                                    return Err(Error::shutting_down());
+	                                }
+	                            }
+	                        }
+	                    }
+
+	                    loop {
+	                        if let Err(err) =
+	                            restarting_mgr.maybe_report_progress(&mut state, monitor_timeout)
+	                        {
+	                            if matches!(err, Error::ShuttingDown) {
                                 let _ = restarting_mgr.send_exiting();
                                 notify_restarting_mgr_exit();
                             }
