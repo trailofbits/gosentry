@@ -50,9 +50,6 @@ jobs:
       - name: Smoke (focus-on-new-code)
         run: bash misc/gosentry/tests/smoke_use_libafl_focus_on_new_code.sh
 
-      - name: Smoke (catch-races)
-        run: bash misc/gosentry/tests/smoke_use_libafl_catch_races.sh
-
   smoke-panic-on:
     runs-on: ubuntu-latest
     steps:

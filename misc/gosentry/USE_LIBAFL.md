@@ -40,6 +40,10 @@ This flag only applies in LibAFL mode and is required.
 
 Note: the Go race detector only reports unsynchronized concurrent access between goroutines in a single process. If the target has no concurrency / shared mutable state during the replay run, there may be no races to catch.
 
+### CI note
+
+This repo runs the `--catch-races` smoke test in its own GitHub Actions workflow (`.github/workflows/catch_races.yml`) so it shows up as a separate check.
+
 `golibafl` stores the generated mapping file under the LibAFL output directory as `git_recency_map.bin` (path provided to the runner via `LIBAFL_GIT_RECENCY_MAPPING_PATH`).
 On large targets, generating this file can take several minutes because it needs to run `go tool addr2line` and `git blame` for many coverage counters.
 

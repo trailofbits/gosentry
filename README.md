@@ -4,12 +4,13 @@
 
 gosentry is a security-focused fork of the Go toolchain. In a _very_ simple phrasing, it's copy of the Go compiler that finds bugs. If you are a security researcher auditing Go codebases, you should probably use this tool and consider it as a great swiss-knife.
 
-For now, it focuses on four things:
+For now, it focuses on five things:
 
 - Integrating [go-panikint](https://github.com/trailofbits/go-panikint): instrumentation that panics on **integer overflow/underflow** (and **optionally on truncating integer conversions**).
 - Integrating [LibAFL](https://github.com/AFLplusplus/LibAFL) fuzzer: run Go fuzzing harnesses with **LibAFL** for better fuzzing performances.
 - Panicking on [user-provided function call](https://github.com/kevin-valerio/gosentry?tab=readme-ov-file#feature-2-panic-on-selected-functions): catching targeted bugs when certains functions are called (eg., `myapp.(*Logger).Error`).
 - Git-blame-oriented fuzzing (based on [this work](https://github.com/kevin-valerio/LibAFL-git-aware)): when fuzzing with LibAFL mode, you can orientate the fuzzer towards **recently added/edited lines**.
+- Detect **race conditions** at fuzz-time: when fuzzing with LibAFL, gosentry can replay newly found seeds with the Go race detector and treat data races like bugs.
 
 It especially has **two** objectives:
 - Being easy to use and UX-friendly (_we're tired of complex tools_),
@@ -22,6 +23,7 @@ It especially has **two** objectives:
   - [Feature 2: Panic on selected functions](#feature-2-panic-on-selected-functions)
   - [Feature 3: LibAFL state-of-the-art fuzzing](#feature-3-libafl-state-of-the-art-fuzzing)
   - [Feature 4: Git-blame-oriented fuzzing (experimental)](#feature-4-git-blame-oriented-fuzzing-experimental)
+  - [Feature 5: Detect race conditions at fuzz-time](#feature-5-detect-race-conditions-at-fuzz-time)
 - [Credits](#credits)
 
 ## Build
@@ -113,11 +115,7 @@ LibAFL performs *way* better than the traditional Go fuzzer. When fuzzing (`go t
 
 When using LibAFL (default), you must explicitly choose whether to enable git-aware scheduling: `--focus-on-new-code=true|false`.
 
-You must also explicitly choose whether to enable data race catching: `--catch-races=true|false`.
-
-When `--catch-races=true`, gosentry starts a separate `-race` replay loop that watches the LibAFL `queue/` directory and replays only newly discovered seeds with `GORACE=halt_on_error=1`. On a detected race, gosentry prints the exact seed path and copies the seed into `output/races/` (under the LibAFL output directory) for easy repro.
-
-Note: Go’s race detector only detects data races **inside a single harness execution** (races between goroutines in the same process accessing the same memory without proper synchronization). `--catch-races` will miss races if the seed does not trigger the racy concurrency, and it does not detect cross-process races.
+You must also explicitly choose whether to enable data race catching: `--catch-races=true|false` (see Feature 5).
 
 To opt out:
 - `--use-libafl=false`: use Go's native fuzzing engine instead of LibAFL.
@@ -281,6 +279,24 @@ git-aware crashes: 4/5 (timeouts=1, errors=0)
 git-aware median (capped to timeout): 87.432s
 ```
 </details>
+
+## Feature 5: Detect race conditions at fuzz-time
+
+#### Overview
+
+When fuzzing with LibAFL, gosentry can optionally run a separate `-race` replay loop that watches the LibAFL `queue/` directory and replays only newly discovered seeds with `GORACE=halt_on_error=1`.
+
+On a detected race, gosentry prints the exact seed path and copies it into `output/races/` (under the LibAFL output directory) for easy repro.
+
+Note: Go’s race detector only detects data races **inside a single harness execution** (races between goroutines in the same process accessing the same memory without proper synchronization). `--catch-races` will miss races if the seed does not trigger the racy concurrency, and it does not detect cross-process races.
+
+#### How to use
+
+Enable race catching with `--catch-races=true` (LibAFL mode only):
+
+```bash
+./bin/go test -fuzz=FuzzHarness --use-libafl --focus-on-new-code=false --catch-races=true
+```
 
 ## Credits
 
