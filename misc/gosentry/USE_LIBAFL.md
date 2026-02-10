@@ -13,6 +13,8 @@ By default, when `-fuzz` is set, gosentry uses the LibAFL runner.
 go test -fuzz=FuzzXxx --focus-on-new-code=false --catch-races=false --catch-leaks=false
 ```
 
+Stop the fuzz campaign with Ctrl+C.
+
 To opt out:
 
 ```bash

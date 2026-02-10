@@ -199,6 +199,8 @@ cd test/gosentry/examples/reverse
 ../../../../bin/go test -fuzz=FuzzReverse --focus-on-new-code=false --catch-races=false --catch-leaks=false
 ```
 
+Stop the fuzz campaign with Ctrl+C.
+
 ## Feature 4: Git-blame-oriented fuzzing (experimental)
 
 #### Overview

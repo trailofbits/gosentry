@@ -2031,6 +2031,22 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 	ctx, cancel := context.WithTimeout(ctx, testKillTimeout)
 	defer cancel()
 
+	if libaflOutDir != "" {
+		// In LibAFL mode we run `cargo run` in its own process group so we can
+		// reliably stop the whole fuzz campaign (cargo + runner + children).
+		// That also means SIGINT from the terminal (Ctrl+C) won't reach the
+		// fuzzer process group, and the go command ignores SIGINT itself.
+		// Cancel the context on the first interrupt so cmd.Cancel can signal
+		// the whole process group and stop fuzzing.
+		go func() {
+			select {
+			case <-base.Interrupted:
+				cancel()
+			case <-ctx.Done():
+			}
+		}()
+	}
+
 	var envBase []string
 	if catchRaces || catchLeaks {
 		envBase = slices.Clip(cfg.OrigEnv)
