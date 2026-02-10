@@ -252,7 +252,7 @@ GIT_AUTHOR_DATE="2000-01-01T00:00:00Z" GIT_COMMITTER_DATE="2000-01-01T00:00:00Z"
 build_harness() {
   local out_dir="${1}"
   mkdir -p "${out_dir}"
-  "${GOSENTRY_GO}" test ./rlp -c -fuzz=FuzzGosentryFocusNewCode --use-libafl --focus-on-new-code=false --catch-races=false -o "${out_dir}/libharness.a"
+  "${GOSENTRY_GO}" test ./rlp -c -fuzz=FuzzGosentryFocusNewCode --use-libafl --focus-on-new-code=false --catch-races=false --catch-leaks=false -o "${out_dir}/libharness.a"
 }
 
 build_golibafl() {

@@ -78,7 +78,7 @@ EOF
 cd "${mod_dir}"
 
 set +e
-CGO_ENABLED=1 timeout 10m "${ROOT_DIR}/bin/go" test -fuzz=FuzzCatchRaces --use-libafl --focus-on-new-code=false --catch-races=true . 2>&1 | tee "${tmp_dir}/output.txt"
+CGO_ENABLED=1 timeout 10m "${ROOT_DIR}/bin/go" test -fuzz=FuzzCatchRaces --use-libafl --focus-on-new-code=false --catch-races=true --catch-leaks=false . 2>&1 | tee "${tmp_dir}/output.txt"
 status="${PIPESTATUS[0]}"
 set -e
 

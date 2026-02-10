@@ -141,6 +141,10 @@ If fuzzing prints repeated timeouts with **0 executions** or appears stuck durin
 
 If you see a panic like `BUG: The current message never got committed using send!` (from `crates/ll_mp/...`) while stopping a fuzz run, it is a `golibafl`/LibAFL shutdown issue (not a Go harness bug). Rebuild/update `golibafl` and retry; clean shutdown should print `Fuzzing stopped by user. Good bye.` and `go test` should end with `ok ...`.
 
+## Maintainer notes
+
+- `golibafl/build.rs` links the exact archive passed via `HARNESS_LIB` (by filename). This matters for `--catch-races`, which builds `libharness_race.a` in a separate directory on CI/Linux.
+
 ## Quick start
 
 1) Build the forked toolchain:
@@ -202,7 +206,7 @@ cargo run --release -- fuzz -i <input_dir> -o <output_dir>
 
 with:
 
-- `HARNESS_LIB=<path to built libharness.a>`
+- `HARNESS_LIB=<path to built harness archive (ex: .../libharness.a or .../libharness_race.a)>`
 - `HARNESS_LINK_SEARCH=/path/one:/path/two` (optional: extra native link search dirs)
 - `HARNESS_LINK_LIBS=dylib=dl,static=z` (optional: extra `rustc-link-lib` entries)
 - working directory set to the `golibafl/` crate

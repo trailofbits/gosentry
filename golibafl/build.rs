@@ -69,7 +69,11 @@ fn main() -> Result<()> {
         #[cfg(not(target_os = "macos"))]
         {
             println!("cargo:rustc-link-search=native={}", _dir.display());
-            println!("cargo:rustc-link-lib=static=harness");
+            let harness_file = harness_lib
+                .file_name()
+                .ok_or_else(|| anyhow!("HARNESS_LIB must point to a file"))?
+                .to_string_lossy();
+            println!("cargo:rustc-link-lib=static=:{}", harness_file);
         }
 
         if let Ok(extra_search) = env::var("HARNESS_LINK_SEARCH") {

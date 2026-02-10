@@ -163,7 +163,7 @@ You can also pass an optional config. file for LibAFL, see [here.](misc/gosentry
 └───────────────────────────────────────────────────────────────────────────┘
 ```
 
-In `--use-libafl` mode, gosentry builds `libharness.a` and the Rust `golibafl` runner drives it in-process via the libFuzzer entrypoints.
+In `--use-libafl` mode, gosentry builds `libharness.a` and the Rust `golibafl` runner drives it in-process via the libFuzzer entrypoints. Note: `HARNESS_LIB` can point to any harness archive name (for example `libharness_race.a` used by `--catch-races`).
 </details>
 
 
