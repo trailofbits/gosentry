@@ -325,16 +325,25 @@ fn notify_restarting_mgr_exit() {
         return;
     }
 
-    let Ok(mut shmem_provider) = StdShMemProvider::new() else {
-        return;
-    };
+    // This is best-effort, and should never block process shutdown (especially in CI).
+    // Some shared memory providers may wedge when the broker is already shutting down.
+    let (tx, rx) = std::sync::mpsc::channel::<()>();
+    std::thread::spawn(move || {
+        let Ok(mut shmem_provider) = StdShMemProvider::new() else {
+            let _ = tx.send(());
+            return;
+        };
 
-    if let Ok(mut staterestorer) = libafl_bolts::staterestore::StateRestorer::from_env(
-        &mut shmem_provider,
-        libafl::events::restarting::_ENV_FUZZER_SENDER,
-    ) {
-        staterestorer.send_exiting();
-    }
+        if let Ok(mut staterestorer) = libafl_bolts::staterestore::StateRestorer::from_env(
+            &mut shmem_provider,
+            libafl::events::restarting::_ENV_FUZZER_SENDER,
+        ) {
+            staterestorer.send_exiting();
+        }
+
+        let _ = tx.send(());
+    });
+    let _ = rx.recv_timeout(Duration::from_millis(200));
 }
 
 fn resolve_broker_port(broker_port: Option<u16>) -> u16 {

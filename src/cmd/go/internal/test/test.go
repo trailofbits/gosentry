@@ -17,6 +17,7 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -24,6 +25,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"cmd/go/internal/base"
@@ -2308,9 +2310,42 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 		}
 		cmd.WaitDelay = testWaitDelay
 
+		var termCh chan os.Signal
+		var termDone chan struct{}
+		if libaflOutDir != "" {
+			// `timeout` kills the go command with SIGTERM. If we exit immediately,
+			// the LibAFL process group can keep running (and keep pipes open),
+			// wedging CI. On SIGTERM, kill the LibAFL process group, then re-raise
+			// SIGTERM so the go command still terminates as expected.
+			termCh = make(chan os.Signal, 1)
+			termDone = make(chan struct{})
+			signal.Notify(termCh, syscall.SIGTERM)
+			go func() {
+				select {
+				case <-termCh:
+					_ = signalCmdProcessGroup(cmd, nil)
+					signal.Stop(termCh)
+					_ = syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
+				case <-termDone:
+				}
+			}()
+		}
+
 		base.StartSigHandlers()
 		t0 = time.Now()
 		err = cmd.Run()
+
+		if termCh != nil {
+			close(termDone)
+			signal.Stop(termCh)
+		}
+
+		if libaflOutDir != "" {
+			// libafl Launcher can return before all child processes have exited
+			// (e.g. Error::ShuttingDown). Ensure we don't leak fuzzing clients that
+			// keep stdout/stderr pipes open.
+			_ = signalCmdProcessGroup(cmd, nil)
+		}
 
 		if !base.IsETXTBSY(err) {
 			// We didn't hit the race in #22315, so there is no reason to retry the

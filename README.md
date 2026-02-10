@@ -117,6 +117,8 @@ You must also explicitly choose whether to enable data race catching: `--catch-r
 
 When `--catch-races=true`, gosentry starts a separate `-race` replay loop that watches the LibAFL `queue/` directory and replays only newly discovered seeds with `GORACE=halt_on_error=1`. On a detected race, gosentry prints the exact seed path and copies the seed into `output/races/` (under the LibAFL output directory) for easy repro.
 
+Note: Go’s race detector only detects data races **inside a single harness execution** (races between goroutines in the same process accessing the same memory without proper synchronization). `--catch-races` will miss races if the seed does not trigger the racy concurrency, and it does not detect cross-process races.
+
 To opt out:
 - `--use-libafl=false`: use Go's native fuzzing engine instead of LibAFL.
 

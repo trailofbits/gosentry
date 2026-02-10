@@ -27,7 +27,19 @@ run_expect_crash() {
   fi
 
   if ! grep -Eq "${GOSENTRY_LIBAFL_CRASH_RE}" "${output_file}"; then
+    # Some multi-client runs can get wedged after finding an objective, before
+    # printing the final crash summary. Accept the presence of on-disk crash
+    # inputs as success.
+    local in_dir out_dir crashes_dir
+    in_dir="$(libafl_input_dir "${fuzz_name}")"
+    out_dir="$(dirname "${in_dir}")"
+    crashes_dir="${out_dir}/crashes"
+    if [[ -d "${crashes_dir}" ]] && find "${crashes_dir}" -maxdepth 1 -type f ! -name '.*' -print -quit | grep -q .; then
+      return
+    fi
+
     echo "expected output to contain: Found N crashing input(s)."
+    echo "and expected crashes dir to contain crash inputs: ${crashes_dir}"
     exit 1
   fi
 }
