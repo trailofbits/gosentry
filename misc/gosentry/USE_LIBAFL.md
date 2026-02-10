@@ -158,6 +158,12 @@ That harness is built via a nested `go test` subprocess with `GOSENTRY_LIBAFL_BU
 When `GOSENTRY_LIBAFL_BUILD_ONLY=1`, gosentry intentionally disables fuzz coverage instrumentation (`-d=libfuzzer`) for the harness build.
 The replay runner only needs to execute inputs, not measure coverage, and keeping the `-race` replay harness uninstrumented avoids mixing the fuzzing coverage instrumentation with the race detector build.
 
+### Sidecar queue snapshot (catch-races / catch-leaks)
+
+The `--catch-races` and `--catch-leaks` sidecars decide what is "new" by keeping a `seen` set of seed paths under `output/queue/`.
+
+To avoid flaky behavior (missing very fast early seeds due to goroutine scheduling), gosentry snapshots the initial contents of `output/queue/` **before** starting the main LibAFL fuzz campaign, and uses that as the initial `seen` set.
+
 ## Quick start
 
 1) Build the forked toolchain:

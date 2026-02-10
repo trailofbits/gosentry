@@ -298,7 +298,7 @@ Note: Go’s race detector only detects data races **inside a single harness exe
 This mode starts a small monitor inside `go test` (same parent process), and it runs for the whole fuzz campaign.
 
 - When: before the main LibAFL fuzzing process is started, gosentry builds the replay harness + runner.
-- Monitoring: a goroutine polls `<libafl output dir>/queue/` every ~1s, keeps a `seen` set of files, and only replays newly created seeds (skips dotfiles and `*.metadata`).
+- Monitoring: before fuzzing starts, gosentry snapshots the initial contents of `<libafl output dir>/queue/` into a `seen` set. A goroutine then polls `<libafl output dir>/queue/` every ~1s and only replays newly created seeds (skips dotfiles and `*.metadata`).
 
 ```text
 ┌───────────────────────────────────────────────────────────────────────────┐

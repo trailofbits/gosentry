@@ -2114,43 +2114,45 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 			return err
 		}
 
+		isSeedFile := func(path string, d fs.DirEntry) bool {
+			if d.IsDir() {
+				return false
+			}
+			name := d.Name()
+			if strings.HasPrefix(name, ".") {
+				return false
+			}
+			if strings.HasSuffix(name, ".metadata") {
+				return false
+			}
+			// Skip common OS noise.
+			if name == "Thumbs.db" || name == "Desktop.ini" {
+				return false
+			}
+			if name == ".DS_Store" {
+				return false
+			}
+			_ = path // for future filters
+			return true
+		}
+
+		// Snapshot the queue before starting the fuzz campaign so we don't
+		// accidentally "miss" fast early seeds due to goroutine scheduling.
+		seen := map[string]struct{}{}
+		_ = filepath.WalkDir(queueDir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return nil
+			}
+			if !isSeedFile(path, d) {
+				return nil
+			}
+			seen[path] = struct{}{}
+			return nil
+		})
+
 		catchRacesDone = make(chan struct{})
 		go func() {
 			defer close(catchRacesDone)
-
-			isSeedFile := func(path string, d fs.DirEntry) bool {
-				if d.IsDir() {
-					return false
-				}
-				name := d.Name()
-				if strings.HasPrefix(name, ".") {
-					return false
-				}
-				if strings.HasSuffix(name, ".metadata") {
-					return false
-				}
-				// Skip common OS noise.
-				if name == "Thumbs.db" || name == "Desktop.ini" {
-					return false
-				}
-				if name == ".DS_Store" {
-					return false
-				}
-				_ = path // for future filters
-				return true
-			}
-
-			seen := map[string]struct{}{}
-			_ = filepath.WalkDir(queueDir, func(path string, d fs.DirEntry, err error) error {
-				if err != nil {
-					return nil
-				}
-				if !isSeedFile(path, d) {
-					return nil
-				}
-				seen[path] = struct{}{}
-				return nil
-			})
 
 			copySeed := func(src string) (string, error) {
 				baseName := filepath.Base(src)
@@ -2298,43 +2300,45 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 			return err
 		}
 
+		isSeedFile := func(path string, d fs.DirEntry) bool {
+			if d.IsDir() {
+				return false
+			}
+			name := d.Name()
+			if strings.HasPrefix(name, ".") {
+				return false
+			}
+			if strings.HasSuffix(name, ".metadata") {
+				return false
+			}
+			// Skip common OS noise.
+			if name == "Thumbs.db" || name == "Desktop.ini" {
+				return false
+			}
+			if name == ".DS_Store" {
+				return false
+			}
+			_ = path // for future filters
+			return true
+		}
+
+		// Snapshot the queue before starting the fuzz campaign so we don't
+		// accidentally "miss" fast early seeds due to goroutine scheduling.
+		seen := map[string]struct{}{}
+		_ = filepath.WalkDir(queueDir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return nil
+			}
+			if !isSeedFile(path, d) {
+				return nil
+			}
+			seen[path] = struct{}{}
+			return nil
+		})
+
 		catchLeaksDone = make(chan struct{})
 		go func() {
 			defer close(catchLeaksDone)
-
-			isSeedFile := func(path string, d fs.DirEntry) bool {
-				if d.IsDir() {
-					return false
-				}
-				name := d.Name()
-				if strings.HasPrefix(name, ".") {
-					return false
-				}
-				if strings.HasSuffix(name, ".metadata") {
-					return false
-				}
-				// Skip common OS noise.
-				if name == "Thumbs.db" || name == "Desktop.ini" {
-					return false
-				}
-				if name == ".DS_Store" {
-					return false
-				}
-				_ = path // for future filters
-				return true
-			}
-
-			seen := map[string]struct{}{}
-			_ = filepath.WalkDir(queueDir, func(path string, d fs.DirEntry, err error) error {
-				if err != nil {
-					return nil
-				}
-				if !isSeedFile(path, d) {
-					return nil
-				}
-				seen[path] = struct{}{}
-				return nil
-			})
 
 			copySeed := func(src string) (string, error) {
 				baseName := filepath.Base(src)
