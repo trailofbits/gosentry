@@ -40,6 +40,8 @@ This flag only applies in LibAFL mode and is required.
 
 Note: the Go race detector only reports unsynchronized concurrent access between goroutines in a single process. If the target has no concurrency / shared mutable state during the replay run, there may be no races to catch.
 
+Linux note: the race replay runner must be linked as a **non-PIE** executable. If you see `ThreadSanitizer failed to allocate ...` during replay, it usually means the runner was built as PIE; rebuild it with `-no-pie`.
+
 ### CI note
 
 This repo runs the `--catch-races` smoke test in its own GitHub Actions workflow (`.github/workflows/catch_races.yml`) so it shows up as a separate check.

@@ -2093,7 +2093,14 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 			return fmt.Errorf("catch-races: race harness not found at %s", raceHarnessLib)
 		}
 
-		cargoBuild := exec.CommandContext(ctx, "cargo", "build", "--release")
+		cargoArgs := []string{"build", "--release"}
+		// On Linux, Go's race runtime (ThreadSanitizer) fails to initialize when
+		// the main executable is PIE ("ThreadSanitizer failed to allocate ...").
+		// Build the replay runner as non-PIE so `--catch-races` can actually run.
+		if cfg.Goos == "linux" {
+			cargoArgs = []string{"rustc", "--release", "--bin", "golibafl", "--", "-C", "link-arg=-no-pie"}
+		}
+		cargoBuild := exec.CommandContext(ctx, "cargo", cargoArgs...)
 		cargoBuild.Dir = cmdDir
 		cargoBuild.Env = slices.Clip(envBase)
 		cargoBuild.Env = append(cargoBuild.Env, "HARNESS_LIB="+raceHarnessLib)
