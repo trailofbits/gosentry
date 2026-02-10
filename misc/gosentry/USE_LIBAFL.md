@@ -158,7 +158,7 @@ cd src
 
 ```bash
 cd test/gosentry/examples/reverse
-CGO_ENABLED=1 ../../../../bin/go test -fuzz=FuzzReverse --focus-on-new-code=false --catch-races=false
+CGO_ENABLED=1 ../../../../bin/go test -fuzz=FuzzReverse --focus-on-new-code=false --catch-races=false --catch-leaks=false
 ```
 
 Fuzzing runs until you stop it (Ctrl+C). The run prints `ok ...` on clean shutdown.
