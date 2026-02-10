@@ -8,7 +8,7 @@ tmp_dir="$(mktemp -d)"
 trap 'rm -rf "${tmp_dir}"' EXIT
 export GOCACHE="${tmp_dir}/gocache"
 
-GOSENTRY_LIBAFL_HANG_RE='Found [1-9][0-9]* hanging input\\(s\\)\\.'
+GOSENTRY_LIBAFL_HANG_RE='Found [1-9][0-9]* hanging input\(s\)\.'
 
 mod_dir="${tmp_dir}/hang_only"
 mkdir -p "${mod_dir}"
@@ -85,13 +85,14 @@ crashes_dir="${out_dir}/crashes"
 if ! grep -Eq "${GOSENTRY_LIBAFL_HANG_RE}" "${tmp_dir}/output.txt"; then
   # Some multi-client runs can get wedged after finding an objective, before
   # printing the final hang summary. Accept the presence of on-disk hang
-  # inputs as success.
+  # inputs as success, but still verify crash-free behavior below.
   if [[ -d "${hangs_dir}" ]] && find "${hangs_dir}" -maxdepth 1 -type f ! -name '.*' -print -quit | grep -q .; then
-    exit 0
+    :
+  else
+    echo "expected output to contain: Found N hanging input(s)."
+    echo "and expected hangs dir to contain hang inputs: ${hangs_dir}"
+    exit 1
   fi
-  echo "expected output to contain: Found N hanging input(s)."
-  echo "and expected hangs dir to contain hang inputs: ${hangs_dir}"
-  exit 1
 fi
 
 if [[ ! -d "${hangs_dir}" ]] || ! find "${hangs_dir}" -maxdepth 1 -type f ! -name '.*' -print -quit | grep -q .; then

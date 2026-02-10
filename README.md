@@ -290,6 +290,8 @@ When fuzzing with LibAFL, a harness execution can **timeout** (for example becau
 
 To reduce false positives, gosentry treats a timeout as a hang candidate and confirms it by replaying the timed-out input a few times with a larger timeout. On a confirmed hang, gosentry writes the input to `output/hangs/` and stops the fuzz campaign (treats it like a bug/crash).
 
+Note: hang confirmation also runs during initial corpus import/generation, so targets that time out on every input can still be detected deterministically.
+
 This is configured via `--libafl-config`:
 - `catch_hangs` (default: `true`)
 - `hang_timeout_ms` (default: `10000`)
