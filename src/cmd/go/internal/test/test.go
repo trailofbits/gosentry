@@ -2055,11 +2055,6 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 			return fmt.Errorf("catch-races: race harness not found at %s", raceHarnessLib)
 		}
 
-		raceCargoTargetDir := filepath.Join(catchRacesRoot, "cargo-target")
-		if err := os.MkdirAll(raceCargoTargetDir, 0777); err != nil {
-			return err
-		}
-
 		envBase := slices.Clip(cfg.OrigEnv)
 		envBase = base.AppendPATH(envBase)
 		envBase = base.AppendPWD(envBase, cmdDir)
@@ -2071,16 +2066,21 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 		cargoBuild.Dir = cmdDir
 		cargoBuild.Env = slices.Clip(envBase)
 		cargoBuild.Env = append(cargoBuild.Env, "HARNESS_LIB="+raceHarnessLib)
-		cargoBuild.Env = append(cargoBuild.Env, "CARGO_TARGET_DIR="+raceCargoTargetDir)
 		cargoBuild.Stdout = stdout
 		cargoBuild.Stderr = stdout
 		if err := cargoBuild.Run(); err != nil {
 			return err
 		}
 
-		raceRunner := filepath.Join(raceCargoTargetDir, "release", "golibafl"+cfg.ExeSuffix)
-		if _, err := os.Stat(raceRunner); err != nil {
-			return fmt.Errorf("catch-races: race runner not found at %s", raceRunner)
+		// Copy the runner so it stays linked against the race harness even after
+		// the main fuzzer runner rebuilds/links against the non-race harness.
+		builtRunner := filepath.Join(cmdDir, "target", "release", "golibafl"+cfg.ExeSuffix)
+		if _, err := os.Stat(builtRunner); err != nil {
+			return fmt.Errorf("catch-races: race runner not found at %s", builtRunner)
+		}
+		raceRunner := filepath.Join(catchRacesRoot, "golibafl-race"+cfg.ExeSuffix)
+		if err := sh.CopyFile(raceRunner, builtRunner, 0755, true); err != nil {
+			return err
 		}
 
 		catchRacesDone = make(chan struct{})
@@ -2247,10 +2247,23 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 		t0             time.Time
 		cancelKilled   = false
 		cancelSignaled = false
+		cancelSignal   os.Signal
+		cancelWith     os.Signal
 	)
+	if libaflOutDir != "" {
+		// LibAFL fuzzing uses `cargo run` which spawns the actual runner as a
+		// child process. Use SIGINT and a dedicated process group so cancellation
+		// stops the whole fuzz campaign (cargo + runner + children).
+		cancelSignal = os.Interrupt
+	} else {
+		cancelSignal = base.SignalTrace
+	}
 	for {
 		cmd = exec.CommandContext(ctx, args[0], args[1:]...)
 		cmd.Dir = cmdDir
+		if libaflOutDir != "" {
+			setCmdProcessGroup(cmd)
+		}
 
 		env := slices.Clip(cfg.OrigEnv)
 		env = base.AppendPATH(env)
@@ -2267,7 +2280,16 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 		cmd.Stderr = stdout
 
 		cmd.Cancel = func() error {
-			if base.SignalTrace == nil {
+			if libaflOutDir != "" {
+				err := signalCmdProcessGroup(cmd, cancelSignal)
+				if err == nil {
+					cancelSignaled = true
+					cancelWith = cancelSignal
+				}
+				return err
+			}
+
+			if cancelSignal == nil {
 				err := cmd.Process.Kill()
 				if err == nil {
 					cancelKilled = true
@@ -2277,9 +2299,10 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 
 			// Send a quit signal in the hope that the program will print
 			// a stack trace and exit.
-			err := cmd.Process.Signal(base.SignalTrace)
+			err := cmd.Process.Signal(cancelSignal)
 			if err == nil {
 				cancelSignaled = true
+				cancelWith = cancelSignal
 			}
 			return err
 		}
@@ -2335,10 +2358,13 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 
 		base.SetExitStatus(1)
 		if cancelSignaled {
+			if cancelWith == nil {
+				cancelWith = base.SignalTrace
+			}
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				fmt.Fprintf(cmd.Stdout, "*** Test killed with %v: ran too long (%v).\n", base.SignalTrace, testKillTimeout)
+				fmt.Fprintf(cmd.Stdout, "*** Test killed with %v: ran too long (%v).\n", cancelWith, testKillTimeout)
 			} else {
-				fmt.Fprintf(cmd.Stdout, "*** Test killed with %v.\n", base.SignalTrace)
+				fmt.Fprintf(cmd.Stdout, "*** Test killed with %v.\n", cancelWith)
 			}
 		} else if cancelKilled {
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
