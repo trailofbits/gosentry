@@ -171,7 +171,7 @@ If `golibafl` fails to launch, set `GOSENTRY_VERBOSE_AFL=1` to print extra diagn
 
 If fuzzing prints repeated timeouts with **0 executions** or appears stuck during startup, make sure you are using a LibAFL fork/build that runs the restarting manager in **non-fork (re-exec) mode**. The embedded Go runtime is not fork-safe once initialized, so forking-based restarts can deadlock and look like “exec/sec: 0.000”.
 
-If you see a panic like `BUG: The current message never got committed using send!` (from `crates/ll_mp/...`) while stopping a fuzz run, it is a `golibafl`/LibAFL shutdown issue (not a Go harness bug). Rebuild/update `golibafl` and retry; clean shutdown should print `Fuzzing stopped by user. Good bye.` and `go test` should end with `ok ...`.
+If you see a panic like `BUG: The current message never got committed using send!` (from `crates/ll_mp/...`), it's a LibAFL/LLMP issue (not a Go harness bug). `golibafl` enables OOM-safe restart-state serialization so the respawner can recover from unexpected child exits without panicking; if you still hit it, rebuild/update `golibafl` and retry (and consider setting `RUST_BACKTRACE=1` to capture a backtrace).
 
 ## Maintainer notes
 

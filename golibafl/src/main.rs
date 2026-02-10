@@ -3,7 +3,7 @@ use libafl::{
     corpus::{CachedOnDiskCorpus, Corpus, OnDiskCorpus, Testcase},
     events::{
         Event, EventFirer, EventManagerHook, EventWithStats, LlmpRestartingEventManager,
-        ProgressReporter, SendExiting,
+        ProgressReporter, SendExiting, ShouldSaveState,
     },
     executors::{inprocess::InProcessExecutor, ExitKind, ShadowExecutor},
     feedback_or_fast,
@@ -2349,6 +2349,7 @@ fn fuzz(
             .run_client(&mut run_client)
             .cores(&effective_cores)
             .broker_port(broker_port)
+            .serialize_state(ShouldSaveState::OOMSafeOnRestart)
             .fork(false)
             .build()
             .launch_with_hooks::<_, BytesInput, _>(tuple_list!(StopOnObjectiveHook {
@@ -2363,6 +2364,7 @@ fn fuzz(
             .run_client(&mut run_client)
             .cores(&effective_cores)
             .broker_port(broker_port)
+            .serialize_state(ShouldSaveState::OOMSafeOnRestart)
             .fork(false)
             .build()
             .launch_with_hooks::<_, BytesInput, _>(tuple_list!(StopOnObjectiveHook {
