@@ -69,11 +69,18 @@ fn main() -> Result<()> {
         #[cfg(not(target_os = "macos"))]
         {
             println!("cargo:rustc-link-search=native={}", _dir.display());
+
+            // rustc's `-l static=...` expects a library name (not a filename).
+            // Map an archive like `libharness_race.a` -> `-l static=harness_race`.
             let harness_file = harness_lib
                 .file_name()
                 .ok_or_else(|| anyhow!("HARNESS_LIB must point to a file"))?
                 .to_string_lossy();
-            println!("cargo:rustc-link-lib=static=:{}", harness_file);
+            let harness_name = harness_file
+                .strip_prefix("lib")
+                .and_then(|s| s.strip_suffix(".a"))
+                .ok_or_else(|| anyhow!("HARNESS_LIB must point to a lib*.a archive (got {})", harness_file))?;
+            println!("cargo:rustc-link-lib=static={}", harness_name);
         }
 
         if let Ok(extra_search) = env::var("HARNESS_LINK_SEARCH") {

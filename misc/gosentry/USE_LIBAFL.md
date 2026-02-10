@@ -143,7 +143,7 @@ If you see a panic like `BUG: The current message never got committed using send
 
 ## Maintainer notes
 
-- `golibafl/build.rs` links the exact archive passed via `HARNESS_LIB` (by filename). This matters for `--catch-races`, which builds `libharness_race.a` in a separate directory on CI/Linux.
+- `golibafl/build.rs` derives the `-l static=...` library name from `HARNESS_LIB` (for example `libharness_race.a` becomes `-l static=harness_race`). This matters for `--catch-races`, which builds `libharness_race.a` in a separate directory on CI/Linux.
 
 ## Quick start
 

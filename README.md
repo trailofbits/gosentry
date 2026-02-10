@@ -23,7 +23,7 @@ It especially has **two** objectives:
   - [Feature 2: Panic on selected functions](#feature-2-panic-on-selected-functions)
   - [Feature 3: LibAFL state-of-the-art fuzzing](#feature-3-libafl-state-of-the-art-fuzzing)
   - [Feature 4: Git-blame-oriented fuzzing (experimental)](#feature-4-git-blame-oriented-fuzzing-experimental)
-  - [Feature 5: Detect race conditions at fuzz-time](#feature-5-detect-race-conditions-at-fuzz-time)
+  - [Feature 5: Detect race conditions and goroutine leaks at fuzz-time](#feature-5-detect-race-conditions-and-goroutine-leaks-at-fuzz-time)
 - [Credits](#credits)
 
 ## Build
@@ -282,9 +282,11 @@ git-aware median (capped to timeout): 87.432s
 ```
 </details>
 
-## Feature 5: Detect race conditions at fuzz-time
+## Feature 5: Detect race conditions and goroutine leaks at fuzz-time
 
 #### Overview
+
+##### Catching data races (`--catch-races`)
 
 When fuzzing with LibAFL, gosentry can optionally run a separate `-race` replay loop that watches the LibAFL `queue/` directory and replays only newly discovered seeds with `GORACE=halt_on_error=1`.
 
@@ -292,7 +294,9 @@ On a detected race, gosentry prints the exact seed path and copies it into `outp
 
 Note: Go’s race detector only detects data races **inside a single harness execution** (races between goroutines in the same process accessing the same memory without proper synchronization). `--catch-races` will miss races if the seed does not trigger the racy concurrency, and it does not detect cross-process races.
 
-gosentry can also optionally run a `goleak` replay loop that watches the LibAFL `queue/` directory and replays only newly discovered seeds with `go.uber.org/goleak` enabled.
+##### Catching goroutine leaks (`--catch-leaks`)
+
+When fuzzing with LibAFL, gosentry can also optionally run a `goleak` replay loop that watches the LibAFL `queue/` directory and replays only newly discovered seeds with `go.uber.org/goleak` enabled.
 
 On a detected goroutine leak, gosentry prints the exact seed path and copies it into `output/leaks/` (under the LibAFL output directory) for easy repro.
 
@@ -300,11 +304,15 @@ Note: `goleak` is for **goroutine leaks**, not memory leaks.
 
 #### How to use
 
+##### Data races
+
 Enable race catching with `--catch-races=true` (LibAFL mode only):
 
 ```bash
 ./bin/go test -fuzz=FuzzHarness --use-libafl --focus-on-new-code=false --catch-races=true --catch-leaks=false
 ```
+
+##### Goroutine leaks
 
 Enable goroutine leak catching with `--catch-leaks=true` (LibAFL mode only):
 
