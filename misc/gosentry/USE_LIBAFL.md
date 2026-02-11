@@ -173,6 +173,8 @@ If fuzzing prints repeated timeouts with **0 executions** or appears stuck durin
 
 If you see a panic like `BUG: The current message never got committed using send!` (from `crates/ll_mp/...`), it's a LibAFL/LLMP issue (not a Go harness bug). `golibafl` enables OOM-safe restart-state serialization so the respawner can recover from unexpected child exits without panicking; if you still hit it, rebuild/update `golibafl` and retry (and consider setting `RUST_BACKTRACE=1` to capture a backtrace).
 
+If you see a panic like `called Option::unwrap() on a None value` in `crates/libafl/src/corpus/inmemory.rs` (often while inserting into the corpus), it's a LibAFL `InMemoryCorpus` internal bookkeeping issue. gosentry enables LibAFL's `corpus_btreemap` feature in `golibafl` to avoid the affected code path; rebuild `golibafl` and retry.
+
 ## Maintainer notes
 
 - `golibafl/build.rs` derives the `-l static=...` library name from `HARNESS_LIB` (for example `libharness_race.a` becomes `-l static=harness_race`). This matters for `--catch-races`, which builds `libharness_race.a` in a separate directory on CI/Linux.

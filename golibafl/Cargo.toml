@@ -12,7 +12,7 @@ lto = "fat"
 anyhow = "1.0.100"
 
 [dependencies]
-libafl = { git = "https://github.com/kevin-valerio/LibAFL-git-aware", branch = "gosentry-libafl-gitaware", features = ["prelude", "std", "derive", "tui_monitor"] }
+libafl = { git = "https://github.com/kevin-valerio/LibAFL-git-aware", branch = "gosentry-libafl-gitaware", features = ["prelude", "std", "derive", "tui_monitor", "corpus_btreemap"] }
 libafl_bolts = { git = "https://github.com/kevin-valerio/LibAFL-git-aware", branch = "gosentry-libafl-gitaware" }
 libafl_targets = { git = "https://github.com/kevin-valerio/LibAFL-git-aware", branch = "gosentry-libafl-gitaware", features = ["sancov_8bit", "observers", "libfuzzer", "sancov_cmplog", "sancov_pcguard_hitcounts"] }
 clap = {version = "4.5.23", features = ["derive"]}
