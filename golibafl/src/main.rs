@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use libafl::{
-    corpus::{CachedOnDiskCorpus, Corpus, OnDiskCorpus, Testcase},
+    corpus::{CachedOnDiskCorpus, Corpus, CorpusId, OnDiskCorpus, Testcase},
     events::{
         Event, EventFirer, EventManagerHook, EventWithStats, LlmpRestartingEventManager,
         ProgressReporter, SendExiting, ShouldSaveState,
@@ -22,6 +22,7 @@ use libafl::{
     },
     stages::{mutational::StdMutationalStage, ShadowTracingStage, StdPowerMutationalStage},
     state::{HasCorpus, HasExecutions, HasSolutions, StdState, Stoppable},
+    schedulers::Scheduler,
     Error, HasMetadata,
 };
 use libafl_bolts::{
@@ -29,7 +30,7 @@ use libafl_bolts::{
     rands::StdRand,
     shmem::ShMemProvider,
     simd::MaxReducer,
-    tuples::{tuple_list, Merge},
+    tuples::{tuple_list, MatchName, Merge},
     ClientId,
 };
 use libafl_targets::{
@@ -81,6 +82,55 @@ where
             state.request_stop();
         }
         Ok(true)
+    }
+}
+
+#[derive(Debug, Clone)]
+struct EnsureTestcaseIdsScheduler<Inner> {
+    inner: Inner,
+}
+
+impl<Inner> EnsureTestcaseIdsScheduler<Inner> {
+    fn new(inner: Inner) -> Self {
+        Self { inner }
+    }
+}
+
+impl<I, S, Inner> Scheduler<I, S> for EnsureTestcaseIdsScheduler<Inner>
+where
+    Inner: Scheduler<I, S>,
+    S: HasCorpus<I>,
+{
+    fn on_add(&mut self, state: &mut S, id: CorpusId) -> Result<(), Error> {
+        {
+            let mut testcase = state.corpus().get(id)?.borrow_mut();
+            testcase.set_corpus_id(Some(id));
+        }
+        self.inner.on_add(state, id)
+    }
+
+    fn on_evaluation<OT>(
+        &mut self,
+        state: &mut S,
+        input: &I,
+        observers: &OT,
+    ) -> Result<(), Error>
+    where
+        OT: MatchName,
+    {
+        self.inner.on_evaluation(state, input, observers)
+    }
+
+    fn next(&mut self, state: &mut S) -> Result<CorpusId, Error> {
+        self.inner.next(state)
+    }
+
+    fn set_current_scheduled(
+        &mut self,
+        state: &mut S,
+        next_id: Option<CorpusId>,
+    ) -> Result<(), Error> {
+        self.inner.set_current_scheduled(state, next_id)
     }
 }
 
@@ -1983,17 +2033,18 @@ fn fuzz(
                         }
                     }
 
-                    let scheduler = IndexesLenTimeMinimizerScheduler::new(
-                        &edges_observer,
-                        GitAwareStdWeightedScheduler::with_schedule(
-                            &mut state,
-                            &edges_observer,
-                            Some(power_schedule),
-                        ),
-                    );
+	                    let scheduler = IndexesLenTimeMinimizerScheduler::new(
+	                        &edges_observer,
+	                        GitAwareStdWeightedScheduler::with_schedule(
+	                            &mut state,
+	                            &edges_observer,
+	                            Some(power_schedule),
+	                        ),
+	                    );
+                        let scheduler = EnsureTestcaseIdsScheduler::new(scheduler);
 
-                    // A fuzzer with feedbacks and a corpus scheduler
-                    let mut fuzzer = StdFuzzer::new(scheduler, feedback, objective);
+	                    // A fuzzer with feedbacks and a corpus scheduler
+	                    let mut fuzzer = StdFuzzer::new(scheduler, feedback, objective);
 
                     // The closure that we want to fuzz
                     let mut harness = |input: &BytesInput| {
