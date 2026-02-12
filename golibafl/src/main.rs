@@ -44,7 +44,7 @@ use std::{
     collections::{HashMap, HashSet},
     env, fs,
     fs::read_dir,
-    io::{BufRead, IsTerminal, Read, Write},
+    io::{BufRead, BufReader, BufWriter, IsTerminal, Read, Write},
     net::TcpListener,
     path::{Path, PathBuf},
     process::{Command, Output, Stdio},
@@ -52,7 +52,7 @@ use std::{
 };
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
-    mpsc, Arc,
+    mpsc, Arc, Mutex,
 };
 
 use object::{Object, ObjectSection, ObjectSymbol, RelocationTarget, SectionKind};
@@ -151,6 +151,272 @@ struct LibAflFuzzConfig {
     go_maxprocs_single: Option<bool>,
     tui_monitor: Option<bool>,
     debug_output: Option<bool>,
+}
+
+#[derive(Debug, Clone)]
+struct GrammarinatorConfig {
+    grammar: Vec<PathBuf>,
+    start_rule: String,
+    actions: bool,
+    serializer: Option<String>,
+    grammarinator_dir: Option<PathBuf>,
+    max_depth: usize,
+    max_tokens: usize,
+}
+
+const GRAMMARINATOR_SERVER_PY: &str = r#"#!/usr/bin/env python3
+import argparse
+import importlib
+import json
+import shutil
+import sys
+import traceback
+from pathlib import Path
+
+
+def import_object(path: str):
+    mod_name, _, attr = path.rpartition(".")
+    if not mod_name or not attr:
+        raise ValueError(f"invalid python ref: {path!r} (expected package.module.attr)")
+    mod = importlib.import_module(mod_name)
+    return getattr(mod, attr)
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out", required=True, help="output dir for generated python generator")
+    ap.add_argument("--grammar", action="append", required=True, help="ANTLRv4 .g4 grammar file (repeatable)")
+    ap.add_argument("--start-rule", required=True, help="start rule name")
+    ap.add_argument("--actions", action="store_true", help="allow inline actions/predicates in grammar")
+    ap.add_argument(
+        "--serializer",
+        default="grammarinator.runtime.simple_space_serializer",
+        help="python serializer function (package.module.function)",
+    )
+    ap.add_argument("--max-depth", type=int, default=32)
+    ap.add_argument("--max-tokens", type=int, default=512)
+    args = ap.parse_args()
+
+    out_dir = Path(args.out)
+    if out_dir.exists():
+        shutil.rmtree(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    from grammarinator.tool import ProcessorTool
+
+    ProcessorTool("py", str(out_dir)).process(
+        args.grammar,
+        options={},
+        default_rule=args.start_rule,
+        encoding="utf-8",
+        errors="strict",
+        lib_dir=None,
+        actions=args.actions,
+        pep8=False,
+    )
+
+    gen_files = sorted(out_dir.glob("*Generator.py"))
+    if not gen_files:
+        raise RuntimeError(f"no *Generator.py produced in {out_dir}")
+    gen_mod_name = gen_files[0].stem
+
+    sys.path.insert(0, str(out_dir))
+    gen_mod = importlib.import_module(gen_mod_name)
+    gen_cls = getattr(gen_mod, gen_mod_name)
+
+    serializer = import_object(args.serializer) if args.serializer else str
+
+    from grammarinator.runtime import RuleSize
+
+    def generate_one() -> str:
+        gen = gen_cls(limit=RuleSize(depth=args.max_depth, tokens=args.max_tokens))
+        root = getattr(gen, args.start_rule)()
+        return serializer(root)
+
+    for _ in sys.stdin:
+        s = generate_one()
+        sys.stdout.write(json.dumps(s, ensure_ascii=False) + "\n")
+        sys.stdout.flush()
+
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except Exception:
+        traceback.print_exc(file=sys.stderr)
+        raise
+"#;
+
+struct GrammarinatorEngine {
+    child: std::process::Child,
+    stdin: BufWriter<std::process::ChildStdin>,
+    stdout: BufReader<std::process::ChildStdout>,
+}
+
+impl GrammarinatorEngine {
+    fn spawn(cfg: &GrammarinatorConfig, workdir: &Path) -> Result<Self, Error> {
+        fs::create_dir_all(workdir)
+            .map_err(|err| Error::os_error(err, "grammarinator: failed to create workdir"))?;
+
+        let script_path = workdir.join("gosentry_grammarinator_server.py");
+        fs::write(&script_path, GRAMMARINATOR_SERVER_PY)
+            .map_err(|err| Error::os_error(err, "grammarinator: failed to write server script"))?;
+
+        let out_dir = workdir.join("out");
+        if out_dir.exists() {
+            let _ = fs::remove_dir_all(&out_dir);
+        }
+
+        let mut cmd = Command::new("python3");
+        cmd.arg(&script_path)
+            .arg("--out")
+            .arg(&out_dir)
+            .arg("--start-rule")
+            .arg(&cfg.start_rule)
+            .arg("--max-depth")
+            .arg(cfg.max_depth.to_string())
+            .arg("--max-tokens")
+            .arg(cfg.max_tokens.to_string())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .env("PYTHONUNBUFFERED", "1")
+            .env("PYTHONIOENCODING", "utf-8");
+
+        if cfg.actions {
+            cmd.arg("--actions");
+        }
+        if let Some(serializer) = cfg.serializer.as_ref() {
+            cmd.arg("--serializer").arg(serializer);
+        }
+        for g in cfg.grammar.iter() {
+            cmd.arg("--grammar").arg(g);
+        }
+
+        if let Some(dir) = cfg.grammarinator_dir.as_ref() {
+            let mut paths = vec![dir.clone()];
+            if let Some(old) = env::var_os("PYTHONPATH") {
+                paths.extend(env::split_paths(&old));
+            }
+            let joined = env::join_paths(paths.iter())
+                .map_err(|_| Error::illegal_argument("grammarinator: invalid PYTHONPATH"))?;
+            cmd.env("PYTHONPATH", joined);
+        }
+
+        let mut child = cmd
+            .spawn()
+            .map_err(|err| Error::os_error(err, "grammarinator: failed to spawn python3"))?;
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| Error::illegal_state("grammarinator: failed to capture stdin"))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| Error::illegal_state("grammarinator: failed to capture stdout"))?;
+
+        Ok(Self {
+            child,
+            stdin: BufWriter::new(stdin),
+            stdout: BufReader::new(stdout),
+        })
+    }
+
+    fn next_bytes(&mut self) -> Result<Vec<u8>, Error> {
+        self.stdin
+            .write_all(b"N\n")
+            .map_err(|err| Error::os_error(err, "grammarinator: failed to write request"))?;
+        self.stdin
+            .flush()
+            .map_err(|err| Error::os_error(err, "grammarinator: failed to flush request"))?;
+
+        let mut line = String::new();
+        let n = self
+            .stdout
+            .read_line(&mut line)
+            .map_err(|err| Error::os_error(err, "grammarinator: failed to read response"))?;
+        if n == 0 {
+            let status = self.child.try_wait().ok().flatten();
+            let msg = match status {
+                Some(s) => format!("grammarinator: server exited ({s})"),
+                None => "grammarinator: server closed stdout".to_string(),
+            };
+            return Err(Error::illegal_state(msg));
+        }
+
+        let s: String = serde_json::from_str(line.trim_end()).map_err(|err| {
+            Error::illegal_state(format!(
+                "grammarinator: invalid response JSON: {err} (line={line:?})"
+            ))
+        })?;
+        Ok(s.into_bytes())
+    }
+}
+
+impl Drop for GrammarinatorEngine {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+#[derive(Clone)]
+struct GrammarinatorGenerator {
+    engine: Arc<Mutex<GrammarinatorEngine>>,
+}
+
+impl GrammarinatorGenerator {
+    fn new(engine: Arc<Mutex<GrammarinatorEngine>>) -> Self {
+        Self { engine }
+    }
+}
+
+impl<S> libafl::generators::Generator<BytesInput, S> for GrammarinatorGenerator {
+    fn generate(&mut self, _state: &mut S) -> Result<BytesInput, Error> {
+        let mut eng = self
+            .engine
+            .lock()
+            .map_err(|_| Error::illegal_state("grammarinator: engine lock poisoned"))?;
+        let bytes = eng.next_bytes()?;
+        Ok(BytesInput::new(bytes))
+    }
+}
+
+#[derive(Clone)]
+struct GrammarinatorMutator {
+    engine: Arc<Mutex<GrammarinatorEngine>>,
+}
+
+impl GrammarinatorMutator {
+    fn new(engine: Arc<Mutex<GrammarinatorEngine>>) -> Self {
+        Self { engine }
+    }
+}
+
+impl libafl_bolts::Named for GrammarinatorMutator {
+    fn name(&self) -> &std::borrow::Cow<'static, str> {
+        static NAME: std::borrow::Cow<'static, str> =
+            std::borrow::Cow::Borrowed("GrammarinatorMutator");
+        &NAME
+    }
+}
+
+impl<S> libafl::mutators::Mutator<BytesInput, S> for GrammarinatorMutator {
+    fn mutate(&mut self, _state: &mut S, input: &mut BytesInput) -> Result<libafl::mutators::MutationResult, Error> {
+        let mut eng = self
+            .engine
+            .lock()
+            .map_err(|_| Error::illegal_state("grammarinator: engine lock poisoned"))?;
+        let bytes = eng.next_bytes()?;
+        *input = BytesInput::new(bytes);
+        Ok(libafl::mutators::MutationResult::Mutated)
+    }
+
+    fn post_exec(&mut self, _state: &mut S, _new_corpus_id: Option<CorpusId>) -> Result<(), Error> {
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -1356,6 +1622,38 @@ enum Mode {
             help = "Fuzzer's output directory"
         )]
         output: PathBuf,
+
+        #[clap(long, help = "Enable grammar-based input generation via Grammarinator (ANTLRv4)")]
+        use_grammar: bool,
+
+        #[clap(long, value_name = "FILE", help = "ANTLRv4 grammar file (.g4). Repeatable.")]
+        grammar: Vec<PathBuf>,
+
+        #[clap(long, value_name = "RULE", help = "Start rule for grammar generation")]
+        start_rule: Option<String>,
+
+        #[clap(long, help = "Allow inline actions and semantic predicates in the grammar")]
+        grammar_actions: bool,
+
+        #[clap(
+            long,
+            value_name = "PY_REF",
+            help = "Python serializer function (package.module.function). Default: grammarinator.runtime.simple_space_serializer"
+        )]
+        grammar_serializer: Option<String>,
+
+        #[clap(
+            long,
+            value_name = "DIR",
+            help = "Add DIR to PYTHONPATH when running Grammarinator (useful for a local checkout)"
+        )]
+        grammarinator_dir: Option<PathBuf>,
+
+        #[clap(long, value_name = "NUM", default_value = "32", help = "Max recursion depth for grammar generation")]
+        grammar_max_depth: usize,
+
+        #[clap(long, value_name = "NUM", default_value = "512", help = "Max token count for grammar generation")]
+        grammar_max_tokens: usize,
     },
     Cov {
         #[clap(short, long, value_name = "OUTPUT", help = "Fuzzer's output directory")]
@@ -1422,6 +1720,7 @@ fn fuzz(
     input: &PathBuf,
     output: &Path,
     config_path: Option<&PathBuf>,
+    grammar_cfg: Option<&GrammarinatorConfig>,
 ) {
     let args: Vec<String> = env::args().collect();
     let is_launcher_client = env::var_os("AFL_LAUNCHER_CLIENT").is_some();
@@ -1469,7 +1768,14 @@ fn fuzz(
 
     let needs_cwd = !input.is_absolute()
         || !output.is_absolute()
-        || config_path.as_ref().is_some_and(|p| p.is_relative());
+        || config_path.as_ref().is_some_and(|p| p.is_relative())
+        || grammar_cfg.as_ref().is_some_and(|cfg| {
+            cfg.grammar.iter().any(|p| p.is_relative())
+                || cfg
+                    .grammarinator_dir
+                    .as_ref()
+                    .is_some_and(|p| p.is_relative())
+        });
     let cwd = if needs_cwd {
         env::current_dir().ok()
     } else {
@@ -1507,6 +1813,36 @@ fn fuzz(
                 .map(|cwd| cwd.join(config_path))
                 .unwrap_or_else(|| config_path.clone())
         }
+    });
+
+    let grammar_cfg = grammar_cfg.cloned().map(|mut cfg| {
+        cfg.grammar = cfg
+            .grammar
+            .into_iter()
+            .map(|p| {
+                if p.is_absolute() {
+                    p
+                } else {
+                    cwd.as_ref().map(|cwd| cwd.join(&p)).unwrap_or(p)
+                }
+            })
+            .collect();
+        cfg.grammarinator_dir = cfg.grammarinator_dir.map(|p| {
+            if p.is_absolute() {
+                p
+            } else {
+                cwd.as_ref().map(|cwd| cwd.join(&p)).unwrap_or(p)
+            }
+        });
+        if cfg.max_depth == 0 {
+            eprintln!("golibafl: --grammar-max-depth must be > 0");
+            std::process::exit(2);
+        }
+        if cfg.max_tokens == 0 {
+            eprintln!("golibafl: --grammar-max-tokens must be > 0");
+            std::process::exit(2);
+        }
+        cfg
     });
 
     let mut effective_cores = cores.clone();
@@ -2005,21 +2341,38 @@ fn fuzz(
                     });
                     let initial_solutions = state.solutions().count();
 
-                    // Setup a randomic Input2State stage
-                    let i2s = StdMutationalStage::new(HavocScheduledMutator::new(tuple_list!(
-                        I2SRandReplace::new()
-                    )));
+                    let grammar_engine = if let Some(cfg) = grammar_cfg.as_ref() {
+                        for g in cfg.grammar.iter() {
+                            if !g.exists() {
+                                eprintln!("golibafl: grammar file not found: {}", g.display());
+                                std::process::exit(2);
+                            }
+                        }
+                        if let Some(dir) = cfg.grammarinator_dir.as_ref() {
+                            if !dir.is_dir() {
+                                eprintln!(
+                                    "golibafl: grammarinator dir not found: {}",
+                                    dir.display()
+                                );
+                                std::process::exit(2);
+                            }
+                        }
 
-                    // Setup a MOPT mutator
-                    let mutator = StdMOptMutator::new(
-                        &mut state,
-                        havoc_mutations().merge(tokens_mutations()),
-                        7,
-                        5,
-                    )?;
-
-                    let power: StdPowerMutationalStage<_, _, BytesInput, _, _, _> =
-                        StdPowerMutationalStage::new(mutator);
+                        let grammar_workdir = workdir.join("grammarinator").join(&client_id);
+                        if verbose {
+                            eprintln!(
+                                "golibafl: grammarinator enabled (workdir={})",
+                                grammar_workdir.display()
+                            );
+                        }
+                        Some(Arc::new(Mutex::new(GrammarinatorEngine::spawn(
+                            cfg,
+                            &grammar_workdir,
+                        )?)))
+                    } else {
+                        None
+                    };
+                    let grammar_mode = grammar_engine.is_some();
 
                     if focus_on_new_code {
                         let map_path = git_recency_map_path.as_ref().unwrap_or_else(|| {
@@ -2043,12 +2396,20 @@ fn fuzz(
 	                    );
                         let scheduler = EnsureTestcaseIdsScheduler::new(scheduler);
 
-	                    // A fuzzer with feedbacks and a corpus scheduler
-	                    let mut fuzzer = StdFuzzer::new(scheduler, feedback, objective);
+                    // A fuzzer with feedbacks and a corpus scheduler
+                    let mut fuzzer = StdFuzzer::new(scheduler, feedback, objective);
 
                     // The closure that we want to fuzz
+                    let mut printed_inputs = 0usize;
                     let mut harness = |input: &BytesInput| {
                         let target = input.target_bytes();
+                        if verbose && grammar_mode && printed_inputs < 20 {
+                            let lossy = String::from_utf8_lossy(target.as_ref());
+                            let quoted = serde_json::to_string(&lossy.as_ref())
+                                .unwrap_or_else(|_| "\"<unprintable>\"".to_string());
+                            eprintln!("GOLIBAFL_MUTATED_INPUT {}", quoted);
+                            printed_inputs += 1;
+                        }
                         unsafe {
                             libfuzzer_test_one_input(&target);
                         }
@@ -2069,8 +2430,6 @@ fn fuzz(
                     // Setup a tracing stage in which we log comparisons
                     let tracing = ShadowTracingStage::new();
 
-                    let mut stages = tuple_list!(calibration, tracing, i2s, power);
-
                     if state.metadata_map().get::<Tokens>().is_none() {
                         let mut toks = Tokens::default();
                         toks += autotokens()?;
@@ -2090,25 +2449,43 @@ fn fuzz(
 		                        let all_inputs_empty = input_is_empty && !resume_has_inputs;
 		                        if all_inputs_empty {
 		                            if verbose {
-		                                eprintln!(
-	                                    "golibafl: input dir empty; generating {} initial inputs (max_len={})",
-	                                    initial_generated_inputs,
-                                    initial_input_max_len
-                                );
+                                        if grammar_mode {
+                                            eprintln!(
+                                                "golibafl: input dir empty; generating {} initial inputs (grammar mode)",
+                                                initial_generated_inputs
+                                            );
+                                        } else {
+                                            eprintln!(
+                                                "golibafl: input dir empty; generating {} initial inputs (max_len={})",
+                                                initial_generated_inputs,
+                                                initial_input_max_len
+                                            );
+                                        }
                             }
-                            // Generator of printable bytearrays of max size initial_input_max_len
-                            let mut generator = RandBytesGenerator::new(initial_input_max_len);
-
-                            // Generate 8 initial inputs
-                            state
-                                .generate_initial_inputs(
-                                    &mut fuzzer,
-                                    &mut executor,
-                                    &mut generator,
-                                    &mut restarting_mgr,
-                                    initial_generated_inputs,
-                                )
-                                .expect("Failed to generate the initial corpus");
+		                            if let Some(engine) = grammar_engine.as_ref() {
+                                        let mut generator = GrammarinatorGenerator::new(engine.clone());
+                                        state
+                                            .generate_initial_inputs(
+                                                &mut fuzzer,
+                                                &mut executor,
+                                                &mut generator,
+                                                &mut restarting_mgr,
+                                                initial_generated_inputs,
+                                            )
+                                            .expect("Failed to generate the initial corpus");
+                                    } else {
+                                        // Generator of printable bytearrays of max size initial_input_max_len
+                                        let mut generator = RandBytesGenerator::new(initial_input_max_len);
+                                        state
+                                            .generate_initial_inputs(
+                                                &mut fuzzer,
+                                                &mut executor,
+                                                &mut generator,
+                                                &mut restarting_mgr,
+                                                initial_generated_inputs,
+                                            )
+                                            .expect("Failed to generate the initial corpus");
+                                    }
                             if verbose {
                                 eprintln!(
                                     "golibafl: generated initial corpus size={}",
@@ -2213,19 +2590,30 @@ fn fuzz(
 		                                    }
 		                                }
 
-		                                // Generator of printable bytearrays of max size initial_input_max_len
-		                                let mut generator = RandBytesGenerator::new(initial_input_max_len);
-	
-	                                // Generate 8 initial inputs
-                                state
-                                    .generate_initial_inputs(
-                                        &mut fuzzer,
-                                        &mut executor,
-                                        &mut generator,
-                                        &mut restarting_mgr,
-                                        initial_generated_inputs,
-                                    )
-                                    .expect("Failed to generate the initial corpus");
+		                                if let Some(engine) = grammar_engine.as_ref() {
+                                            let mut generator = GrammarinatorGenerator::new(engine.clone());
+                                            state
+                                                .generate_initial_inputs(
+                                                    &mut fuzzer,
+                                                    &mut executor,
+                                                    &mut generator,
+                                                    &mut restarting_mgr,
+                                                    initial_generated_inputs,
+                                                )
+                                                .expect("Failed to generate the initial corpus");
+                                        } else {
+                                            // Generator of printable bytearrays of max size initial_input_max_len
+                                            let mut generator = RandBytesGenerator::new(initial_input_max_len);
+                                            state
+                                                .generate_initial_inputs(
+                                                    &mut fuzzer,
+                                                    &mut executor,
+                                                    &mut generator,
+                                                    &mut restarting_mgr,
+                                                    initial_generated_inputs,
+                                                )
+                                                .expect("Failed to generate the initial corpus");
+                                        }
                                 println!(
                                     "We imported {} inputs from the generator.",
                                     state.corpus().count()
@@ -2290,84 +2678,192 @@ fn fuzz(
 	                        }
 	                    }
 
-	                    loop {
-	                        if let Err(err) =
-	                            restarting_mgr.maybe_report_progress(&mut state, monitor_timeout)
-	                        {
-	                            if matches!(err, Error::ShuttingDown) {
-                                let _ = restarting_mgr.send_exiting();
-                                notify_restarting_mgr_exit();
-                            }
-                            return Err(err);
-                        }
+                        if let Some(engine) = grammar_engine.as_ref() {
+                            let grammar_stage = StdMutationalStage::with_max_iterations(
+                                GrammarinatorMutator::new(engine.clone()),
+                                std::num::NonZeroUsize::new(1).unwrap(),
+                            );
+                            let mut stages = tuple_list!(calibration, tracing, grammar_stage);
 
-                        if let Err(err) = fuzzer.fuzz_one(
-                            &mut stages,
-                            &mut executor,
-                            &mut state,
-                            &mut restarting_mgr,
-                        ) {
-                            if matches!(err, Error::ShuttingDown) {
-                                let _ = restarting_mgr.send_exiting();
-                                notify_restarting_mgr_exit();
-                            }
-                            return Err(err);
-                        }
+                            loop {
+                                if let Err(err) =
+                                    restarting_mgr.maybe_report_progress(&mut state, monitor_timeout)
+                                {
+                                    if matches!(err, Error::ShuttingDown) {
+                                        let _ = restarting_mgr.send_exiting();
+                                        notify_restarting_mgr_exit();
+                                    }
+                                    return Err(err);
+                                }
 
-                        if catch_hangs && hang_candidate_path.exists() {
-                            let exe = env::current_exe().unwrap_or_else(|err| {
-                                eprintln!("golibafl: failed to get current exe path: {err}");
-                                std::process::exit(2);
-                            });
-                            match confirm_timeout_candidate(
-                                &exe,
-                                &hang_candidate_path,
-                                hang_timeout,
-                                hang_confirm_runs,
-                                &hangs_dir,
-                                &crashes_dir,
-                                &client_id,
-                            ) {
-                                TimeoutCandidateVerdict::NotHang => (),
-                                TimeoutCandidateVerdict::Hang(p)
-                                | TimeoutCandidateVerdict::Crash(p) => {
-                                    if verbose {
-                                        eprintln!(
-                                            "golibafl: timeout candidate confirmed; saved: {}",
-                                            p.display()
-                                        );
+                                if let Err(err) = fuzzer.fuzz_one(
+                                    &mut stages,
+                                    &mut executor,
+                                    &mut state,
+                                    &mut restarting_mgr,
+                                ) {
+                                    if matches!(err, Error::ShuttingDown) {
+                                        let _ = restarting_mgr.send_exiting();
+                                        notify_restarting_mgr_exit();
                                     }
-                                    if stop_all_fuzzers_on_panic {
-                                        let executions = *state.executions();
-                                        restarting_mgr.fire(
-                                            &mut state,
-                                            EventWithStats::with_current_time(
-                                                Event::<BytesInput>::Stop,
-                                                executions,
-                                            ),
-                                        )?;
-                                        state.request_stop();
-                                        restarting_mgr.send_exiting()?;
-                                        return Err(Error::shutting_down());
+                                    return Err(err);
+                                }
+
+                                if catch_hangs && hang_candidate_path.exists() {
+                                    let exe = env::current_exe().unwrap_or_else(|err| {
+                                        eprintln!("golibafl: failed to get current exe path: {err}");
+                                        std::process::exit(2);
+                                    });
+                                    match confirm_timeout_candidate(
+                                        &exe,
+                                        &hang_candidate_path,
+                                        hang_timeout,
+                                        hang_confirm_runs,
+                                        &hangs_dir,
+                                        &crashes_dir,
+                                        &client_id,
+                                    ) {
+                                        TimeoutCandidateVerdict::NotHang => (),
+                                        TimeoutCandidateVerdict::Hang(p)
+                                        | TimeoutCandidateVerdict::Crash(p) => {
+                                            if verbose {
+                                                eprintln!(
+                                                    "golibafl: timeout candidate confirmed; saved: {}",
+                                                    p.display()
+                                                );
+                                            }
+                                            if stop_all_fuzzers_on_panic {
+                                                let executions = *state.executions();
+                                                restarting_mgr.fire(
+                                                    &mut state,
+                                                    EventWithStats::with_current_time(
+                                                        Event::<BytesInput>::Stop,
+                                                        executions,
+                                                    ),
+                                                )?;
+                                                state.request_stop();
+                                                restarting_mgr.send_exiting()?;
+                                                return Err(Error::shutting_down());
+                                            }
+                                        }
                                     }
+                                }
+
+                                if stop_all_fuzzers_on_panic
+                                    && state.solutions().count() > initial_solutions
+                                {
+                                    let executions = *state.executions();
+                                    restarting_mgr.fire(
+                                        &mut state,
+                                        EventWithStats::with_current_time(
+                                            Event::<BytesInput>::Stop,
+                                            executions,
+                                        ),
+                                    )?;
+                                    state.request_stop();
+                                    restarting_mgr.send_exiting()?;
+                                    return Err(Error::shutting_down());
+                                }
+                            }
+                        } else {
+                            // Setup a randomic Input2State stage
+                            let i2s = StdMutationalStage::new(HavocScheduledMutator::new(tuple_list!(
+                                I2SRandReplace::new()
+                            )));
+
+                            // Setup a MOPT mutator
+                            let mutator = StdMOptMutator::new(
+                                &mut state,
+                                havoc_mutations().merge(tokens_mutations()),
+                                7,
+                                5,
+                            )?;
+                            let power: StdPowerMutationalStage<_, _, BytesInput, _, _, _> =
+                                StdPowerMutationalStage::new(mutator);
+
+                            let mut stages = tuple_list!(calibration, tracing, i2s, power);
+
+                            loop {
+                                if let Err(err) =
+                                    restarting_mgr.maybe_report_progress(&mut state, monitor_timeout)
+                                {
+                                    if matches!(err, Error::ShuttingDown) {
+                                        let _ = restarting_mgr.send_exiting();
+                                        notify_restarting_mgr_exit();
+                                    }
+                                    return Err(err);
+                                }
+
+                                if let Err(err) = fuzzer.fuzz_one(
+                                    &mut stages,
+                                    &mut executor,
+                                    &mut state,
+                                    &mut restarting_mgr,
+                                ) {
+                                    if matches!(err, Error::ShuttingDown) {
+                                        let _ = restarting_mgr.send_exiting();
+                                        notify_restarting_mgr_exit();
+                                    }
+                                    return Err(err);
+                                }
+
+                                if catch_hangs && hang_candidate_path.exists() {
+                                    let exe = env::current_exe().unwrap_or_else(|err| {
+                                        eprintln!("golibafl: failed to get current exe path: {err}");
+                                        std::process::exit(2);
+                                    });
+                                    match confirm_timeout_candidate(
+                                        &exe,
+                                        &hang_candidate_path,
+                                        hang_timeout,
+                                        hang_confirm_runs,
+                                        &hangs_dir,
+                                        &crashes_dir,
+                                        &client_id,
+                                    ) {
+                                        TimeoutCandidateVerdict::NotHang => (),
+                                        TimeoutCandidateVerdict::Hang(p)
+                                        | TimeoutCandidateVerdict::Crash(p) => {
+                                            if verbose {
+                                                eprintln!(
+                                                    "golibafl: timeout candidate confirmed; saved: {}",
+                                                    p.display()
+                                                );
+                                            }
+                                            if stop_all_fuzzers_on_panic {
+                                                let executions = *state.executions();
+                                                restarting_mgr.fire(
+                                                    &mut state,
+                                                    EventWithStats::with_current_time(
+                                                        Event::<BytesInput>::Stop,
+                                                        executions,
+                                                    ),
+                                                )?;
+                                                state.request_stop();
+                                                restarting_mgr.send_exiting()?;
+                                                return Err(Error::shutting_down());
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if stop_all_fuzzers_on_panic
+                                    && state.solutions().count() > initial_solutions
+                                {
+                                    let executions = *state.executions();
+                                    restarting_mgr.fire(
+                                        &mut state,
+                                        EventWithStats::with_current_time(
+                                            Event::<BytesInput>::Stop,
+                                            executions,
+                                        ),
+                                    )?;
+                                    state.request_stop();
+                                    restarting_mgr.send_exiting()?;
+                                    return Err(Error::shutting_down());
                                 }
                             }
                         }
-
-                        if stop_all_fuzzers_on_panic && state.solutions().count() > initial_solutions {
-                            let executions = *state.executions();
-                            restarting_mgr.fire(
-                                &mut state,
-                                EventWithStats::with_current_time(
-                                    Event::<BytesInput>::Stop,
-                                    executions,
-                                ),
-                            )?;
-                            state.request_stop();
-                            restarting_mgr.send_exiting()?;
-                            return Err(Error::shutting_down());
-                        }
-                    }
                 }};
             }
 
@@ -2614,9 +3110,57 @@ pub fn main() {
             broker_port,
             input,
             output,
+            use_grammar,
+            grammar,
+            start_rule,
+            grammar_actions,
+            grammar_serializer,
+            grammarinator_dir,
+            grammar_max_depth,
+            grammar_max_tokens,
         } => {
             let broker_port = resolve_broker_port(broker_port);
-            fuzz(&cores, broker_port, &input, &output, config.as_ref())
+            let grammar_cfg = if use_grammar {
+                if grammar.is_empty() {
+                    eprintln!("golibafl: --use-grammar requires --grammar");
+                    std::process::exit(2);
+                }
+                let start_rule = start_rule.unwrap_or_else(|| {
+                    eprintln!("golibafl: --use-grammar requires --start-rule");
+                    std::process::exit(2);
+                });
+                Some(GrammarinatorConfig {
+                    grammar,
+                    start_rule,
+                    actions: grammar_actions,
+                    serializer: grammar_serializer,
+                    grammarinator_dir,
+                    max_depth: grammar_max_depth,
+                    max_tokens: grammar_max_tokens,
+                })
+            } else {
+                if !grammar.is_empty()
+                    || start_rule.is_some()
+                    || grammar_actions
+                    || grammar_serializer.is_some()
+                    || grammarinator_dir.is_some()
+                {
+                    eprintln!(
+                        "golibafl: --grammar/--start-rule/--grammar-actions/--grammar-serializer/--grammarinator-dir require --use-grammar"
+                    );
+                    std::process::exit(2);
+                }
+                None
+            };
+
+            fuzz(
+                &cores,
+                broker_port,
+                &input,
+                &output,
+                config.as_ref(),
+                grammar_cfg.as_ref(),
+            )
         }
         Mode::Run { input } => {
             run(input);

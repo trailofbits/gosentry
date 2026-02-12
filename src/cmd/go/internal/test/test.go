@@ -310,6 +310,32 @@ control the execution of any test:
 	    When -use-libafl is set, pass a JSONC configuration file (JSON with // comments)
 	    to the LibAFL runner (implemented in $GOROOT/golibafl).
 
+	-use-grammar
+	    When -use-libafl is set, use Grammarinator (ANTLRv4) to generate inputs
+	    that conform to a user-provided grammar.
+	    Requires -grammar and -start-rule.
+
+	-grammar file
+	    ANTLRv4 grammar file(s) (.g4) for -use-grammar.
+	    May be specified multiple times or as a comma-separated list.
+
+	-start-rule name
+	    Start rule for -use-grammar (parser rule name).
+
+	-grammar-actions
+	    When -use-grammar is set, allow inline actions and semantic predicates
+	    in the grammar.
+	    The default is false.
+
+	-grammar-serializer path
+	    When -use-grammar is set, override the Python serializer used to convert
+	    the generated derivation tree into bytes (package.module.function).
+	    If unset, golibafl defaults to grammarinator.runtime.simple_space_serializer.
+
+	-grammarinator-dir dir
+	    When -use-grammar is set, add dir to PYTHONPATH for importing the
+	    grammarinator Python package (useful for a local checkout).
+
 	-json
 	    Log verbose output and test results in JSON. This presents the
 	    same information as the -v flag in a machine-readable format.
@@ -585,6 +611,12 @@ var (
 	testFocusOnNewCode explicitBoolFlag                  // -focus-on-new-code flag (required with -use-libafl)
 	testCatchRaces     explicitBoolFlag                  // -catch-races flag (required with -use-libafl)
 	testCatchLeaks     explicitBoolFlag                  // -catch-leaks flag (required with -use-libafl)
+	testUseGrammar     bool                              // -use-grammar flag (requires -use-libafl)
+	testGrammar        []string                          // -grammar flag (requires -use-grammar)
+	testStartRule      string                            // -start-rule flag (requires -use-grammar)
+	testGrammarActions bool                              // -grammar-actions flag (requires -use-grammar)
+	testGrammarSer     string                            // -grammar-serializer flag (requires -use-grammar)
+	testGrammarinator  string                            // -grammarinator-dir flag (requires -use-grammar)
 	testLibAFLConfig   string                            // -libafl-config flag
 	testPanicOn        string                            // -panic-on flag
 	testJSON           bool                              // -json flag
@@ -785,6 +817,11 @@ func runTest(ctx context.Context, cmd *base.Command, args []string) {
 	if testCatchLeaks.set && !testUseLibAFL {
 		base.Fatalf("-catch-leaks requires -use-libafl")
 	}
+	if !testUseGrammar {
+		if len(testGrammar) > 0 || testStartRule != "" || testGrammarActions || testGrammarSer != "" || testGrammarinator != "" {
+			base.Fatalf("-grammar/-start-rule/-grammar-actions/-grammar-serializer/-grammarinator-dir require -use-grammar")
+		}
+	}
 	if testUseLibAFL {
 		if !testFocusOnNewCode.set {
 			base.Fatalf("-use-libafl requires -focus-on-new-code={true|false}")
@@ -803,6 +840,20 @@ func runTest(ctx context.Context, cmd *base.Command, args []string) {
 		}
 		if !slices.Contains(cfg.BuildContext.BuildTags, "libfuzzer") {
 			cfg.BuildContext.BuildTags = append(cfg.BuildContext.BuildTags, "libfuzzer")
+		}
+	}
+	if testUseGrammar {
+		if testFuzz == "" {
+			base.Fatalf("-use-grammar requires -fuzz")
+		}
+		if !testUseLibAFL {
+			base.Fatalf("-use-grammar requires -use-libafl")
+		}
+		if len(testGrammar) == 0 {
+			base.Fatalf("-use-grammar requires -grammar")
+		}
+		if testStartRule == "" {
+			base.Fatalf("-use-grammar requires -start-rule")
 		}
 	}
 	if testCatchRaces.set && testCatchRaces.val {
@@ -1947,6 +1998,40 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 			args = append(args, "--config", cfgPath)
 		}
 		args = append(args, "-j", "0", "-i", inDir, "-o", libaflOutDir)
+
+		if testUseGrammar {
+			args = append(args, "--use-grammar")
+
+			for _, grammar := range testGrammar {
+				path := grammar
+				if !filepath.IsAbs(path) {
+					path = filepath.Join(base.Cwd(), path)
+				}
+				if _, err := os.Stat(path); err != nil {
+					return fmt.Errorf("grammar file not found: %s", path)
+				}
+				args = append(args, "--grammar", path)
+			}
+
+			args = append(args, "--start-rule", testStartRule)
+			if testGrammarActions {
+				args = append(args, "--grammar-actions")
+			}
+			if testGrammarSer != "" {
+				args = append(args, "--grammar-serializer", testGrammarSer)
+			}
+			if testGrammarinator != "" {
+				path := testGrammarinator
+				if !filepath.IsAbs(path) {
+					path = filepath.Join(base.Cwd(), path)
+				}
+				if fi, err := os.Stat(path); err != nil || !fi.IsDir() {
+					return fmt.Errorf("grammarinator dir not found: %s", path)
+				}
+				args = append(args, "--grammarinator-dir", path)
+			}
+		}
+
 		cmdDir = golibaflDir
 		addEnv = []string{"HARNESS_LIB=" + buildAction.BuiltTarget()}
 		addEnv = append(addEnv, "LIBAFL_SEED_DIR="+inDir)

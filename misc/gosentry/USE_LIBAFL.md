@@ -21,6 +21,33 @@ To opt out:
 go test -use-libafl=false -fuzz=FuzzXxx
 ```
 
+## Grammar-based fuzzing (Grammarinator)
+
+When running in LibAFL mode, gosentry can generate inputs from an ANTLRv4 grammar via Grammarinator.
+
+Flags (gosentry `go test`):
+- `--use-grammar`: enable grammar-based input generation (LibAFL mode only).
+- `--grammar path/to/Foo.g4`: grammar file(s) (repeatable or comma-separated).
+- `--start-rule RuleName`: start rule for generation.
+
+Requirements:
+- `python3` with Grammarinator installed: `python3 -m pip install grammarinator`
+- Java (JRE/JDK) for Grammarinator/ANTLR.
+
+Example (JSON grammar):
+
+```bash
+cd test/gosentry/examples/grammar_json
+GOSENTRY_VERBOSE_AFL=1 CGO_ENABLED=1 ../../../../bin/go test -fuzz=FuzzGrammarJSON --use-grammar --grammar=testdata/JSON.g4 --start-rule=json --focus-on-new-code=false --catch-races=false --catch-leaks=false .
+```
+
+Set `GOSENTRY_VERBOSE_AFL=1` to print a few generated inputs as `GOLIBAFL_MUTATED_INPUT "..."`.
+
+Advanced flags:
+- `--grammar-actions`: allow inline actions and semantic predicates (default: false).
+- `--grammar-serializer pkg.module.func`: override the Python serializer (default: `grammarinator.runtime.simple_space_serializer`).
+- `--grammarinator-dir /path/to/grammarinator`: add a local Grammarinator checkout to `PYTHONPATH`.
+
 ## Git-aware scheduling (focus on new code)
 
 `--focus-on-new-code={true|false}` enables git-aware scheduling to prefer inputs that execute recently changed lines (based on `git blame`).

@@ -73,6 +73,12 @@ func init() {
 	cf.Var(&testFocusOnNewCode, "focus-on-new-code", "")
 	cf.Var(&testCatchRaces, "catch-races", "")
 	cf.Var(&testCatchLeaks, "catch-leaks", "")
+	cf.BoolVar(&testUseGrammar, "use-grammar", false, "")
+	cf.Var((*grammarFilesFlag)(&testGrammar), "grammar", "")
+	cf.StringVar(&testStartRule, "start-rule", "", "")
+	cf.BoolVar(&testGrammarActions, "grammar-actions", false, "")
+	cf.StringVar(&testGrammarSer, "grammar-serializer", "", "")
+	cf.StringVar(&testGrammarinator, "grammarinator-dir", "", "")
 	cf.StringVar(&testLibAFLConfig, "libafl-config", "", "")
 	cf.StringVar(&testPanicOn, "panic-on", "", "")
 	cf.StringVar(&testTrace, "trace", "", "")
@@ -84,6 +90,41 @@ func init() {
 			cf.Var(cf.Lookup(name).Value, "test."+name, "")
 		}
 	}
+}
+
+// grammarFilesFlag is the implementation of the -grammar flag.
+//
+// It may be specified multiple times. Each occurrence accepts either a
+// comma-separated list (recommended) or a space-separated and possibly-quoted
+// list (compatible with base.StringsFlag).
+type grammarFilesFlag []string
+
+func (v *grammarFilesFlag) Set(s string) error {
+	// For compatibility, allow "-grammar='a b c'" or "-grammar='a'".
+	if strings.Contains(s, " ") || strings.Contains(s, "'") {
+		var tmp base.StringsFlag
+		if err := tmp.Set(s); err != nil {
+			return err
+		}
+		for _, item := range tmp {
+			if item != "" {
+				*v = append(*v, item)
+			}
+		}
+		return nil
+	}
+
+	// Split on commas, ignore empty strings.
+	for part := range strings.SplitSeq(s, ",") {
+		if part != "" {
+			*v = append(*v, part)
+		}
+	}
+	return nil
+}
+
+func (v *grammarFilesFlag) String() string {
+	return "<GrammarFilesFlag>"
 }
 
 // outputdirFlag implements the -outputdir flag.
