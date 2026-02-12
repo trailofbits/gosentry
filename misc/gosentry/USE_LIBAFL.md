@@ -40,12 +40,95 @@ Requirements:
 - `python3` with Grammarinator installed: `python3 -m pip install grammarinator`
 - Java (JRE/JDK) for Grammarinator/ANTLR.
 
-Example (JSON grammar):
+<details>
+<summary><strong>Command example</strong></summary>
 
 ```bash
+# Example (from this repo): JSON grammar + JSON harness.
 cd test/gosentry/examples/grammar_json
-GOSENTRY_VERBOSE_AFL=1 CGO_ENABLED=1 ../../../../bin/go test -fuzz=FuzzGrammarJSON --use-grammar --grammar=testdata/JSON.g4 --start-rule=json --focus-on-new-code=false --catch-races=false --catch-leaks=false .
+GOSENTRY_VERBOSE_AFL=1 CGO_ENABLED=1 ../../../../bin/go test -fuzz=FuzzGrammarJSON \
+  --use-grammar --grammar=testdata/JSON.g4 --start-rule=json \
+  --focus-on-new-code=false --catch-races=false --catch-leaks=false .
+
+# Generic pattern:
+# GOSENTRY_VERBOSE_AFL=1 CGO_ENABLED=1 go test -fuzz=FuzzXxx \
+#   --use-grammar --grammar=/path/to/MyGrammar.g4 --start-rule=MyStartRule \
+#   --focus-on-new-code=false --catch-races=false --catch-leaks=false
 ```
+
+</details>
+
+<details>
+<summary><strong>Go fuzz harness example (JSON)</strong></summary>
+
+```go
+package mypkg
+
+import (
+	"bytes"
+	"encoding/json"
+	"io"
+	"testing"
+)
+
+func FuzzGrammarJSON(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		dec := json.NewDecoder(bytes.NewReader(data))
+		dec.UseNumber()
+
+		var v any
+		if err := dec.Decode(&v); err != nil {
+			t.Fatalf("invalid JSON: %v", err)
+		}
+		if err := dec.Decode(&struct{}{}); err != io.EOF {
+			t.Fatalf("invalid JSON: trailing data")
+		}
+	})
+}
+```
+
+</details>
+
+<details>
+<summary><strong>ANTLRv4 grammar example (small JSON subset)</strong></summary>
+
+```antlr
+grammar MiniJSON;
+
+json : value EOF ;
+
+value
+  : STRING
+  | NUMBER
+  | obj
+  | arr
+  | 'true'
+  | 'false'
+  | 'null'
+  ;
+
+obj  : '{' pair (',' pair)* '}' | '{' '}' ;
+pair : STRING ':' value ;
+arr  : '[' value (',' value)* ']' | '[' ']' ;
+
+STRING : '"' [a-zA-Z0-9 _.-]* '"' ;
+NUMBER : '-'? ('0' | [1-9] [0-9]*) ;
+WS     : [ \t\r\n]+ -> skip ;
+```
+
+</details>
+
+<details>
+<summary><strong>Expected verbose output (example)</strong></summary>
+
+```text
+golibafl: grammarinator enabled (workdir=...)
+GOLIBAFL_MUTATED_INPUT "null"
+GOLIBAFL_MUTATED_INPUT "{ }"
+GOLIBAFL_MUTATED_INPUT "[ true, false, null ]"
+```
+
+</details>
 
 Set `GOSENTRY_VERBOSE_AFL=1` to print a few generated inputs as `GOLIBAFL_MUTATED_INPUT "..."` (printed by `golibafl`, useful for smoke tests / CI).
 
@@ -57,6 +140,50 @@ Behavior notes:
 ### CI note
 
 This repo includes a grammar smoke test script at `misc/gosentry/tests/smoke_use_libafl_grammar_json.sh` (run by `.github/workflows/smoke_use_libafl.yml`).
+
+<details>
+<summary><strong>How grammar fuzzing works in gosentry (detailed)</strong></summary>
+
+```text
+┌───────────────────────────────────────────────────────────────────────────┐
+│ 1) gosentry `go test -fuzz=FuzzXxx` (LibAFL mode)                          │
+│    - captures your `testing.F.Fuzz` callback                               │
+│    - generates a Go->libFuzzer bridge (`_libaflmain.go`)                    │
+│    - builds a static harness archive (`libharness.a`)                       │
+│    - launches the Rust runner: `golibafl fuzz ...`                          │
+└───────────────┬───────────────────────────────────────────────────────────┘
+                v
+┌───────────────────────────────────────────────────────────────────────────┐
+│ 2) `golibafl` (Rust + LibAFL) fuzzes the Go harness in-process              │
+│    - loads `libharness.a` via HARNESS_LIB                                   │
+│    - executes inputs by calling `LLVMFuzzerTestOneInput(data)`              │
+│      (implemented by the generated `_libaflmain.go`)                        │
+└───────────────┬───────────────────────────────────────────────────────────┘
+                v
+┌───────────────────────────────────────────────────────────────────────────┐
+│ 3) In grammar mode, `golibafl` spawns a long-lived `python3` subprocess     │
+│    - runs Grammarinator `ProcessorTool` on your `.g4` file(s)               │
+│    - produces a Python `*Generator.py` under a temp workdir                 │
+│    - serves 1 generated sample per request over stdin/stdout                │
+│      (uses: `--start-rule` + optional `--grammar-serializer`)               │
+│    - `golibafl` reads the generated string and uses its UTF-8 bytes         │
+└───────────────┬───────────────────────────────────────────────────────────┘
+                v
+┌───────────────────────────────────────────────────────────────────────────┐
+│ 4) LibAFL stages (grammar mode)                                            │
+│    - initial corpus: generated from the grammar if the input dir is empty  │
+│    - mutation: replace the current input with a fresh grammar-generated    │
+│      one (current implementation is generation-from-scratch)               │
+│    - feedback/objective: coverage/time/crash as usual                       │
+└───────────────────────────────────────────────────────────────────────────┘
+```
+
+Notes:
+- Your Go harness still receives `data []byte`. Parsing/validation stays in Go (ex: JSON decode into a struct).
+- If the harness rejects inputs, it usually means the grammar/serializer is not aligned with what the harness expects.
+- Use `GOSENTRY_VERBOSE_AFL=1` to see `golibafl: grammarinator enabled` + a few `GOLIBAFL_MUTATED_INPUT "..."` lines.
+
+</details>
 
 Advanced flags:
 - `--grammar-actions`: allow inline actions and semantic predicates (default: false).
