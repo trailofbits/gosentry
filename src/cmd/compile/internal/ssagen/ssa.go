@@ -288,6 +288,7 @@ func (s *state) emitOpenDeferInfo() {
 
 	x := base.Ctxt.Lookup(s.curfn.LSym.Name + ".opendefer")
 	x.Set(obj.AttrContentAddressable, true)
+	x.Align = 1
 	s.curfn.LSym.Func().OpenCodedDeferInfo = x
 
 	off := 0
@@ -7593,6 +7594,7 @@ func emitArgInfo(e *ssafn, f *ssa.Func, pp *objw.Progs) {
 // emit argument info (locations on stack) of f for traceback.
 func EmitArgInfo(f *ir.Func, abiInfo *abi.ABIParamResultInfo) *obj.LSym {
 	x := base.Ctxt.Lookup(fmt.Sprintf("%s.arginfo%d", f.LSym.Name, f.ABI))
+	x.Align = 1
 	// NOTE: do not set ContentAddressable here. This may be referenced from
 	// assembly code by name (in this case f is a declaration).
 	// Instead, set it in emitArgInfo above.
@@ -7712,6 +7714,7 @@ func emitWrappedFuncInfo(e *ssafn, pp *objw.Progs) {
 	x := base.Ctxt.LookupInit(fmt.Sprintf("%s.wrapinfo", wsym.Name), func(x *obj.LSym) {
 		objw.SymPtrOff(x, 0, wsym)
 		x.Set(obj.AttrContentAddressable, true)
+		x.Align = 4
 	})
 	e.curfn.LSym.Func().WrapInfo = x
 

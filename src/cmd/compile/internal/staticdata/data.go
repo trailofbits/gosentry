@@ -99,6 +99,7 @@ func StringSym(pos src.XPos, s string) (data *obj.LSym) {
 			off := dstringdata(symdata, 0, s, pos, "string")
 			objw.Global(symdata, int32(off), obj.DUPOK|obj.RODATA|obj.LOCAL)
 			symdata.Set(obj.AttrContentAddressable, true)
+			symdata.Align = 1
 		}
 		stringSymMu.Unlock()
 	}
@@ -194,6 +195,7 @@ func fileStringSym(pos src.XPos, file string, readonly bool, hashBytes []byte) (
 			info.Name = file
 			info.Size = size
 			objw.Global(symdata, int32(size), obj.DUPOK|obj.RODATA|obj.LOCAL)
+			symdata.Align = 1
 			// Note: AttrContentAddressable cannot be set here,
 			// because the content-addressable-handling code
 			// does not know about file symbols.
@@ -220,6 +222,7 @@ func slicedata(pos src.XPos, s string) *obj.LSym {
 	lsym := types.LocalPkg.Lookup(symname).LinksymABI(obj.ABI0)
 	off := dstringdata(lsym, 0, s, pos, "slice")
 	objw.Global(lsym, int32(off), obj.NOPTR|obj.LOCAL)
+	lsym.Align = 1
 
 	return lsym
 }
