@@ -400,7 +400,9 @@ Enable goroutine leak catching with `--catch-leaks=true` or race catching with `
 
 #### Overview
 
-Byte-level fuzzing is great, but parsers and file formats often need structured inputs. In LibAFL mode, gosentry can generate inputs from an ANTLRv4 grammar via [Grammarinator](https://github.com/renatahodovan/grammarinator), and feed them to your regular Go fuzz harness (`testing.F.Fuzz`) as `data []byte`.
+Byte-level fuzzing is great, but parsers and file formats often need structured inputs. In LibAFL mode, gosentry can generate inputs from an ANTLRv4 grammar via [Grammarinator](https://github.com/renatahodovan/grammarinator), and feed them to your regular Go fuzz harness (`testing.F.Fuzz`).
+
+Your fuzz callback can also take a single `string` argument (instead of `[]byte`), which is often more convenient for text grammars. Grammar mode works best when the callback takes a **single** input argument that represents the whole input (usually `[]byte` or `string`): if you use multiple inputs, gosentry will decode the underlying byte buffer into separate values, so the original grammar-generated text won’t stay intact.
 
 This feature requires LibAFL (`--use-libafl=true`, which is the default when `-fuzz` is set).
 
@@ -518,7 +520,8 @@ WS     : [ \t\r\n]+ -> skip ;
 ```
 
 Notes:
-- Your Go harness still receives `data []byte`. The “Go types” part stays in Go (ex: parse JSON into a struct and `t.Fatalf` if parsing fails).
+- Your Go harness still receives standard Go fuzz inputs. In grammar mode, a one-arg fuzz target can be either `data []byte` or `s string` (the generated sample is passed as UTF-8 bytes).
+- Grammar mode works best with a single input argument; with multiple arguments, gosentry will decode the underlying byte buffer into separate values, so the original grammar-generated text won’t stay intact.
 - If your harness rejects inputs (example: JSON unmarshal fails), it usually means the grammar/serializer does not match what the harness expects.
 - If you want to see generated inputs, set `GOSENTRY_VERBOSE_AFL=1` and look for `GOLIBAFL_MUTATED_INPUT "..."`.
 
