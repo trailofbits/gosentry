@@ -4,15 +4,14 @@
 
 gosentry is a security-focused fork of the Go toolchain. In a _very_ simple phrasing, it's copy of the Go compiler that finds bugs. If you are a security researcher auditing Go codebases, you should probably use this tool and consider it as a great swiss-knife.
 
-For now, it focuses on six things:
+For now, it focuses on the following features:
 
 - Integrating [go-panikint](https://github.com/trailofbits/go-panikint): instrumentation that panics on **integer overflow/underflow** (and **optionally on truncating integer conversions**).
 - Integrating [LibAFL](https://github.com/AFLplusplus/LibAFL) fuzzer: run Go fuzzing harnesses with **LibAFL** for better fuzzing performances.
-- Grammar-based fuzzing (ANTLRv4 via [Grammarinator](https://github.com/renatahodovan/grammarinator)): generate structured inputs from a grammar ([Feature 6](#feature-6-grammar-based-fuzzing-grammarinator)).
+- Proposing **Grammar-based fuzzing** (ANTLRv4 via [Grammarinator](https://github.com/renatahodovan/grammarinator)): generate structured inputs from a grammar ([Feature 6](#feature-6-grammar-based-fuzzing-grammarinator)).
 - Panicking on [user-provided function call](https://github.com/kevin-valerio/gosentry?tab=readme-ov-file#feature-2-panic-on-selected-functions): catching targeted bugs when certains functions are called (eg., `myapp.(*Logger).Error`).
 - Git-blame-oriented fuzzing (based on [this work](https://github.com/kevin-valerio/LibAFL-git-aware)): when fuzzing with LibAFL mode, you can orientate the fuzzer towards **recently added/edited lines**.
 - Detect **race conditions**, **goroutine leaks**, and **confirmed hangs** at fuzz-time: when fuzzing with LibAFL, gosentry can replay newly found seeds (or timed-out executions) and treat findings like bugs.
-- Proposing a **grammar-based** fuzzer: using [Grammarinator](https://github.com/renatahodovan/grammarinator/) as a mutator, gosentry can generate valid grammar for mutation.
 
 It especially has **two** objectives:
 - Being easy to use and UX-friendly (_we're tired of complex tools_),
@@ -289,7 +288,7 @@ git-aware median (capped to timeout): 87.432s
 ```
 </details>
 
-## Feature 5: Detect race conditions, goroutine leaks, and hangs at fuzz-time
+## Feature 5: Detect race conditions, goroutine leaks, and hangs (timeouts) at fuzz-time
 
 ##### Catching confirmed hangs (LibAFL timeouts)
 
@@ -400,7 +399,7 @@ Enable goroutine leak catching with `--catch-leaks=true` or race catching with `
 
 #### Overview
 
-Byte-level fuzzing is great, but parsers and file formats often need structured inputs. In LibAFL mode, gosentry can generate inputs from an ANTLRv4 grammar via [Grammarinator](https://github.com/renatahodovan/grammarinator), and feed them to your regular Go fuzz harness (`testing.F.Fuzz`).
+Byte-level fuzzing is great, but parsers and file formats often need structured inputs. gosentry can generate inputs from an ANTLRv4 grammar via [Grammarinator](https://github.com/renatahodovan/grammarinator), and feed them to your regular Go fuzz harness (`testing.F.Fuzz`).
 
 In grammar mode, LibAFL still runs the normal coverage-guided loop (pick a corpus seed → mutate → execute → keep inputs that increase coverage). The difference is the mutator: instead of byte-level havoc, gosentry uses Grammarinator to do **grammar-aware mutation** of the currently selected corpus seed (parse → mutate the derivation tree → serialize back to text).
 
@@ -413,8 +412,6 @@ f.Fuzz(func(t *testing.T, s string) { /* parse s */ })
 ```
 
 If you use multiple inputs in your harness, gosentry will decode the underlying byte buffer into separate values, so the original grammar-generated text won’t stay intact.
-
-This feature requires LibAFL (`--use-libafl=true`, which is the default when `-fuzz` is set).
 
 #### How to use 
 Requirements:  `python3` with `grammarinator` installed (`python3 -m pip install grammarinator`) and Java (JRE/JDK) for Grammarinator/ANTLR.
@@ -529,13 +526,6 @@ Example protocol:
   {"op":"mutate","input":"...seed..."}
   "<generated or mutated input string>"
 ```
-
-Notes:
-- Your Go harness still receives standard Go fuzz inputs. In grammar mode, a one-arg fuzz target can be either `data []byte` or `s string` (the generated sample is passed as UTF-8 bytes).
-- Grammar mode works best with a single input argument; with multiple arguments, gosentry will decode the underlying byte buffer into separate values, so the original grammar-generated text won’t stay intact.
-- `golibafl` validates mutated candidates by re-parsing them with the same grammar and retries on invalid outputs.
-- If your harness rejects inputs (example: JSON unmarshal fails), it usually means the grammar/serializer does not match what the harness expects.
-- If you want to see generated inputs, set `GOSENTRY_VERBOSE_AFL=1` and look for `GOLIBAFL_MUTATED_INPUT "..."`.
 
 </details>
 
