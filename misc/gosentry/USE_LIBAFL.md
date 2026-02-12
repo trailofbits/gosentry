@@ -143,7 +143,7 @@ Limitations (current glue):
 - Grammar mode currently expects UTF-8 text inputs (the Grammarinator subprocess works with strings).
 - Grammar mode works best with a single input argument; multi-arg fuzz targets will decode the underlying byte buffer into separate values.
 - Grammarinator mutation is best-effort; `golibafl` validates candidates by re-parsing and retries. If repeated mutation attempts fail, it may fall back to generation-from-scratch to keep fuzzing.
-- By default, `--grammar-actions` is off: gosentry will strip ANTLR inline actions/predicates (`{ ... }` / `{ ... }?`) for the parsing/validation step so no embedded grammar code executes. If your grammar relies on them, enable `--grammar-actions` (unsafe) or provide an action-free grammar.
+- `--grammar-actions` is not enforced for the parse step yet: the ANTLR parser used during mutation may still execute inline actions/predicates from the grammar. Only use trusted grammars.
 - The LibAFL corpus is stored as raw bytes on disk; Grammarinator trees are cached only in-memory (per client, bounded), so restarts lose the tree cache.
 - No grammar recombination/crossover between two corpus seeds yet (mutation is single-seed).
 
@@ -174,8 +174,6 @@ This repo includes a grammar smoke test script at `misc/gosentry/tests/smoke_use
 ┌───────────────────────────────────────────────────────────────────────────┐
 │ 2) Grammarinator engine (`python3` subprocess, per client)                  │
 │    - `ProcessorTool`: turns `.g4` file(s) into a Python `*Generator.py`     │
-│    - safety: unless `--grammar-actions` is set, gosentry strips inline      │
-│      actions/predicates from the grammar used for parsing/validation        │
 │    - protocol: JSON per line over stdin/stdout (generate / mutate(seed))    │
 │    - mutate = parse seed -> mutate derivation tree -> serialize back        │
 │    - validates candidates by re-parsing; retries on invalid outputs         │
@@ -197,7 +195,7 @@ Notes:
 </details>
 
 Advanced flags:
-- `--grammar-actions`: allow inline actions and semantic predicates (default: false).
+- `--grammar-actions`: enable inline actions and semantic predicates when building the Grammarinator generator (default: false; unsafe).
 - `--grammar-serializer pkg.module.func`: override the Python serializer (default: `grammarinator.runtime.simple_space_serializer`).
 - `--grammarinator-dir /path/to/grammarinator`: add a local Grammarinator checkout to `PYTHONPATH`.
 

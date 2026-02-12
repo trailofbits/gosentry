@@ -511,8 +511,6 @@ WS     : [ \t\r\n]+ -> skip ;
 ┌───────────────────────────────────────────────────────────────────────────┐
 │ 2) Grammarinator engine (`python3` subprocess, per client)                  │
 │    - `ProcessorTool`: turns `.g4` file(s) into a Python `*Generator.py`     │
-│    - safety: unless `--grammar-actions` is set, gosentry strips inline      │
-│      actions/predicates from the grammar used for parsing/validation        │
 │    - protocol: JSON per line over stdin/stdout (generate / mutate(seed))    │
 │    - mutate = parse seed -> mutate derivation tree -> serialize back        │
 │    - validates candidates by re-parsing; retries on invalid outputs         │
@@ -537,7 +535,6 @@ Limitations (current glue):
 - Grammar mode currently expects UTF-8 text inputs (the Grammarinator subprocess works with strings).
 - Grammar mode works best with a single input argument; multi-arg fuzz targets will decode the underlying byte buffer into separate values.
 - Grammarinator mutation is best-effort; `golibafl` validates candidates by re-parsing and retries. If repeated mutation attempts fail, it may fall back to generation-from-scratch to keep fuzzing.
-- By default, `--grammar-actions` is off: gosentry will strip ANTLR inline actions/predicates (`{ ... }` / `{ ... }?`) for the parsing/validation step so no embedded grammar code executes. If your grammar relies on them, enable `--grammar-actions` (unsafe) or provide an action-free grammar.
 - The LibAFL corpus is stored as raw bytes on disk; Grammarinator trees are cached only in-memory (per client, bounded), so restarts lose the tree cache.
 - No grammar recombination/crossover between two corpus seeds yet (mutation is single-seed).
 
