@@ -4,10 +4,11 @@
 
 gosentry is a security-focused fork of the Go toolchain. In a _very_ simple phrasing, it's copy of the Go compiler that finds bugs. If you are a security researcher auditing Go codebases, you should probably use this tool and consider it as a great swiss-knife.
 
-For now, it focuses on five things:
+For now, it focuses on six things:
 
 - Integrating [go-panikint](https://github.com/trailofbits/go-panikint): instrumentation that panics on **integer overflow/underflow** (and **optionally on truncating integer conversions**).
-- Integrating [LibAFL](https://github.com/AFLplusplus/LibAFL) fuzzer: run Go fuzzing harnesses with **LibAFL** for better fuzzing performances (and optionally generate inputs from ANTLRv4 grammars via Grammarinator).
+- Integrating [LibAFL](https://github.com/AFLplusplus/LibAFL) fuzzer: run Go fuzzing harnesses with **LibAFL** for better fuzzing performances.
+- Grammar-based fuzzing (ANTLRv4 via [Grammarinator](https://github.com/renatahodovan/grammarinator)): generate structured inputs from a grammar ([Feature 6](#feature-6-grammar-based-fuzzing-grammarinator)).
 - Panicking on [user-provided function call](https://github.com/kevin-valerio/gosentry?tab=readme-ov-file#feature-2-panic-on-selected-functions): catching targeted bugs when certains functions are called (eg., `myapp.(*Logger).Error`).
 - Git-blame-oriented fuzzing (based on [this work](https://github.com/kevin-valerio/LibAFL-git-aware)): when fuzzing with LibAFL mode, you can orientate the fuzzer towards **recently added/edited lines**.
 - Detect **race conditions**, **goroutine leaks**, and **confirmed hangs** at fuzz-time: when fuzzing with LibAFL, gosentry can replay newly found seeds (or timed-out executions) and treat findings like bugs.
@@ -24,6 +25,7 @@ It especially has **two** objectives:
   - [Feature 3: LibAFL state-of-the-art fuzzing](#feature-3-libafl-state-of-the-art-fuzzing)
   - [Feature 4: Git-blame-oriented fuzzing (experimental)](#feature-4-git-blame-oriented-fuzzing-experimental)
   - [Feature 5: Detect race conditions, goroutine leaks, and hangs at fuzz-time](#feature-5-detect-race-conditions-goroutine-leaks-and-hangs-at-fuzz-time)
+  - [Feature 6: Grammar-based fuzzing (Grammarinator)](#feature-6-grammar-based-fuzzing-grammarinator)
 - [Credits](#credits)
 
 ## Build
@@ -130,22 +132,7 @@ You can also pass an optional config. file for LibAFL, see [here.](misc/gosentry
 ./bin/go test -fuzz=FuzzHarness --focus-on-new-code=false --catch-races=false --catch-leaks=false --libafl-config=path/to/libafl.jsonc # optional --libafl-config
 ```
 
-#### Grammar-based fuzzing (Grammarinator)
-
-When fuzzing with LibAFL, gosentry can generate inputs from an ANTLRv4 grammar via [Grammarinator](https://github.com/renatahodovan/grammarinator).
-
-Requirements:
-- `python3` with `grammarinator` installed (`python3 -m pip install grammarinator`).
-- Java (JRE/JDK) for Grammarinator/ANTLR.
-
-Example (JSON grammar):
-
-```bash
-cd test/gosentry/examples/grammar_json
-GOSENTRY_VERBOSE_AFL=1 CGO_ENABLED=1 ../../../../bin/go test -fuzz=FuzzGrammarJSON --use-grammar --grammar=testdata/JSON.g4 --start-rule=json --focus-on-new-code=false --catch-races=false --catch-leaks=false .
-```
-
-Set `GOSENTRY_VERBOSE_AFL=1` to print a few generated inputs as `GOLIBAFL_MUTATED_INPUT "..."` (useful for CI/smoke tests).
+Grammar-based fuzzing (Grammarinator) is documented in [Feature 6](#feature-6-grammar-based-fuzzing-grammarinator).
 
 <details>
 <summary><strong>How Go + LibAFL are wired together</strong></summary>
@@ -407,6 +394,66 @@ Enable goroutine leak catching with `--catch-leaks=true` or race catching with `
 ```bash
 ./bin/go test -fuzz=FuzzHarness --use-libafl --focus-on-new-code=false --catch-races=true --catch-leaks=true
 ```
+
+## Feature 6: Grammar-based fuzzing (Grammarinator)
+
+#### Overview
+
+Byte-level fuzzing is great, but parsers and file formats often need structured inputs. In LibAFL mode, gosentry can generate inputs from an ANTLRv4 grammar via [Grammarinator](https://github.com/renatahodovan/grammarinator), and feed them to your regular Go fuzz harness (`testing.F.Fuzz`) as `data []byte`.
+
+This feature requires LibAFL (`--use-libafl=true`, which is the default when `-fuzz` is set).
+
+#### How to use
+
+Flags:
+- `--use-grammar`
+- `--grammar path/to/Foo.g4` (repeatable or comma-separated)
+- `--start-rule RuleName`
+
+Requirements:
+- `python3` with `grammarinator` installed (`python3 -m pip install grammarinator`)
+- Java (JRE/JDK) for Grammarinator/ANTLR.
+
+Example / tutorial (JSON grammar):
+
+```bash
+cd test/gosentry/examples/grammar_json
+GOSENTRY_VERBOSE_AFL=1 CGO_ENABLED=1 ../../../../bin/go test -fuzz=FuzzGrammarJSON --use-grammar --grammar=testdata/JSON.g4 --start-rule=json --focus-on-new-code=false --catch-races=false --catch-leaks=false .
+```
+
+Set `GOSENTRY_VERBOSE_AFL=1` to print a few generated inputs as `GOLIBAFL_MUTATED_INPUT "..."`.
+
+More examples / docs:
+- `test/gosentry/examples/grammar_json/` (fuzz harness + `testdata/JSON.g4`)
+- `misc/gosentry/USE_LIBAFL.md` (Grammar-based fuzzing section)
+- `misc/gosentry/tests/smoke_use_libafl_grammar_json.sh` (CI smoke test)
+
+#### How it works
+
+<details>
+<summary><strong>How grammar fuzzing works in gosentry</strong></summary>
+
+```text
+┌───────────────────────────────────────────────────────────────────────────┐
+│ 1) gosentry `go test -fuzz` (LibAFL mode)                                  │
+│    - forwards: --use-grammar --grammar ... --start-rule ...                │
+│    - runs the Rust runner: `golibafl fuzz ...`                             │
+└───────────────┬───────────────────────────────────────────────────────────┘
+                v
+┌───────────────────────────────────────────────────────────────────────────┐
+│ 2) `golibafl` spawns a `python3` Grammarinator server                      │
+│    - processes .g4 -> Python *Generator.py                                 │
+│    - generates 1 sample per request (start rule + serializer)              │
+└───────────────┬───────────────────────────────────────────────────────────┘
+                v
+┌───────────────────────────────────────────────────────────────────────────┐
+│ 3) LibAFL uses generated bytes                                             │
+│    - initial corpus: generated when the input dir is empty                 │
+│    - mutation stage: replaces the current input with a new generated one   │
+└───────────────────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 ## Credits
 

@@ -23,12 +23,18 @@ go test -use-libafl=false -fuzz=FuzzXxx
 
 ## Grammar-based fuzzing (Grammarinator)
 
-When running in LibAFL mode, gosentry can generate inputs from an ANTLRv4 grammar via Grammarinator.
+When running in LibAFL mode, gosentry can generate inputs from an ANTLRv4 grammar via Grammarinator, and use those inputs as fuzzing testcases.
+
+This mode is useful when you want inputs that are always syntactically valid (or at least grammar-valid), so the fuzzer can focus on deeper semantic paths.
 
 Flags (gosentry `go test`):
-- `--use-grammar`: enable grammar-based input generation (LibAFL mode only).
-- `--grammar path/to/Foo.g4`: grammar file(s) (repeatable or comma-separated).
-- `--start-rule RuleName`: start rule for generation.
+- `--use-grammar`: enable grammar-based input generation.
+  - Requires `-fuzz=...` and LibAFL mode.
+  - Still requires the usual LibAFL-required flags: `--focus-on-new-code={true|false}`, `--catch-races={true|false}`, `--catch-leaks={true|false}`.
+- `--grammar path/to/Foo.g4`: ANTLRv4 `.g4` grammar file(s).
+  - Repeatable: `--grammar=a.g4 --grammar=b.g4`
+  - Or comma-separated: `--grammar=a.g4,b.g4`
+- `--start-rule RuleName`: parser start rule for generation (example: `json`, `document`).
 
 Requirements:
 - `python3` with Grammarinator installed: `python3 -m pip install grammarinator`
@@ -41,12 +47,24 @@ cd test/gosentry/examples/grammar_json
 GOSENTRY_VERBOSE_AFL=1 CGO_ENABLED=1 ../../../../bin/go test -fuzz=FuzzGrammarJSON --use-grammar --grammar=testdata/JSON.g4 --start-rule=json --focus-on-new-code=false --catch-races=false --catch-leaks=false .
 ```
 
-Set `GOSENTRY_VERBOSE_AFL=1` to print a few generated inputs as `GOLIBAFL_MUTATED_INPUT "..."`.
+Set `GOSENTRY_VERBOSE_AFL=1` to print a few generated inputs as `GOLIBAFL_MUTATED_INPUT "..."` (printed by `golibafl`, useful for smoke tests / CI).
+
+Behavior notes:
+- If the LibAFL input dir is empty, `golibafl` generates an initial corpus using the grammar.
+- If you provide initial seeds (via `testdata/fuzz` or by placing files in the LibAFL input dir), they will still be loaded, but in grammar mode the mutator generates fresh grammar-based inputs (it does not perform structure-preserving edits of your original seeds).
+- The `GOLIBAFL_MUTATED_INPUT` log is currently printed for the first 20 executions only.
+
+### CI note
+
+This repo includes a grammar smoke test script at `misc/gosentry/tests/smoke_use_libafl_grammar_json.sh` (run by `.github/workflows/smoke_use_libafl.yml`).
 
 Advanced flags:
 - `--grammar-actions`: allow inline actions and semantic predicates (default: false).
 - `--grammar-serializer pkg.module.func`: override the Python serializer (default: `grammarinator.runtime.simple_space_serializer`).
 - `--grammarinator-dir /path/to/grammarinator`: add a local Grammarinator checkout to `PYTHONPATH`.
+
+Runner (golibafl) knobs:
+- When running `golibafl` directly, you can also set `--grammar-max-depth` (default: 32) and `--grammar-max-tokens` (default: 512).
 
 ## Git-aware scheduling (focus on new code)
 
