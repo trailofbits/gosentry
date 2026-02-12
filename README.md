@@ -402,8 +402,17 @@ Enable goroutine leak catching with `--catch-leaks=true` or race catching with `
 
 Byte-level fuzzing is great, but parsers and file formats often need structured inputs. In LibAFL mode, gosentry can generate inputs from an ANTLRv4 grammar via [Grammarinator](https://github.com/renatahodovan/grammarinator), and feed them to your regular Go fuzz harness (`testing.F.Fuzz`).
 
-Grammar mode works best when the callback takes a **single** input argument that represents the whole input (`[]byte` or `string`): if you use multiple inputs in your harness, gosentry will decode the underlying byte buffer into separate values, so the original grammar-generated text won’t stay intact.
+In grammar mode, the “mutation” step is basically: generate a new sample from the grammar, then pass it to your harness. For best results, use a one-arg fuzz callback that takes either a byte slice (`[]byte`) or a `string`:
 
+```go
+f.Fuzz(func(t *testing.T, data []byte) { /* parse data */ })
+// or:
+f.Fuzz(func(t *testing.T, s string) { /* parse s */ })
+```
+
+If you use multiple inputs in your harness, gosentry will decode the underlying byte buffer into separate values, so the original grammar-generated text won’t stay intact.
+
+This feature requires LibAFL (`--use-libafl=true`, which is the default when `-fuzz` is set).
 
 #### How to use 
 Requirements:  `python3` with `grammarinator` installed (`python3 -m pip install grammarinator`) and Java (JRE/JDK) for Grammarinator/ANTLR.
