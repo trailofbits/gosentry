@@ -30,8 +30,11 @@ It especially has **two** objectives:
 
 ## Build
 ```bash
-cd src && ./make.bash # This produces `./bin/go`. See `GOFLAGS` below.
+cd src && ./make.bash # Produces `../bin/go` (or `./bin/go` from repo root). See `GOFLAGS` below.
 ```
+
+> [!TIP]
+> If you’re in `src/`, run the toolchain as `../bin/go ...` (the binaries are in `bin/` at repo root).
 
 ## Feature 1: Integer overflow and truncation issues detection
 
@@ -114,6 +117,9 @@ In practice, this makes any matched call site behave like a crash/panic for fuzz
 ## Feature 3: LibAFL state-of-the-art fuzzing
 
 LibAFL performs *way* better than the traditional Go fuzzer. When fuzzing (`go test -fuzz=...`), gosentry uses [LibAFL](https://github.com/AFLplusplus/LibAFL) **by default** (runner in `golibafl/`).
+
+> [!IMPORTANT]
+> `go test -fuzz=...` uses LibAFL by default, and you must explicitly pass `--focus-on-new-code=...`, `--catch-races=...`, and `--catch-leaks=...` (no implicit defaults). Use `--use-libafl=false` to switch back to Go’s native fuzzer.
 
 When using LibAFL (default), you must explicitly choose whether to enable git-aware scheduling: `--focus-on-new-code=true|false`.
 
@@ -403,6 +409,15 @@ Byte-level fuzzing is great, but parsers and file formats often need structured 
 
 In grammar mode, LibAFL still runs the normal coverage-guided loop (pick a corpus seed → mutate → execute → keep inputs that increase coverage). The difference is the mutator: instead of byte-level havoc, gosentry uses Grammarinator to do **grammar-aware mutation** of the currently selected corpus seed (parse → mutate the derivation tree → serialize back to text).
 
+> [!WARNING]
+> Grammar-based fuzzing is currently **much slower** than byte-level fuzzing. On the JSON fuzz targets in `test/gosentry/examples/grammar_json/perf_json_test.go` (~5 minutes each), byte-level ("no-grammar") ran at ~5.9–7.0k exec/s vs ~113–158 exec/s in grammar mode (~37×–62× slower).
+> We’re actively working on making grammar mode faster — today it’s a trade-off: more structured inputs vs fewer executions per second.
+>
+> | fuzz target | no-grammar exec/s | grammar exec/s | no-grammar ÷ grammar |
+> |---|---:|---:|---:|
+> | `FuzzJSONUnmarshal` | 7048 | 112.8 | 62.48× |
+> | `FuzzJSONDecoder` | 5931 | 158.2 | 37.49× |
+
 For best results, use a one-arg fuzz callback that takes either a byte slice (`[]byte`) or a `string`:
 
 ```go
@@ -411,16 +426,17 @@ f.Fuzz(func(t *testing.T, data []byte) { /* parse data */ })
 f.Fuzz(func(t *testing.T, s string) { /* parse s */ })
 ```
 
-If you use multiple inputs in your harness, gosentry will decode the underlying byte buffer into separate values, so the original grammar-generated text won’t stay intact.
+Grammar mode works best with a single input argument (`[]byte` or `string`). Multi-arg fuzz callbacks cause gosentry to decode the underlying byte buffer into separate values, so the original grammar-generated text won’t stay intact.
 
 #### How to use 
 Requirements:  `python3` with `grammarinator` installed (`python3 -m pip install grammarinator`) and Java (JRE/JDK) for Grammarinator/ANTLR.
 
 You can tune the Grammarinator engine via `--libafl-config` (only used with `--use-grammar`): `grammar_max_depth`, `grammar_max_tokens`, `grammar_actions`, `grammarinator_dir` (see `misc/gosentry/libafl.config.jsonc`).
 
+Set `GOSENTRY_VERBOSE_AFL=1` to print a few generated inputs (useful to verify you are really running in grammar mode).
+
 <details>
 <summary><strong>Command example</strong></summary>
-Set `GOSENTRY_VERBOSE_AFL=1` to print a few generated inputs (useful to verify you are really running in grammar mode).
 
 ```bash
 # Example (from this repo): JSON grammar + JSON harness.
