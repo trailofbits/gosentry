@@ -402,16 +402,15 @@ Enable goroutine leak catching with `--catch-leaks=true` or race catching with `
 
 Byte-level fuzzing is great, but parsers and file formats often need structured inputs. In LibAFL mode, gosentry can generate inputs from an ANTLRv4 grammar via [Grammarinator](https://github.com/renatahodovan/grammarinator), and feed them to your regular Go fuzz harness (`testing.F.Fuzz`).
 
-Your fuzz callback can also take a single `string` argument (instead of `[]byte`), which is often more convenient for text grammars. Grammar mode works best when the callback takes a **single** input argument that represents the whole input (usually `[]byte` or `string`): if you use multiple inputs, gosentry will decode the underlying byte buffer into separate values, so the original grammar-generated text won’t stay intact.
+Grammar mode works best when the callback takes a **single** input argument that represents the whole input (`[]byte` or `string`): if you use multiple inputs in your harness, gosentry will decode the underlying byte buffer into separate values, so the original grammar-generated text won’t stay intact.
 
-This feature requires LibAFL (`--use-libafl=true`, which is the default when `-fuzz` is set).
 
 #### How to use 
 Requirements:  `python3` with `grammarinator` installed (`python3 -m pip install grammarinator`) and Java (JRE/JDK) for Grammarinator/ANTLR.
 
 <details>
 <summary><strong>Command example</strong></summary>
-Set `GOSENTRY_VERBOSE_AFL=1` to print a few generated inputs as `GOLIBAFL_MUTATED_INPUT "..."` (useful to verify you are really running in grammar mode).
+Set `GOSENTRY_VERBOSE_AFL=1` to print a few generated inputs (useful to verify you are really running in grammar mode).
 
 ```bash
 # Example (from this repo): JSON grammar + JSON harness.
@@ -479,8 +478,6 @@ WS     : [ \t\r\n]+ -> skip ;
 ```
 
 </details> 
-
-#### How it works
 
 <details>
 <summary><strong>How grammar fuzzing works in gosentry</strong></summary>
