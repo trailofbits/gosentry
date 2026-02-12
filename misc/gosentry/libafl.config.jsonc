@@ -62,5 +62,30 @@
   // debug_output: force-enable/disable LIBAFL_DEBUG_OUTPUT (otherwise auto).
   // default: auto (enabled when running with a single client)
   // use `null` for "auto"
-  "debug_output": null
+  "debug_output": null,
+
+  // --- Grammar fuzzing (Grammarinator) ---
+  // Only used with `--use-grammar`.
+
+  // grammar_actions: allow inline actions and semantic predicates in the grammar.
+  // default: false
+  "grammar_actions": false,
+
+  // grammar_serializer: python serializer function (package.module.function)
+  // default: grammarinator.runtime.simple_space_serializer
+  // use `null` to keep the default
+  "grammar_serializer": null,
+
+  // grammarinator_dir: add DIR to PYTHONPATH for importing the grammarinator python package.
+  // default: null
+  // useful for a local checkout
+  "grammarinator_dir": null,
+
+  // grammar_max_depth: max recursion depth for grammar generation.
+  // default: 32
+  "grammar_max_depth": 32,
+
+  // grammar_max_tokens: max token count for grammar generation.
+  // default: 512
+  "grammar_max_tokens": 512
 }

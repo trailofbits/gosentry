@@ -151,6 +151,11 @@ struct LibAflFuzzConfig {
     go_maxprocs_single: Option<bool>,
     tui_monitor: Option<bool>,
     debug_output: Option<bool>,
+    grammar_actions: Option<bool>,
+    grammar_serializer: Option<String>,
+    grammarinator_dir: Option<PathBuf>,
+    grammar_max_depth: Option<usize>,
+    grammar_max_tokens: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -2008,7 +2013,7 @@ fn fuzz(
         }
     });
 
-    let grammar_cfg = grammar_cfg.cloned().map(|mut cfg| {
+    let mut grammar_cfg = grammar_cfg.cloned().map(|mut cfg| {
         cfg.grammar = cfg
             .grammar
             .into_iter()
@@ -2165,6 +2170,54 @@ fn fuzz(
             tui_monitor = v;
         }
         debug_output_override = config.debug_output;
+
+        if let Some(n) = config.grammar_max_depth {
+            if n == 0 {
+                eprintln!(
+                    "golibafl: grammar_max_depth must be > 0 (config: {})",
+                    config_path.display()
+                );
+                std::process::exit(2);
+            }
+            if let Some(grammar_cfg) = grammar_cfg.as_mut() {
+                grammar_cfg.max_depth = n;
+            }
+        }
+        if let Some(n) = config.grammar_max_tokens {
+            if n == 0 {
+                eprintln!(
+                    "golibafl: grammar_max_tokens must be > 0 (config: {})",
+                    config_path.display()
+                );
+                std::process::exit(2);
+            }
+            if let Some(grammar_cfg) = grammar_cfg.as_mut() {
+                grammar_cfg.max_tokens = n;
+            }
+        }
+        if let Some(grammar_cfg) = grammar_cfg.as_mut() {
+            if let Some(v) = config.grammar_actions {
+                grammar_cfg.actions = v;
+            }
+            if let Some(serializer) = config.grammar_serializer.as_deref() {
+                grammar_cfg.serializer = Some(serializer.to_string());
+            }
+            if let Some(dir) = config.grammarinator_dir.as_ref() {
+                let dir = if dir.is_absolute() {
+                    dir.clone()
+                } else {
+                    let cwd = cwd.as_ref().cloned().or_else(|| env::current_dir().ok()).unwrap_or_else(|| {
+                        eprintln!(
+                            "golibafl: failed to resolve grammarinator_dir (config: {})",
+                            config_path.display()
+                        );
+                        std::process::exit(2);
+                    });
+                    cwd.join(dir)
+                };
+                grammar_cfg.grammarinator_dir = Some(dir);
+            }
+        }
 
         println!(
             "GOLIBAFL_CONFIG_APPLIED cores_ids={} exec_timeout_ms={} catch_hangs={} hang_timeout_ms={} hang_confirm_runs={}",

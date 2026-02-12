@@ -126,7 +126,7 @@ To opt out:
 
 More documentation in [this Markdown file.](misc/gosentry/USE_LIBAFL.md)
 
-You can also pass an optional config. file for LibAFL, see [here.](misc/gosentry/libafl.config.jsonc)
+You can also pass an optional JSONC config file for LibAFL (including grammar fuzzing options), see [here.](misc/gosentry/libafl.config.jsonc)
 
 ```bash
 ./bin/go test -fuzz=FuzzHarness --focus-on-new-code=false --catch-races=false --catch-leaks=false --libafl-config=path/to/libafl.jsonc # optional --libafl-config
@@ -415,6 +415,8 @@ If you use multiple inputs in your harness, gosentry will decode the underlying 
 
 #### How to use 
 Requirements:  `python3` with `grammarinator` installed (`python3 -m pip install grammarinator`) and Java (JRE/JDK) for Grammarinator/ANTLR.
+
+You can tune the Grammarinator engine via `--libafl-config` (only used with `--use-grammar`): `grammar_max_depth`, `grammar_max_tokens`, `grammar_actions`, `grammar_serializer`, `grammarinator_dir` (see `misc/gosentry/libafl.config.jsonc`).
 
 <details>
 <summary><strong>Command example</strong></summary>

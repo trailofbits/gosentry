@@ -338,7 +338,30 @@ Example `libafl.jsonc` (all fields optional; defaults shown in comments):
 
   // debug_output: force-enable/disable LIBAFL_DEBUG_OUTPUT (otherwise auto)
   // default: auto (enabled when running with a single client)
-  "debug_output": true
+  "debug_output": true,
+
+  // --- Grammar fuzzing (Grammarinator) ---
+  // Only used with -use-grammar (or golibafl --use-grammar).
+
+  // grammar_actions: allow inline actions and semantic predicates in the grammar
+  // default: false
+  "grammar_actions": false,
+
+  // grammar_serializer: python serializer function (package.module.function)
+  // default: grammarinator.runtime.simple_space_serializer
+  "grammar_serializer": null,
+
+  // grammarinator_dir: add DIR to PYTHONPATH for importing the grammarinator python package
+  // default: null
+  "grammarinator_dir": null,
+
+  // grammar_max_depth: max recursion depth for grammar generation
+  // default: 32
+  "grammar_max_depth": 32,
+
+  // grammar_max_tokens: max token count for grammar generation
+  // default: 512
+  "grammar_max_tokens": 512
 }
 ```
 
