@@ -136,12 +136,14 @@ Behavior notes:
 - If the LibAFL input dir is empty, `golibafl` generates an initial corpus using the grammar.
 - If you provide initial seeds (via `testdata/fuzz` or by placing files in the LibAFL input dir), they will be loaded into the corpus and Grammarinator will mutate the selected corpus seed (coverage-guided) instead of overwriting it with unrelated fresh generations.
 - `golibafl` validates mutated candidates by re-parsing them with the same grammar and retries on invalid outputs.
+- If a loaded corpus seed is not parseable by the grammar (example: user seed is invalid, or you changed `--grammar-max-depth/--grammar-max-tokens` between runs), `golibafl` will fall back to generation-from-scratch instead of aborting the fuzz run.
 - The `GOLIBAFL_MUTATED_INPUT` log is currently printed for the first 20 executions only.
 
 Limitations (current glue):
 - Grammar mode currently expects UTF-8 text inputs (the Grammarinator subprocess works with strings).
 - Grammar mode works best with a single input argument; multi-arg fuzz targets will decode the underlying byte buffer into separate values.
 - Grammarinator mutation is best-effort; `golibafl` validates candidates by re-parsing and retries. If repeated mutation attempts fail, it may fall back to generation-from-scratch to keep fuzzing.
+- By default, `--grammar-actions` is off: gosentry will strip ANTLR inline actions/predicates (`{ ... }` / `{ ... }?`) for the parsing/validation step so no embedded grammar code executes. If your grammar relies on them, enable `--grammar-actions` (unsafe) or provide an action-free grammar.
 - The LibAFL corpus is stored as raw bytes on disk; Grammarinator trees are cached only in-memory (per client, bounded), so restarts lose the tree cache.
 - No grammar recombination/crossover between two corpus seeds yet (mutation is single-seed).
 
@@ -172,6 +174,8 @@ This repo includes a grammar smoke test script at `misc/gosentry/tests/smoke_use
 ┌───────────────────────────────────────────────────────────────────────────┐
 │ 2) Grammarinator engine (`python3` subprocess, per client)                  │
 │    - `ProcessorTool`: turns `.g4` file(s) into a Python `*Generator.py`     │
+│    - safety: unless `--grammar-actions` is set, gosentry strips inline      │
+│      actions/predicates from the grammar used for parsing/validation        │
 │    - protocol: JSON per line over stdin/stdout (generate / mutate(seed))    │
 │    - mutate = parse seed -> mutate derivation tree -> serialize back        │
 │    - validates candidates by re-parsing; retries on invalid outputs         │
@@ -345,22 +349,22 @@ Example `libafl.jsonc` (all fields optional; defaults shown in comments):
 
   // grammar_actions: allow inline actions and semantic predicates in the grammar
   // default: false
+  // example: true (needed if your .g4 contains `{ ... }` actions/predicates)
   "grammar_actions": false,
-
-  // grammar_serializer: python serializer function (package.module.function)
-  // default: grammarinator.runtime.simple_space_serializer
-  "grammar_serializer": null,
 
   // grammarinator_dir: add DIR to PYTHONPATH for importing the grammarinator python package
   // default: null
+  // example: "/home/me/grammarinator"
   "grammarinator_dir": null,
 
   // grammar_max_depth: max recursion depth for grammar generation
   // default: 32
+  // example: 64 (allow deeper nesting)
   "grammar_max_depth": 32,
 
   // grammar_max_tokens: max token count for grammar generation
   // default: 512
+  // example: 2048 (allow longer outputs)
   "grammar_max_tokens": 512
 }
 ```

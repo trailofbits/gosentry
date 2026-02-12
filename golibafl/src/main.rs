@@ -152,7 +152,6 @@ struct LibAflFuzzConfig {
     tui_monitor: Option<bool>,
     debug_output: Option<bool>,
     grammar_actions: Option<bool>,
-    grammar_serializer: Option<String>,
     grammarinator_dir: Option<PathBuf>,
     grammar_max_depth: Option<usize>,
     grammar_max_tokens: Option<usize>,
@@ -275,6 +274,257 @@ def main() -> int:
         while len(tree_cache) > CACHE_MAX:
             tree_cache.popitem(last=False)
 
+    def _skip_brace_block(text: str, start: int) -> int:
+        assert start < len(text) and text[start] == "{"
+        depth = 1
+        i = start + 1
+
+        in_line_comment = False
+        in_block_comment = False
+        in_squote = False
+        in_dquote = False
+        escape = False
+
+        while i < len(text):
+            ch = text[i]
+            nxt = text[i + 1] if i + 1 < len(text) else ""
+
+            if in_line_comment:
+                if ch == "\n":
+                    in_line_comment = False
+                i += 1
+                continue
+
+            if in_block_comment:
+                if ch == "*" and nxt == "/":
+                    in_block_comment = False
+                    i += 2
+                    continue
+                i += 1
+                continue
+
+            if in_squote:
+                if escape:
+                    escape = False
+                elif ch == "\\":
+                    escape = True
+                elif ch == "'":
+                    in_squote = False
+                i += 1
+                continue
+
+            if in_dquote:
+                if escape:
+                    escape = False
+                elif ch == "\\":
+                    escape = True
+                elif ch == '"':
+                    in_dquote = False
+                i += 1
+                continue
+
+            if ch == "/" and nxt == "/":
+                in_line_comment = True
+                i += 2
+                continue
+            if ch == "/" and nxt == "*":
+                in_block_comment = True
+                i += 2
+                continue
+            if ch == "#":
+                # Best-effort: some target languages use '#' for line comments.
+                in_line_comment = True
+                i += 1
+                continue
+            if ch == "'":
+                in_squote = True
+                escape = False
+                i += 1
+                continue
+            if ch == '"':
+                in_dquote = True
+                escape = False
+                i += 1
+                continue
+
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return i + 1
+
+            i += 1
+
+        return len(text)
+
+    def strip_antlr_actions_and_predicates(text: str) -> str:
+        # Safety: ANTLR actions and semantic predicates are embedded code
+        # blocks in the grammar (e.g. `{ ... }` and `{ ... }?`). When running
+        # without `--grammar-actions`, gosentry must not execute that code.
+        #
+        # We strip:
+        # - named actions like `@members { ... }`
+        # - inline actions `{ ... }`
+        # - semantic predicates `{ ... }?` / `{ ... }?=>`
+        #
+        # We keep grammar constructs like `options { ... }`, `tokens { ... }`,
+        # `channels { ... }`.
+        KEEP_BLOCKS = {"options", "tokens", "channels"}
+
+        out = []
+        i = 0
+
+        in_line_comment = False
+        in_block_comment = False
+        in_squote = False
+        in_dquote = False
+        escape = False
+        bracket_depth = 0
+
+        last_ident = None
+
+        def is_ident_start(ch: str) -> bool:
+            return ch.isalpha() or ch == "_"
+
+        def is_ident_char(ch: str) -> bool:
+            return ch.isalnum() or ch == "_"
+
+        while i < len(text):
+            ch = text[i]
+            nxt = text[i + 1] if i + 1 < len(text) else ""
+
+            if in_line_comment:
+                out.append(ch)
+                if ch == "\n":
+                    in_line_comment = False
+                i += 1
+                continue
+
+            if in_block_comment:
+                out.append(ch)
+                if ch == "*" and nxt == "/":
+                    out.append(nxt)
+                    i += 2
+                    in_block_comment = False
+                    continue
+                i += 1
+                continue
+
+            if in_squote:
+                out.append(ch)
+                if escape:
+                    escape = False
+                elif ch == "\\":
+                    escape = True
+                elif ch == "'":
+                    in_squote = False
+                i += 1
+                continue
+
+            if in_dquote:
+                out.append(ch)
+                if escape:
+                    escape = False
+                elif ch == "\\":
+                    escape = True
+                elif ch == '"':
+                    in_dquote = False
+                i += 1
+                continue
+
+            if ch == "/" and nxt == "/":
+                out.append(ch)
+                out.append(nxt)
+                i += 2
+                in_line_comment = True
+                continue
+            if ch == "/" and nxt == "*":
+                out.append(ch)
+                out.append(nxt)
+                i += 2
+                in_block_comment = True
+                continue
+
+            if ch == "'":
+                out.append(ch)
+                i += 1
+                in_squote = True
+                escape = False
+                continue
+            if ch == '"':
+                out.append(ch)
+                i += 1
+                in_dquote = True
+                escape = False
+                continue
+
+            if ch == "[":
+                bracket_depth += 1
+                out.append(ch)
+                i += 1
+                continue
+            if ch == "]":
+                if bracket_depth > 0:
+                    bracket_depth -= 1
+                out.append(ch)
+                i += 1
+                continue
+
+            if is_ident_start(ch):
+                j = i + 1
+                while j < len(text) and is_ident_char(text[j]):
+                    j += 1
+                ident = text[i:j]
+                last_ident = ident
+                out.append(ident)
+                i = j
+                continue
+
+            if ch == "@":
+                # Named actions: `@members { ... }` or `@parser::members { ... }`
+                j = i + 1
+                while j < len(text) and (text[j].isalnum() or text[j] in "_:"):
+                    j += 1
+                k = j
+                while k < len(text) and text[k].isspace():
+                    k += 1
+                if k < len(text) and text[k] == "{":
+                    end = _skip_brace_block(text, k)
+                    removed = text[i:end]
+                    out.append("\n" * removed.count("\n"))
+                    out.append(" ")
+                    i = end
+                    continue
+
+                out.append(ch)
+                i += 1
+                continue
+
+            if ch == "{" and bracket_depth == 0 and (last_ident not in KEEP_BLOCKS):
+                end = _skip_brace_block(text, i)
+
+                # Semantic predicate suffix: `{ ... }?` or `{ ... }?=>`
+                pred_end = end
+                k = end
+                while k < len(text) and text[k].isspace():
+                    k += 1
+                if k < len(text) and text[k] == "?":
+                    pred_end = k + 1
+                    if text.startswith("=>", pred_end):
+                        pred_end += 2
+
+                removed = text[i:pred_end]
+                out.append("\n" * removed.count("\n"))
+                out.append(" ")
+                i = pred_end
+                continue
+
+            out.append(ch)
+            i += 1
+
+        return "".join(out)
+
     def generate_one() -> str:
         gen = gen_cls(limit=RuleSize(depth=args.max_depth, tokens=args.max_tokens))
         root = getattr(gen, args.start_rule)()
@@ -284,9 +534,10 @@ def main() -> int:
 
     parser_tool = None
     generator_tool = None
+    stripped_grammars = None
 
     def ensure_mutation_tools():
-        nonlocal parser_tool, generator_tool
+        nonlocal parser_tool, generator_tool, stripped_grammars
         if parser_tool is not None and generator_tool is not None:
             return
 
@@ -295,9 +546,22 @@ def main() -> int:
 
         antlr_jar = antlerinator.download(lazy=True)
 
+        parser_grammars = args.grammar
+        if not args.actions:
+            if stripped_grammars is None:
+                stripped_dir = out_dir / "g4_stripped"
+                stripped_dir.mkdir(parents=True, exist_ok=True)
+                stripped_grammars = []
+                for g in args.grammar:
+                    src = Path(g).read_text(encoding="utf-8", errors="strict")
+                    dst = stripped_dir / Path(g).name
+                    dst.write_text(strip_antlr_actions_and_predicates(src), encoding="utf-8")
+                    stripped_grammars.append(str(dst))
+            parser_grammars = stripped_grammars
+
         parser_dir = out_dir / "parser"
         parser_tool = ParserTool(
-            grammars=args.grammar,
+            grammars=list(parser_grammars),
             parser_dir=str(parser_dir),
             antlr=antlr_jar,
             population=None,
@@ -337,11 +601,26 @@ def main() -> int:
         from antlr4 import InputStream
         from grammarinator.runtime import Individual
 
+        def generate_valid_one() -> str:
+            # Fall back to generation-from-scratch (still grammar-valid) so the
+            # fuzzer can keep making progress.
+            MAX_GENERATE_ATTEMPTS = 64
+            for _ in range(MAX_GENERATE_ATTEMPTS):
+                out = generate_one()
+                parsed = parser_tool._create_tree(InputStream(out), "<generated>")
+                if parsed is None:
+                    continue
+                cache_put(out, parsed)
+                return out
+            raise RuntimeError("failed to generate a valid input")
+
         root = cache_get(s)
         if root is None:
             root = parser_tool._create_tree(InputStream(s), "<seed>")
             if root is None:
-                raise RuntimeError("failed to parse input for grammar mutation")
+                # Don't abort fuzzing on an unparseable corpus seed; just fall
+                # back to generation so the campaign can continue.
+                return generate_valid_one()
             cache_put(s, root)
 
         # Grammarinator mutation is best-effort and may emit invalid outputs in
@@ -367,18 +646,7 @@ def main() -> int:
             cache_put(mutated, parsed)
             return mutated
 
-        # As a last resort, fall back to generation-from-scratch (still
-        # grammar-valid) so the fuzzer can keep making progress.
-        MAX_GENERATE_ATTEMPTS = 64
-        for _ in range(MAX_GENERATE_ATTEMPTS):
-            out = generate_one()
-            parsed = parser_tool._create_tree(InputStream(out), "<generated>")
-            if parsed is None:
-                continue
-            cache_put(out, parsed)
-            return out
-
-        raise RuntimeError("failed to generate a valid mutated input")
+        return generate_valid_one()
 
     for line in sys.stdin:
         line = line.strip()
@@ -2198,9 +2466,6 @@ fn fuzz(
         if let Some(grammar_cfg) = grammar_cfg.as_mut() {
             if let Some(v) = config.grammar_actions {
                 grammar_cfg.actions = v;
-            }
-            if let Some(serializer) = config.grammar_serializer.as_deref() {
-                grammar_cfg.serializer = Some(serializer.to_string());
             }
             if let Some(dir) = config.grammarinator_dir.as_ref() {
                 let dir = if dir.is_absolute() {
