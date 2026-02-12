@@ -23,7 +23,7 @@ go test -use-libafl=false -fuzz=FuzzXxx
 
 ## Grammar-based fuzzing (Grammarinator)
 
-When running in LibAFL mode, gosentry can generate inputs from an ANTLRv4 grammar via Grammarinator, and use those inputs as fuzzing testcases.
+When running in LibAFL mode, gosentry can generate inputs from an ANTLRv4 grammar via Grammarinator, and use Grammarinator as a **grammar-aware mutator** (parse → mutate derivation tree → serialize) while keeping LibAFL’s normal coverage-guided scheduling and corpus management.
 
 This mode is useful when you want inputs that are always syntactically valid (or at least grammar-valid), so the fuzzer can focus on deeper semantic paths.
 
@@ -134,8 +134,16 @@ Set `GOSENTRY_VERBOSE_AFL=1` to print a few generated inputs as `GOLIBAFL_MUTATE
 
 Behavior notes:
 - If the LibAFL input dir is empty, `golibafl` generates an initial corpus using the grammar.
-- If you provide initial seeds (via `testdata/fuzz` or by placing files in the LibAFL input dir), they will still be loaded, but in grammar mode the mutator generates fresh grammar-based inputs (it does not perform structure-preserving edits of your original seeds).
+- If you provide initial seeds (via `testdata/fuzz` or by placing files in the LibAFL input dir), they will be loaded into the corpus and Grammarinator will mutate the selected corpus seed (coverage-guided) instead of overwriting it with unrelated fresh generations.
+- `golibafl` validates mutated candidates by re-parsing them with the same grammar and retries on invalid outputs.
 - The `GOLIBAFL_MUTATED_INPUT` log is currently printed for the first 20 executions only.
+
+Limitations (current glue):
+- Grammar mode currently expects UTF-8 text inputs (the Grammarinator subprocess works with strings).
+- Grammar mode works best with a single input argument; multi-arg fuzz targets will decode the underlying byte buffer into separate values.
+- Grammarinator mutation is best-effort; `golibafl` validates candidates by re-parsing and retries. If repeated mutation attempts fail, it may fall back to generation-from-scratch to keep fuzzing.
+- The LibAFL corpus is stored as raw bytes on disk; Grammarinator trees are cached only in-memory (per client, bounded), so restarts lose the tree cache.
+- No grammar recombination/crossover between two corpus seeds yet (mutation is single-seed).
 
 ### CI note
 
@@ -146,41 +154,40 @@ This repo includes a grammar smoke test script at `misc/gosentry/tests/smoke_use
 
 ```text
 ┌───────────────────────────────────────────────────────────────────────────┐
-│ 1) gosentry `go test -fuzz=FuzzXxx` (LibAFL mode)                          │
-│    - captures your `testing.F.Fuzz` callback                               │
-│    - generates a Go->libFuzzer bridge (`_libaflmain.go`)                    │
-│    - builds a static harness archive (`libharness.a`)                       │
-│    - launches the Rust runner: `golibafl fuzz ...`                          │
+│ 0) gosentry `go test -fuzz=FuzzXxx` (LibAFL + --use-grammar)               │
+│    - captures your fuzz target + signature (`testing/libafl.go`)            │
+│    - builds `libharness.a` (buildmode=c-archive)                            │
+│    - runs the Rust runner: `golibafl fuzz ... --use-grammar ...`            │
 └───────────────┬───────────────────────────────────────────────────────────┘
                 v
 ┌───────────────────────────────────────────────────────────────────────────┐
-│ 2) `golibafl` (Rust + LibAFL) fuzzes the Go harness in-process              │
-│    - loads `libharness.a` via HARNESS_LIB                                   │
+│ 1) `golibafl` (Rust + LibAFL) fuzzes the Go harness in-process              │
+│    - loads `libharness.a` via `HARNESS_LIB=...`                             │
 │    - executes inputs by calling `LLVMFuzzerTestOneInput(data)`              │
-│      (implemented by the generated `_libaflmain.go`)                        │
+│    - scheduler selects a corpus seed (coverage-guided)                      │
+│    - stage mutates that seed, executes, and keeps new-coverage inputs       │
+│      in the on-disk corpus (`output/queue/`)                                │
 └───────────────┬───────────────────────────────────────────────────────────┘
                 v
 ┌───────────────────────────────────────────────────────────────────────────┐
-│ 3) In grammar mode, `golibafl` spawns a long-lived `python3` subprocess     │
-│    - runs Grammarinator `ProcessorTool` on your `.g4` file(s)               │
-│    - produces a Python `*Generator.py` under a temp workdir                 │
-│    - serves 1 generated sample per request over stdin/stdout                │
-│      (uses: `--start-rule` + optional `--grammar-serializer`)               │
-│    - `golibafl` reads the generated string and uses its UTF-8 bytes         │
-└───────────────┬───────────────────────────────────────────────────────────┘
-                v
-┌───────────────────────────────────────────────────────────────────────────┐
-│ 4) LibAFL stages (grammar mode)                                            │
-│    - initial corpus: generated from the grammar if the input dir is empty  │
-│    - mutation: replace the current input with a fresh grammar-generated    │
-│      one (current implementation is generation-from-scratch)               │
-│    - feedback/objective: coverage/time/crash as usual                       │
+│ 2) Grammarinator engine (`python3` subprocess, per client)                  │
+│    - `ProcessorTool`: turns `.g4` file(s) into a Python `*Generator.py`     │
+│    - protocol: JSON per line over stdin/stdout (generate / mutate(seed))    │
+│    - mutate = parse seed -> mutate derivation tree -> serialize back        │
+│    - validates candidates by re-parsing; retries on invalid outputs         │
 └───────────────────────────────────────────────────────────────────────────┘
+
+Example protocol:
+  {"op":"generate"}
+  {"op":"mutate","input":"...seed..."}
+  "<generated or mutated input string>"
 ```
 
 Notes:
-- Your Go harness still receives `data []byte`. Parsing/validation stays in Go (ex: JSON decode into a struct).
-- If the harness rejects inputs, it usually means the grammar/serializer is not aligned with what the harness expects.
+- Your Go harness still receives standard Go fuzz inputs. In grammar mode, a one-arg fuzz target can be either `data []byte` or `s string` (the generated sample is passed as UTF-8 bytes).
+- Grammar mode works best with a single input argument; with multiple arguments, gosentry will decode the underlying byte buffer into separate values, so the original grammar-generated text won’t stay intact.
+- `golibafl` validates mutated candidates by re-parsing them with the same grammar and retries on invalid outputs.
+- If the harness rejects inputs (example: JSON unmarshal fails), it usually means the grammar/serializer is not aligned with what the harness expects.
 - Use `GOSENTRY_VERBOSE_AFL=1` to see `golibafl: grammarinator enabled` + a few `GOLIBAFL_MUTATED_INPUT "..."` lines.
 
 </details>
