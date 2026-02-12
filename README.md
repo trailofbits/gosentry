@@ -12,6 +12,7 @@ For now, it focuses on six things:
 - Panicking on [user-provided function call](https://github.com/kevin-valerio/gosentry?tab=readme-ov-file#feature-2-panic-on-selected-functions): catching targeted bugs when certains functions are called (eg., `myapp.(*Logger).Error`).
 - Git-blame-oriented fuzzing (based on [this work](https://github.com/kevin-valerio/LibAFL-git-aware)): when fuzzing with LibAFL mode, you can orientate the fuzzer towards **recently added/edited lines**.
 - Detect **race conditions**, **goroutine leaks**, and **confirmed hangs** at fuzz-time: when fuzzing with LibAFL, gosentry can replay newly found seeds (or timed-out executions) and treat findings like bugs.
+- Proposing a **grammar-based** fuzzer: using [Grammarinator](https://github.com/renatahodovan/grammarinator/) as a mutator, gosentry can generate valid grammar for mutation.
 
 It especially has **two** objectives:
 - Being easy to use and UX-friendly (_we're tired of complex tools_),
@@ -403,35 +404,16 @@ Byte-level fuzzing is great, but parsers and file formats often need structured 
 
 This feature requires LibAFL (`--use-libafl=true`, which is the default when `-fuzz` is set).
 
-#### How to use
-
-Flags:
-- `--use-grammar`
-- `--grammar path/to/Foo.g4` (repeatable or comma-separated)
-- `--start-rule RuleName`
-
-Requirements:
-- `python3` with `grammarinator` installed (`python3 -m pip install grammarinator`)
-- Java (JRE/JDK) for Grammarinator/ANTLR.
-
-Example / tutorial (JSON grammar):
-
-Set `GOSENTRY_VERBOSE_AFL=1` to print a few generated inputs as `GOLIBAFL_MUTATED_INPUT "..."` (useful to verify you are really running in grammar mode).
+#### How to use 
+Requirements:  `python3` with `grammarinator` installed (`python3 -m pip install grammarinator`) and Java (JRE/JDK) for Grammarinator/ANTLR.
 
 <details>
 <summary><strong>Command example</strong></summary>
+Set `GOSENTRY_VERBOSE_AFL=1` to print a few generated inputs as `GOLIBAFL_MUTATED_INPUT "..."` (useful to verify you are really running in grammar mode).
 
 ```bash
 # Example (from this repo): JSON grammar + JSON harness.
-cd test/gosentry/examples/grammar_json
-GOSENTRY_VERBOSE_AFL=1 CGO_ENABLED=1 ../../../../bin/go test -fuzz=FuzzGrammarJSON \
-  --use-grammar --grammar=testdata/JSON.g4 --start-rule=json \
-  --focus-on-new-code=false --catch-races=false --catch-leaks=false .
-
-# Generic pattern:
-# GOSENTRY_VERBOSE_AFL=1 CGO_ENABLED=1 go test -fuzz=FuzzXxx \
-#   --use-grammar --grammar=/path/to/MyGrammar.g4 --start-rule=MyStartRule \
-#   --focus-on-new-code=false --catch-races=false --catch-leaks=false
+gosentry test -fuzz=FuzzGrammarJSON --use-grammar --grammar=testdata/JSON.g4 --start-rule=json --focus-on-new-code=false --catch-races=false --catch-leaks=false
 ```
 
 </details>
@@ -494,19 +476,7 @@ NUMBER : '-'? ('0' | [1-9] [0-9]*) ;
 WS     : [ \t\r\n]+ -> skip ;
 ```
 
-</details>
-
-<details>
-<summary><strong>Expected verbose output (example)</strong></summary>
-
-```text
-golibafl: grammarinator enabled (workdir=...)
-GOLIBAFL_MUTATED_INPUT "null"
-GOLIBAFL_MUTATED_INPUT "{ }"
-GOLIBAFL_MUTATED_INPUT "[ true, false, null ]"
-```
-
-</details>
+</details> 
 
 #### How it works
 
