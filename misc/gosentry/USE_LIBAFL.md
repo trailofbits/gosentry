@@ -135,7 +135,7 @@ Set `GOSENTRY_VERBOSE_AFL=1` to print a few generated inputs as `GOLIBAFL_MUTATE
 Behavior notes:
 - If the LibAFL input dir is empty, `golibafl` generates an initial corpus using the grammar.
 - If you provide initial seeds (via `testdata/fuzz` or by placing files in the LibAFL input dir), they will be loaded into the corpus and Grammarinator will mutate the selected corpus seed (coverage-guided) instead of overwriting it with unrelated fresh generations.
-- `golibafl` validates mutated candidates by re-parsing them with the same grammar and retries on invalid outputs.
+- `golibafl` validates mutated candidates by re-parsing them with the same grammar and retries on invalid outputs (syntax-only parse for performance; it doesn’t rebuild a full Grammarinator tree for every candidate).
 - If a loaded corpus seed is not parseable by the grammar (example: user seed is invalid, or you changed `--grammar-max-depth/--grammar-max-tokens` between runs), `golibafl` will fall back to generation-from-scratch instead of aborting the fuzz run.
 - The `GOLIBAFL_MUTATED_INPUT` log is currently printed for the first 20 executions only.
 
@@ -188,7 +188,7 @@ Example protocol:
 Notes:
 - Your Go harness still receives standard Go fuzz inputs. In grammar mode, a one-arg fuzz target can be either `data []byte` or `s string` (the generated sample is passed as UTF-8 bytes).
 - Grammar mode works best with a single input argument; with multiple arguments, gosentry will decode the underlying byte buffer into separate values, so the original grammar-generated text won’t stay intact.
-- `golibafl` validates mutated candidates by re-parsing them with the same grammar and retries on invalid outputs.
+- `golibafl` validates mutated candidates by re-parsing them with the same grammar and retries on invalid outputs (syntax-only parse for performance; it doesn’t rebuild a full Grammarinator tree for every candidate).
 - If the harness rejects inputs (example: JSON unmarshal fails), it usually means the grammar/serializer is not aligned with what the harness expects.
 - Use `GOSENTRY_VERBOSE_AFL=1` to see `golibafl: grammarinator enabled` + a few `GOLIBAFL_MUTATED_INPUT "..."` lines.
 

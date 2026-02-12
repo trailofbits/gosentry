@@ -333,8 +333,23 @@ def main() -> int:
 
     def mutate_one(s: str) -> str:
         ensure_mutation_tools()
-        from antlr4 import InputStream
+        from antlr4 import CommonTokenStream, InputStream
+        from grammarinator.tool.parser import ExtendedErrorListener
         from grammarinator.runtime import Individual
+
+        def is_parseable(text: str) -> bool:
+            # Fast validity check: run the ANTLR parser and check for syntax
+            # errors, but avoid converting the parse tree into Grammarinator's
+            # internal tree representation (much slower).
+            try:
+                lexer = parser_tool._lexer_cls(InputStream(text))
+                lexer.addErrorListener(ExtendedErrorListener())
+                parser = parser_tool._parser_cls(CommonTokenStream(lexer))
+                parser.buildParseTrees = False
+                getattr(parser, parser_tool._rule)()
+                return parser._syntaxErrors == 0
+            except Exception:
+                return False
 
         def generate_valid_one() -> str:
             # Fall back to generation-from-scratch (still grammar-valid) so the
@@ -342,10 +357,8 @@ def main() -> int:
             MAX_GENERATE_ATTEMPTS = 64
             for _ in range(MAX_GENERATE_ATTEMPTS):
                 out = generate_one()
-                parsed = parser_tool._create_tree(InputStream(out), "<generated>")
-                if parsed is None:
+                if not is_parseable(out):
                     continue
-                cache_put(out, parsed)
                 return out
             raise RuntimeError("failed to generate a valid input")
 
@@ -375,10 +388,8 @@ def main() -> int:
             if cached is not None:
                 return mutated
 
-            parsed = parser_tool._create_tree(InputStream(mutated), "<mutated>")
-            if parsed is None:
+            if not is_parseable(mutated):
                 continue
-            cache_put(mutated, parsed)
             return mutated
 
         return generate_valid_one()

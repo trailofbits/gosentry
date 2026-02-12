@@ -550,7 +550,7 @@ Example protocol:
 Limitations (current glue):
 - Grammar mode currently expects UTF-8 text inputs (the Grammarinator subprocess works with strings).
 - Grammar mode works best with a single input argument; multi-arg fuzz targets will decode the underlying byte buffer into separate values.
-- Grammarinator mutation is best-effort; `golibafl` validates candidates by re-parsing and retries. If repeated mutation attempts fail, it may fall back to generation-from-scratch to keep fuzzing.
+- Grammarinator mutation is best-effort; `golibafl` validates candidates by re-parsing and retries. For performance, this validity check is a syntax-only parse (it does not convert every candidate back into a Grammarinator tree).
 - The LibAFL corpus is stored as raw bytes on disk; Grammarinator trees are cached only in-memory (per client, bounded), so restarts lose the tree cache.
 - No grammar recombination/crossover between two corpus seeds yet (mutation is single-seed).
 
