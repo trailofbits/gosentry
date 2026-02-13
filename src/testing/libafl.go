@@ -14,8 +14,10 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"unsafe"
 
@@ -42,6 +44,23 @@ var libafl libaflHarness
 var libaflCatchLeaksOnce sync.Once
 var libaflCatchLeaks bool
 
+var libaflGoInitDone uint32
+var libaflStackTracesOnFailNow uint32
+
+// LibAFLMarkGoInitDone marks Go package initialization as complete for the
+// generated LibAFL harness.
+func LibAFLMarkGoInitDone() {
+	atomic.StoreUint32(&libaflGoInitDone, 1)
+}
+
+// LibAFLWaitForGoInit blocks until Go package initialization is complete for
+// the generated LibAFL harness.
+func LibAFLWaitForGoInit() {
+	for atomic.LoadUint32(&libaflGoInitDone) == 0 {
+		runtime.Gosched()
+	}
+}
+
 func libaflCatchLeaksEnabled() bool {
 	libaflCatchLeaksOnce.Do(func() {
 		libaflCatchLeaks = os.Getenv("GOSENTRY_LIBAFL_CATCH_LEAKS") == "1"
@@ -60,6 +79,8 @@ const (
 // is set.
 func LibAFLInit(name string, fuzzFn func(*F)) error {
 	libafl.once.Do(func() {
+		atomic.StoreUint32(&libaflStackTracesOnFailNow, 1)
+
 		// In --use-libafl mode we don't run the generated test main, so the
 		// testing flags are not registered unless we do it ourselves.
 		// Without this, methods like (*T).Fatalf may crash (e.g. nil *fullPath).

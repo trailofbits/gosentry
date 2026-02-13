@@ -1422,6 +1422,19 @@ import (
 
 const libaflFuzzPattern = %q
 
+// When the harness is linked as a c-archive and driven by an external runtime
+// (LibAFL), the runner may call into the exported libFuzzer entrypoints while
+// Go package initialization is still in progress. That can create spurious
+// startup races between init-time writes in dependencies and fuzz target reads.
+//
+func init() {
+	testing.LibAFLMarkGoInitDone()
+}
+
+func waitForGoInit() {
+	testing.LibAFLWaitForGoInit()
+}
+
 func selectLibAFLFuzzTarget() *testing.InternalFuzzTarget {
 	re, err := regexp.Compile(libaflFuzzPattern)
 	if err != nil {
@@ -1455,6 +1468,7 @@ func selectLibAFLFuzzTarget() *testing.InternalFuzzTarget {
 
 //export LLVMFuzzerInitialize
 func LLVMFuzzerInitialize(argc *C.int, argv ***C.char) C.int {
+	waitForGoInit()
 	t := selectLibAFLFuzzTarget()
 	if err := testing.LibAFLInit(t.Name, t.Fn); err != nil {
 		os.Stderr.WriteString("testing: libafl init failed: " + err.Error() + "\n")
@@ -1471,6 +1485,7 @@ func LLVMFuzzerInitialize(argc *C.int, argv ***C.char) C.int {
 
 //export LLVMFuzzerTestOneInput
 func LLVMFuzzerTestOneInput(data *C.char, size C.size_t) C.int {
+	waitForGoInit()
 	input := C.GoBytes(unsafe.Pointer(data), C.int(size))
 	testing.LibAFLFuzzOneInput(input)
 	return 0
@@ -2332,6 +2347,7 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 
 				for _, seedPath := range newSeeds {
 					raceDetected := false
+					var raceReport []byte
 					for rep := 0; rep < repeats && !raceDetected; rep++ {
 						type res struct {
 							out []byte
@@ -2348,12 +2364,22 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 							r := <-ch
 							if r.err != nil && bytes.Contains(r.out, []byte("DATA RACE")) {
 								raceDetected = true
+								if raceReport == nil {
+									raceReport = r.out
+								}
 							}
 						}
 					}
 
 					if !raceDetected {
 						continue
+					}
+
+					if len(raceReport) > 0 {
+						_, _ = os.Stderr.Write(raceReport)
+						if raceReport[len(raceReport)-1] != '\n' {
+							_, _ = os.Stderr.WriteString("\n")
+						}
 					}
 
 					dst, err := copySeed(seedPath)

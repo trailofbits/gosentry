@@ -996,6 +996,10 @@ func (c *common) Failed() bool {
 func (c *common) FailNow() {
 	c.checkFuzzFn("FailNow")
 	c.Fail()
+	if atomic.LoadUint32(&libaflStackTracesOnFailNow) != 0 {
+		_, _ = os.Stderr.WriteString("stack trace:\n")
+		_, _ = os.Stderr.Write(debug.Stack())
+	}
 
 	// Calling runtime.Goexit will exit the goroutine, which
 	// will run the deferred functions in this goroutine,
