@@ -26,6 +26,10 @@ jobs:
         cd src
         ./make.bash
 
+    - name: Run stdlib LibAFL encoding tests
+      run: |
+        GOROOT=${{ github.workspace }} ${{ github.workspace }}/bin/go test -v -run TestLibAFLMarshalUnmarshal testing
+
     - name: Run tests (truncation disabled)
       run: |
         cd tests
@@ -48,6 +52,10 @@ jobs:
       run: |
         cd src
         GOFLAGS="-gcflags=-truncationdetect=true" ./make.bash
+
+    - name: Run stdlib LibAFL encoding tests
+      run: |
+        GOROOT=${{ github.workspace }} GOFLAGS="-gcflags=-truncationdetect=true" ${{ github.workspace }}/bin/go test -v -run TestLibAFLMarshalUnmarshal testing
 
     - name: Run tests (truncation enabled)
       run: |
