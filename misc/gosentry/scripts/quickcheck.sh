@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd)"
+
+bootstrap_goroot="${GOROOT_BOOTSTRAP:-}"
+if [[ -z "${bootstrap_goroot}" ]]; then
+  if command -v go >/dev/null 2>&1; then
+    bootstrap_goroot="$(go env GOROOT)"
+  else
+    bootstrap_ver="go1.25.5"
+    os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+    arch="$(uname -m)"
+    case "${arch}" in
+      x86_64) arch="amd64" ;;
+      aarch64 | arm64) arch="arm64" ;;
+      *) echo "unsupported arch for auto-bootstrap: ${arch}" >&2; exit 1 ;;
+    esac
+    case "${os}" in
+      linux | darwin) ;;
+      *) echo "unsupported os for auto-bootstrap: ${os}" >&2; exit 1 ;;
+    esac
+    cache_root="${XDG_CACHE_HOME:-$HOME/.cache}/gosentry/go-bootstrap/${bootstrap_ver}"
+    bootstrap_goroot="${cache_root}/go"
+    if [[ ! -x "${bootstrap_goroot}/bin/go" ]]; then
+      mkdir -p "${cache_root}"
+      archive="${bootstrap_ver}.${os}-${arch}.tar.gz"
+      curl -fsSL -o "${cache_root}/${archive}" "https://go.dev/dl/${archive}"
+      tar -C "${cache_root}" -xzf "${cache_root}/${archive}"
+    fi
+  fi
+fi
+
+build_goflags="${GOFLAGS:-}"
+if [[ "${GOSENTRY_QUICKCHECK_TRUNCATION:-}" == "1" ]]; then
+  if [[ -n "${build_goflags}" ]]; then
+    build_goflags="${build_goflags} "
+  fi
+  build_goflags="${build_goflags}-gcflags=-truncationdetect=true"
+fi
+
+cd "${ROOT_DIR}/src"
+GOROOT_BOOTSTRAP="${bootstrap_goroot}" GOFLAGS="${build_goflags}" ./make.bash
+
+cd "${ROOT_DIR}/tests"
+GOROOT="${ROOT_DIR}" GOFLAGS="${build_goflags}" "${ROOT_DIR}/bin/go" test -v .
