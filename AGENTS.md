@@ -21,4 +21,4 @@
 ## Rules
 
 - Keep this file as a **map**, not an encyclopedia.
-- If you change LibAFL `go test` flags (`src/cmd/go/internal/test/testflag.go`), update `misc/gosentry/USE_LIBAFL.md`.
+- If you change any feature of gosentry, update `misc/gosentry/USE_LIBAFL.md`.

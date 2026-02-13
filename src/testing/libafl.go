@@ -39,7 +39,15 @@ type libaflHarness struct {
 }
 
 var libafl libaflHarness
-var libaflCatchLeaks = os.Getenv("GOSENTRY_LIBAFL_CATCH_LEAKS") == "1"
+var libaflCatchLeaksOnce sync.Once
+var libaflCatchLeaks bool
+
+func libaflCatchLeaksEnabled() bool {
+	libaflCatchLeaksOnce.Do(func() {
+		libaflCatchLeaks = os.Getenv("GOSENTRY_LIBAFL_CATCH_LEAKS") == "1"
+	})
+	return libaflCatchLeaks
+}
 
 const (
 	libaflMaxVarLen       = 1 << 20
@@ -194,8 +202,9 @@ func LibAFLFuzzOneInput(data []byte) {
 		panic("libafl fuzz target not initialized")
 	}
 
+	catchLeaks := libaflCatchLeaksEnabled()
 	var ignoreExistingGoroutines goleak.Option
-	if libaflCatchLeaks {
+	if catchLeaks {
 		ignoreExistingGoroutines = goleak.IgnoreCurrent()
 	}
 
@@ -234,7 +243,7 @@ func LibAFLFuzzOneInput(data []byte) {
 		panic("fuzz target failed")
 	}
 
-	if libaflCatchLeaks {
+	if catchLeaks {
 		if err := goleak.Find(ignoreExistingGoroutines); err != nil {
 			_, _ = os.Stderr.WriteString("catch-leaks: detected goroutine leak\n")
 			_, _ = os.Stderr.WriteString(err.Error())
