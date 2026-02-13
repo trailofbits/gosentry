@@ -14,8 +14,6 @@ fuzz_test/testdata/
 *.rej
 *.exe
 .*.swp
-AGENTS.md
-AGENT.md
 CLAUDE.local.md
 core
 *.cgo*.go
