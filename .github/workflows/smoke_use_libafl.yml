@@ -59,6 +59,9 @@ jobs:
       - name: Smoke (focus-on-new-code)
         run: bash misc/gosentry/tests/smoke_use_libafl_focus_on_new_code.sh
 
+      - name: Smoke (addseed + testdata/fuzz)
+        run: bash misc/gosentry/tests/smoke_use_libafl_addseed_testdata.sh
+
       - name: Smoke (grammar json)
         run: bash misc/gosentry/tests/smoke_use_libafl_grammar_json.sh
 
