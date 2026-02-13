@@ -217,7 +217,7 @@ Note: `--focus-on-new-code=true` needs `git` (to run `git blame`) and `go tool a
 
 `--catch-races={true|false}` enables a separate `-race` replay loop that watches the LibAFL `queue/` corpus directory and replays only newly discovered seeds with `GORACE=halt_on_error=1`.
 
-When a race is detected, gosentry prints the exact seed path, copies the seed into `output/races/` (under the LibAFL output directory), and stops the fuzz campaign (treats it like a bug/crash).
+When a race is detected, gosentry prints the race detector report (stack traces), prints the exact seed path, copies the seed into `output/races/` (under the LibAFL output directory), and stops the fuzz campaign (treats it like a bug/crash).
 
 This flag only applies in LibAFL mode and is required.
 
@@ -449,6 +449,8 @@ Those are the standard libFuzzer entrypoints expected by `libafl_targets::libfuz
 
 `LLVMFuzzerTestOneInput` converts the input bytes and calls the fuzz callback once.
 
+Note: the exported entrypoints wait for Go package initialization to complete before running. This avoids spurious startup race reports when the harness is driven by an external runtime (LibAFL) that may call into the harness from multiple threads.
+
 ### 2) The fuzz callback is captured from standard `testing.F.Fuzz`
 
 The `testing` package is patched so that, in this special mode, the first `f.Fuzz(func(*testing.T, []byte){...})` call is **captured** instead of starting the native Go fuzzing engine.
@@ -510,6 +512,8 @@ When a crash is found, `golibafl` prints:
 - the output directory + `crashes/` path
 - the exact crash input file path
 - a repro command: `golibafl run --input <crash_file>`
+
+The harness output is printed above that (panic backtrace, or a stack trace for `t.Fatal`/`t.Fatalf`).
 
 To keep fuzzing after crashes, set `"stop_all_fuzzers_on_panic": false` in the LibAFL JSONC config.
 

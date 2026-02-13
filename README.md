@@ -134,6 +134,8 @@ You must also explicitly choose whether to enable data race catching: `--catch-r
 
 You must also explicitly choose whether to enable goroutine leak catching: `--catch-leaks=true|false` (see Feature 5).
 
+When a crash or failure is found, gosentry prints the Go backtrace above the LibAFL summary output (panic backtrace, and also stack traces for `t.Fatal`/`t.Fatalf`).
+
 To opt out:
 - `--use-libafl=false`: use Go's native fuzzing engine instead of LibAFL.
 
@@ -322,6 +324,8 @@ gosentry can run a separate `-race` replay loop that watches the LibAFL `queue/`
 
 The replay loop builds a separate `-race` harness archive for replay-only (no fuzz coverage instrumentation).
 
+When a data race is detected during replay, gosentry prints the full race detector report before the `catch-races:` summary and repro command.
+
 Note: Go’s race detector only detects data races **inside a single harness execution** (races between goroutines in the same process accessing the same memory without proper synchronization). `--catch-races` will miss races if the seed does not trigger the racy concurrency, and it does not detect cross-process races.
 
 <details>
@@ -353,6 +357,7 @@ This mode starts a small monitor inside `go test` (same parent process), and it 
                 v
 ┌───────────────────────────────────────────────────────────────────────────┐
 │ 4) On "DATA RACE"                                                          │
+│    - prints the race detector report                                       │
 │    - copies seed to `output/races/`                                        │
 │    - stops the fuzz campaign (treat as bug/crash)                          │
 └───────────────────────────────────────────────────────────────────────────┘
