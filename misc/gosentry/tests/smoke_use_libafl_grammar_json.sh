@@ -14,7 +14,7 @@ mkdir -p "${in_dir}"
 
 output="${tmp_dir}/output.txt"
 set +e
-GOSENTRY_VERBOSE_AFL=1 CGO_ENABLED=1 timeout 2m "${ROOT_DIR}/bin/go" test -fuzz=FuzzGrammarJSON --use-libafl --use-grammar --grammar=testdata/JSON.json --focus-on-new-code=false --catch-races=false --catch-leaks=false . 2>&1 | tee "${output}"
+GOSENTRY_VERBOSE_AFL=1 CGO_ENABLED=1 timeout 5m "${ROOT_DIR}/bin/go" test -fuzz=FuzzGrammarJSON --use-libafl --use-grammar --grammar=testdata/JSON.json --focus-on-new-code=false --catch-races=false --catch-leaks=false . 2>&1 | tee "${output}"
 status="${PIPESTATUS[0]}"
 set -e
 

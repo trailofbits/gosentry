@@ -45,6 +45,9 @@ If the user's request is missing key details, ask up to **3** short questions, t
 - `misc/gosentry/nautilus/examples/json/gosentry_json.json` (small JSON subset)
 - `misc/gosentry/nautilus/examples/json/libafl_ruby_grammar.json` (larger grammar, lots of terminals)
 - `misc/gosentry/nautilus/examples/json/libafl_quickjs_grammar.json` (JavaScript example)
+- `misc/gosentry/nautilus/examples/json/libafl_workshop_grammar.json` (small example)
+- `misc/gosentry/nautilus/examples/json/nautilus_ruby_new_antlr_grammar.json` (Ruby example)
+- `misc/gosentry/nautilus/examples/json/sqlite_syntax_grammar.json` (SQL example)
 
 ## Suggested construction pattern
 
