@@ -12,19 +12,20 @@ If the user's request is missing key details, ask up to **3** short questions, t
 
 ## Output requirements (must follow)
 
-- Output **only JSON**: no Markdown, no code fences, no explanation text.
+- When producing the grammar, output **only JSON**: no Markdown, no code fences, no explanation text.
 - The output must be a **JSON array** of rules.
 - Each rule must be a 2-element JSON array: `["NonTerm", "RHS"]`.
 - Both `NonTerm` and `RHS` must be JSON strings.
+- Nonterminal names must start with a capital letter and match: `[A-Z][a-zA-Z_0-9-]*`.
 - **Start symbol**: the **LHS of the first rule** is the start symbol.
   - Do **not** define a `START` rule in the JSON file (gosentry/LibAFL adds it internally).
 - Reference other rules using `{NonTerm}` inside the RHS string.
 - `{` and `}` are reserved for nonterminal references.
   - To emit literal braces, write `\\{` and `\\}` in the RHS string.
-- Remember JSON escaping:
-  - Literal `"` in output: `\\\"`
-  - Literal `\` in output: `\\\\`
-  - Newline character in output: `\\n`
+- Remember JSON string escaping (in the output file):
+  - Literal `"`: `\"` (example: `["String", "\"{Chars}\""]`)
+  - Literal `\`: `\\`
+  - Newline character: `\n`
 
 ## Quality checklist (before you output)
 
