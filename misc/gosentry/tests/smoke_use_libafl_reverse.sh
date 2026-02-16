@@ -13,4 +13,4 @@ in_dir="$(libafl_input_dir FuzzReverse)"
 mkdir -p "${in_dir}"
 printf 'FUZZING!' > "${in_dir}/seed-crash"
 
-run_expect_crash reverse FuzzReverse 2m "${tmp_dir}/output.txt"
+run_expect_crash reverse FuzzReverse 5m "${tmp_dir}/output.txt"

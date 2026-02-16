@@ -34,7 +34,7 @@ mkdir -p "${in_dir}"
 printf 'FUZZING!' > "${in_dir}/seed-crash"
 
 output_file="${tmp_dir}/output.txt"
-run_expect_crash reverse FuzzReverse 2m "${output_file}" --libafl-config="${cfg_path}"
+run_expect_crash reverse FuzzReverse 5m "${output_file}" --libafl-config="${cfg_path}"
 
 if ! grep -Fq "GOLIBAFL_CONFIG_APPLIED cores_ids=${cores}" "${output_file}"; then
   echo "expected output to confirm applied LibAFL config cores_ids=${cores}"

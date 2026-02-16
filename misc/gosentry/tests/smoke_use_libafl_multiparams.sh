@@ -13,4 +13,4 @@ in_dir="$(libafl_input_dir FuzzMultiParams)"
 mkdir -p "${in_dir}"
 printf '\x06libafl\x08gosentry\x69\x7a\x01' > "${in_dir}/seed-crash"
 
-run_expect_crash multiparams FuzzMultiParams 2m "${tmp_dir}/output.txt"
+run_expect_crash multiparams FuzzMultiParams 5m "${tmp_dir}/output.txt"

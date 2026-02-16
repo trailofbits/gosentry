@@ -75,10 +75,6 @@ func init() {
 	cf.Var(&testCatchLeaks, "catch-leaks", "")
 	cf.BoolVar(&testUseGrammar, "use-grammar", false, "")
 	cf.Var((*grammarFilesFlag)(&testGrammar), "grammar", "")
-	cf.StringVar(&testStartRule, "start-rule", "", "")
-	cf.BoolVar(&testGrammarActions, "grammar-actions", false, "")
-	cf.StringVar(&testGrammarSer, "grammar-serializer", "", "")
-	cf.StringVar(&testGrammarinator, "grammarinator-dir", "", "")
 	cf.StringVar(&testLibAFLConfig, "libafl-config", "", "")
 	cf.StringVar(&testPanicOn, "panic-on", "", "")
 	cf.StringVar(&testTrace, "trace", "", "")
@@ -94,9 +90,11 @@ func init() {
 
 // grammarFilesFlag is the implementation of the -grammar flag.
 //
-// It may be specified multiple times. Each occurrence accepts either a
-// comma-separated list (recommended) or a space-separated and possibly-quoted
-// list (compatible with base.StringsFlag).
+// It may be specified multiple times and may accept a comma-separated list.
+//
+// Note: gosentry's `-use-grammar` mode currently requires exactly one grammar
+// file, but we keep this flexible parser for compatibility with existing flag
+// spelling and quoting patterns.
 type grammarFilesFlag []string
 
 func (v *grammarFilesFlag) Set(s string) error {

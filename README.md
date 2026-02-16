@@ -8,7 +8,7 @@ For now, it focuses on the following features:
 
 - Integrating [go-panikint](https://github.com/trailofbits/go-panikint): instrumentation that panics on **integer overflow/underflow** (and **optionally on truncating integer conversions**).
 - Integrating [LibAFL](https://github.com/AFLplusplus/LibAFL) fuzzer: run Go fuzzing harnesses with **LibAFL** for better fuzzing performances.
-- Proposing **Grammar-based fuzzing** (ANTLRv4 via [Grammarinator](https://github.com/renatahodovan/grammarinator)): generate structured inputs from a grammar ([Feature 6](#feature-6-grammar-based-fuzzing-grammarinator)).
+- Proposing **Grammar-based fuzzing** (Nautilus JSON grammar): generate structured inputs from a grammar ([Feature 6](#feature-6-grammar-based-fuzzing-nautilus)).
 - Panicking on [user-provided function call](https://github.com/kevin-valerio/gosentry?tab=readme-ov-file#feature-2-panic-on-selected-functions): catching targeted bugs when certains functions are called (eg., `myapp.(*Logger).Error`).
 - Git-blame-oriented fuzzing (based on [this work](https://github.com/kevin-valerio/LibAFL-git-aware)): when fuzzing with LibAFL mode, you can orientate the fuzzer towards **recently added/edited lines**.
 - Detect **race conditions**, **goroutine leaks**, and **confirmed hangs** at fuzz-time: when fuzzing with LibAFL, gosentry can replay newly found seeds (or timed-out executions) and treat findings like bugs.
@@ -25,7 +25,7 @@ It especially has **two** objectives:
   - [Feature 3: LibAFL state-of-the-art fuzzing](#feature-3-libafl-state-of-the-art-fuzzing)
   - [Feature 4: Git-blame-oriented fuzzing (experimental)](#feature-4-git-blame-oriented-fuzzing-experimental)
   - [Feature 5: Detect race conditions, goroutine leaks, and hangs at fuzz-time](#feature-5-detect-race-conditions-goroutine-leaks-and-hangs-at-fuzz-time)
-  - [Feature 6: Grammar-based fuzzing (Grammarinator)](#feature-6-grammar-based-fuzzing-grammarinator)
+  - [Feature 6: Grammar-based fuzzing (Nautilus)](#feature-6-grammar-based-fuzzing-nautilus)
 - [Credits](#credits)
 
 ## Build
@@ -147,7 +147,7 @@ You can also pass an optional JSONC config file for LibAFL (including grammar fu
 ./bin/go test -fuzz=FuzzHarness --focus-on-new-code=false --catch-races=false --catch-leaks=false --libafl-config=path/to/libafl.jsonc # optional --libafl-config
 ```
 
-Grammar-based fuzzing (Grammarinator) is documented in [Feature 6](#feature-6-grammar-based-fuzzing-grammarinator).
+Grammar-based fuzzing (Nautilus) is documented in [Feature 6](#feature-6-grammar-based-fuzzing-nautilus).
 
 <details>
 <summary><strong>How Go + LibAFL are wired together</strong></summary>
@@ -413,22 +413,16 @@ Enable goroutine leak catching with `--catch-leaks=true` or race catching with `
 ./bin/go test -fuzz=FuzzHarness --use-libafl --focus-on-new-code=false --catch-races=true --catch-leaks=true
 ```
 
-## Feature 6: Grammar-based fuzzing (Grammarinator)
+## Feature 6: Grammar-based fuzzing (Nautilus)
 
 #### Overview
 
-Byte-level fuzzing is great, but parsers and file formats often need structured inputs. gosentry can generate inputs from an ANTLRv4 grammar via [Grammarinator](https://github.com/renatahodovan/grammarinator), and feed them to your regular Go fuzz harness (`testing.F.Fuzz`).
+Byte-level fuzzing is great, but parsers and file formats often need structured inputs. With `--use-grammar`, gosentry uses LibAFL’s Nautilus grammar mutator to generate and mutate inputs that conform to a user-provided grammar (JSON format), and feeds them to your regular Go fuzz harness (`testing.F.Fuzz`).
 
-In grammar mode, LibAFL still runs the normal coverage-guided loop (pick a corpus seed → mutate → execute → keep inputs that increase coverage). The difference is the mutator: instead of byte-level havoc, gosentry uses Grammarinator to do **grammar-aware mutation** of the currently selected corpus seed (parse → mutate the derivation tree → serialize back to text).
+In grammar mode, LibAFL still runs the normal coverage-guided loop (pick a corpus seed → mutate → execute → keep inputs that increase coverage). The difference is the mutator: instead of byte-level havoc, gosentry parses the selected corpus seed into a grammar tree, mutates that tree, and unparses it back to bytes.
 
-> [!WARNING]
-> Grammar-based fuzzing is currently **much slower** than byte-level fuzzing. On the JSON fuzz targets in `test/gosentry/examples/grammar_json/perf_json_test.go` (~5 minutes each), byte-level ("no-grammar") ran at ~5.9–7.0k exec/s vs ~113–158 exec/s in grammar mode (~37×–62× slower).
-> We’re actively working on making grammar mode faster — today it’s a trade-off: more structured inputs vs fewer executions per second.
->
-> | fuzz target | no-grammar exec/s | grammar exec/s | no-grammar ÷ grammar |
-> |---|---:|---:|---:|
-> | `FuzzJSONUnmarshal` | 7048 | 112.8 | 62.48× |
-> | `FuzzJSONDecoder` | 5931 | 158.2 | 37.49× |
+> [!NOTE]
+> Grammar mode is usually slower than byte-level fuzzing. It is a trade-off: more structure vs fewer executions per second.
 
 For best results, use a one-arg fuzz callback that takes either a byte slice (`[]byte`) or a `string`:
 
@@ -441,9 +435,9 @@ f.Fuzz(func(t *testing.T, s string) { /* parse s */ })
 Grammar mode works best with a single input argument (`[]byte` or `string`). Multi-arg fuzz callbacks cause gosentry to decode the underlying byte buffer into separate values, so the original grammar-generated text won’t stay intact.
 
 #### How to use 
-Requirements:  `python3` with `grammarinator` installed (`python3 -m pip install grammarinator`) and Java (JRE/JDK) for Grammarinator/ANTLR.
+Requirements: no extra dependencies beyond the Rust toolchain already needed for LibAFL mode.
 
-You can tune the Grammarinator engine via `--libafl-config` (only used with `--use-grammar`): `grammar_max_depth`, `grammar_max_tokens`, `grammar_actions`, `grammarinator_dir` (see `misc/gosentry/libafl.config.jsonc`).
+You can tune Nautilus via `--libafl-config` (only used with `--use-grammar`): `nautilus_max_len` (see `misc/gosentry/libafl.config.jsonc`).
 
 Set `GOSENTRY_VERBOSE_AFL=1` to print a few generated inputs (useful to verify you are really running in grammar mode).
 
@@ -451,15 +445,18 @@ Set `GOSENTRY_VERBOSE_AFL=1` to print a few generated inputs (useful to verify y
 
 If you need to create a new Nautilus JSON grammar for your own target format/protocol, gosentry ships:
 
-- An LLM-ready prompt: `misc/gosentry/nautilus/prompt.md`
-- A small set of example grammars: `misc/gosentry/nautilus/examples/`
+- An LLM-ready prompt: [misc/gosentry/nautilus/prompt.md](misc/gosentry/nautilus/prompt.md)
+- A small set of example grammars: [misc/gosentry/nautilus/examples/](misc/gosentry/nautilus/examples/)
 
 <details>
 <summary><strong>Command example</strong></summary>
 
 ```bash
 # Example (from this repo): JSON grammar + JSON harness.
-gosentry test -fuzz=FuzzGrammarJSON --use-grammar --grammar=testdata/JSON.g4 --start-rule=json --focus-on-new-code=false --catch-races=false --catch-leaks=false
+cd test/gosentry/examples/grammar_json
+GOSENTRY_VERBOSE_AFL=1 CGO_ENABLED=1 ../../../../bin/go test -fuzz=FuzzGrammarJSON \
+  --use-grammar --grammar=testdata/JSON.json \
+  --focus-on-new-code=false --catch-races=false --catch-leaks=false .
 ```
 
 </details>
@@ -496,30 +493,25 @@ func FuzzGrammarJSON(f *testing.F) {
 </details>
 
 <details>
-<summary><strong>ANTLRv4 grammar example (small JSON subset)</strong></summary>
+<summary><strong>Nautilus JSON grammar example (small JSON subset)</strong></summary>
 
-```antlr
-grammar MiniJSON;
+This is the file format expected by `--grammar=...`:
+- The grammar is a JSON array of rules: `["NonTerm", "RHS"]`.
+- Nonterminal names must start with a capital letter (`Value`, `Object`, ...).
+- Use `{NonTerm}` in the RHS to reference another rule.
+- `{` and `}` are reserved for nonterminal references; to emit literal braces, use `\\{` and `\\}` in the RHS string.
 
-json : value EOF ;
-
-value
-  : STRING
-  | NUMBER
-  | obj
-  | arr
-  | 'true'
-  | 'false'
-  | 'null'
-  ;
-
-obj  : '{' pair (',' pair)* '}' | '{' '}' ;
-pair : STRING ':' value ;
-arr  : '[' value (',' value)* ']' | '[' ']' ;
-
-STRING : '"' [a-zA-Z0-9 _.-]* '"' ;
-NUMBER : '-'? ('0' | [1-9] [0-9]*) ;
-WS     : [ \t\r\n]+ -> skip ;
+```json
+[
+  ["Json", "{Value}"],
+  ["Value", "null"],
+  ["Value", "{String}"],
+  ["String", "\"{Chars}\""],
+  ["Chars", ""],
+  ["Chars", "{Char}{Chars}"],
+  ["Char", "a"],
+  ["Char", "b"]
+]
 ```
 
 </details> 
@@ -532,7 +524,7 @@ WS     : [ \t\r\n]+ -> skip ;
 │ 0) gosentry `go test -fuzz=FuzzXxx` (LibAFL + --use-grammar)               │
 │    - captures your `testing.F.Fuzz` callback + its parameter types          │
 │    - builds `libharness.a` (libFuzzer-style entrypoints for LibAFL)         │
-│    - runs `golibafl fuzz ... --use-grammar --grammar ... --start-rule ...`  │
+│    - runs `golibafl fuzz ... --use-grammar --grammar ...`                   │
 └───────────────┬───────────────────────────────────────────────────────────┘
                 v
 ┌───────────────────────────────────────────────────────────────────────────┐
@@ -544,33 +536,24 @@ WS     : [ \t\r\n]+ -> skip ;
 └───────────────┬───────────────────────────────────────────────────────────┘
                 v
 ┌───────────────────────────────────────────────────────────────────────────┐
-│ 2) Grammarinator engine (`python3` subprocess, per client)                  │
-│    - `ProcessorTool`: turns `.g4` file(s) into a Python `*Generator.py`     │
-│    - protocol: JSON per line over stdin/stdout (generate / mutate(seed))    │
-│    - mutate = parse seed -> mutate derivation tree -> serialize back        │
-│    - validates candidates by re-parsing; retries on invalid outputs         │
+│ 2) Nautilus (in-process, per client)                                       │
+│    - loads the JSON grammar into a Nautilus context                         │
+│    - fuzz loop stage: parse seed -> mutate tree -> unparse to bytes         │
+│    - if the seed is not parseable: fall back to generation-from-scratch     │
 └───────────────┬───────────────────────────────────────────────────────────┘
                 v
 ┌───────────────────────────────────────────────────────────────────────────┐
 │ 3) Grammar mode stages                                                     │
 │    - initial corpus: if input dir empty, call `generate` N times            │
-│    - fuzz loop: corpus seed -> `mutate(seed)` -> exec harness               │
+│    - fuzz loop: corpus seed -> grammar mutate -> exec harness               │
 │    - new coverage inputs are added to the on-disk corpus (`output/queue/`)  │
 └───────────────────────────────────────────────────────────────────────────┘
-
-Example protocol:
-  {"op":"generate"}
-  {"op":"mutate","input":"...seed..."}
-  "<generated or mutated input string>"
 ```
 
 </details>
 
 Limitations (current glue):
-- Grammar mode currently expects UTF-8 text inputs (the Grammarinator subprocess works with strings).
 - Grammar mode works best with a single input argument; multi-arg fuzz targets will decode the underlying byte buffer into separate values.
-- Grammarinator mutation is best-effort; `golibafl` validates candidates by re-parsing and retries. For performance, this validity check is a syntax-only parse (it does not convert every candidate back into a Grammarinator tree).
-- The LibAFL corpus is stored as raw bytes on disk; Grammarinator trees are cached only in-memory (per client, bounded), so restarts lose the tree cache.
 - No grammar recombination/crossover between two corpus seeds yet (mutation is single-seed).
 
 ## Credits

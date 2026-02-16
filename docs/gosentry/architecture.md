@@ -46,10 +46,10 @@ This is a pointer document. For user-facing usage, see `README.md`.
   - vendor: `src/vendor/go.uber.org/goleak/*`
   - in-process check: `src/testing/libafl.go`
 
-## Feature 6: grammar-based fuzzing (Grammarinator)
+## Feature 6: grammar-based fuzzing (Nautilus)
 
-- `go test` flags: `-use-grammar`, `-grammar`, `-start-rule`, etc (`src/cmd/go/internal/test/testflag.go`)
+- `go test` flags: `-use-grammar`, `-grammar` (`src/cmd/go/internal/test/testflag.go`)
 - Runner implementation:
-  - Embedded python server: `GRAMMARINATOR_SERVER_PY` in `golibafl/src/main.rs`
+  - Nautilus integration: `NautilusBytesGenerator` / `NautilusBytesMutator` in `golibafl/src/main.rs`
   - Protocol + caveats: `misc/gosentry/USE_LIBAFL.md`
 - Example: `test/gosentry/examples/grammar_json`

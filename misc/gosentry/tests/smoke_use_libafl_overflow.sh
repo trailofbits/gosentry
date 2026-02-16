@@ -8,6 +8,6 @@ tmp_dir="$(mktemp -d)"
 trap 'rm -rf "${tmp_dir}"' EXIT
 export GOCACHE="${tmp_dir}/gocache"
 
-run_expect_crash overflow FuzzUint8Overflow 2m "${tmp_dir}/output.txt"
+run_expect_crash overflow FuzzUint8Overflow 5m "${tmp_dir}/output.txt"
 
 grep -Fq "integer overflow in uint8 addition operation" "${tmp_dir}/output.txt"

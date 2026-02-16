@@ -21,24 +21,23 @@ To opt out:
 go test -use-libafl=false -fuzz=FuzzXxx
 ```
 
-## Grammar-based fuzzing (Grammarinator)
+## Grammar-based fuzzing (Nautilus)
 
-When running in LibAFL mode, gosentry can generate inputs from an ANTLRv4 grammar via Grammarinator, and use Grammarinator as a **grammar-aware mutator** (parse → mutate derivation tree → serialize) while keeping LibAFL’s normal coverage-guided scheduling and corpus management.
-
-This mode is useful when you want inputs that are always syntactically valid (or at least grammar-valid), so the fuzzer can focus on deeper semantic paths.
+When running in LibAFL mode, gosentry can generate and mutate inputs using Nautilus, a grammar-based mutator integrated in LibAFL. This is useful for parsers and file formats where byte-level mutation wastes time on syntactically-invalid inputs.
 
 Flags (gosentry `go test`):
 - `--use-grammar`: enable grammar-based input generation.
   - Requires `-fuzz=...` and LibAFL mode.
   - Still requires the usual LibAFL-required flags: `--focus-on-new-code={true|false}`, `--catch-races={true|false}`, `--catch-leaks={true|false}`.
-- `--grammar path/to/Foo.g4`: ANTLRv4 `.g4` grammar file(s).
-  - Repeatable: `--grammar=a.g4 --grammar=b.g4`
-  - Or comma-separated: `--grammar=a.g4,b.g4`
-- `--start-rule RuleName`: parser start rule for generation (example: `json`, `document`).
+- `--grammar path/to/grammar.json`: Nautilus JSON grammar file.
+  - Must be specified exactly once.
+  - Start symbol is implicit: the first rule’s nonterminal in the JSON file.
+
+Tuning:
+- In `--libafl-config`, set `nautilus_max_len` (only used with `--use-grammar`).
 
 Requirements:
-- `python3` with Grammarinator installed: `python3 -m pip install grammarinator`
-- Java (JRE/JDK) for Grammarinator/ANTLR.
+- No extra dependencies beyond the Rust toolchain already needed for LibAFL mode.
 
 <details>
 <summary><strong>Command example</strong></summary>
@@ -47,12 +46,12 @@ Requirements:
 # Example (from this repo): JSON grammar + JSON harness.
 cd test/gosentry/examples/grammar_json
 GOSENTRY_VERBOSE_AFL=1 CGO_ENABLED=1 ../../../../bin/go test -fuzz=FuzzGrammarJSON \
-  --use-grammar --grammar=testdata/JSON.g4 --start-rule=json \
+  --use-grammar --grammar=testdata/JSON.json \
   --focus-on-new-code=false --catch-races=false --catch-leaks=false .
 
 # Generic pattern:
 # GOSENTRY_VERBOSE_AFL=1 CGO_ENABLED=1 go test -fuzz=FuzzXxx \
-#   --use-grammar --grammar=/path/to/MyGrammar.g4 --start-rule=MyStartRule \
+#   --use-grammar --grammar=/path/to/MyGrammar.json \
 #   --focus-on-new-code=false --catch-races=false --catch-leaks=false
 ```
 
@@ -90,30 +89,25 @@ func FuzzGrammarJSON(f *testing.F) {
 </details>
 
 <details>
-<summary><strong>ANTLRv4 grammar example (small JSON subset)</strong></summary>
+<summary><strong>Nautilus JSON grammar example (small JSON subset)</strong></summary>
 
-```antlr
-grammar MiniJSON;
+This is the file format expected by `--grammar=...`:
+- The grammar is a JSON array of rules: `["NonTerm", "RHS"]`.
+- Nonterminal names must start with a capital letter (`Value`, `Object`, ...).
+- Use `{NonTerm}` in the RHS to reference another rule.
+- `{` and `}` are reserved for nonterminal references; to emit literal braces, use `\\{` and `\\}` in the RHS string.
 
-json : value EOF ;
-
-value
-  : STRING
-  | NUMBER
-  | obj
-  | arr
-  | 'true'
-  | 'false'
-  | 'null'
-  ;
-
-obj  : '{' pair (',' pair)* '}' | '{' '}' ;
-pair : STRING ':' value ;
-arr  : '[' value (',' value)* ']' | '[' ']' ;
-
-STRING : '"' [a-zA-Z0-9 _.-]* '"' ;
-NUMBER : '-'? ('0' | [1-9] [0-9]*) ;
-WS     : [ \t\r\n]+ -> skip ;
+```json
+[
+  ["Json", "{Value}"],
+  ["Value", "null"],
+  ["Value", "{String}"],
+  ["String", "\"{Chars}\""],
+  ["Chars", ""],
+  ["Chars", "{Char}{Chars}"],
+  ["Char", "a"],
+  ["Char", "b"]
+]
 ```
 
 </details>
@@ -122,10 +116,10 @@ WS     : [ \t\r\n]+ -> skip ;
 <summary><strong>Expected verbose output (example)</strong></summary>
 
 ```text
-golibafl: grammarinator enabled (workdir=...)
+golibafl: nautilus enabled (grammar=... max_len=... workdir=...)
 GOLIBAFL_MUTATED_INPUT "null"
-GOLIBAFL_MUTATED_INPUT "{ }"
-GOLIBAFL_MUTATED_INPUT "[ true, false, null ]"
+GOLIBAFL_MUTATED_INPUT "{}"
+GOLIBAFL_MUTATED_INPUT "[true,false,null]"
 ```
 
 </details>
@@ -134,18 +128,13 @@ Set `GOSENTRY_VERBOSE_AFL=1` to print a few generated inputs as `GOLIBAFL_MUTATE
 
 Behavior notes:
 - If the LibAFL input dir is empty, `golibafl` generates an initial corpus using the grammar.
-- If you provide initial seeds (via `testdata/fuzz` or by placing files in the LibAFL input dir), they will be loaded into the corpus and Grammarinator will mutate the selected corpus seed (coverage-guided) instead of overwriting it with unrelated fresh generations.
-- `golibafl` validates mutated candidates by re-parsing them with the same grammar and retries on invalid outputs (syntax-only parse for performance; it doesn’t rebuild a full Grammarinator tree for every candidate).
-- If a loaded corpus seed is not parseable by the grammar (example: user seed is invalid, or you changed `--grammar-max-depth/--grammar-max-tokens` between runs), `golibafl` will fall back to generation-from-scratch instead of aborting the fuzz run.
+- If you provide initial seeds (via `testdata/fuzz` or by placing files in the LibAFL input dir), they will be loaded into the corpus and Nautilus will mutate the selected corpus seed (coverage-guided) instead of overwriting it with unrelated fresh generations.
+- If a loaded corpus seed is not parseable by the grammar, `golibafl` falls back to generation-from-scratch instead of aborting the fuzz run.
 - The `GOLIBAFL_MUTATED_INPUT` log is currently printed for the first 20 executions only.
 
 Limitations (current glue):
-- Grammar mode currently expects UTF-8 text inputs (the Grammarinator subprocess works with strings).
 - Grammar mode works best with a single input argument; multi-arg fuzz targets will decode the underlying byte buffer into separate values.
-- Grammarinator mutation is best-effort; `golibafl` validates candidates by re-parsing and retries. If repeated mutation attempts fail, it may fall back to generation-from-scratch to keep fuzzing.
-- `--grammar-actions` is not enforced for the parse step yet: the ANTLR parser used during mutation may still execute inline actions/predicates from the grammar. Only use trusted grammars.
-- The LibAFL corpus is stored as raw bytes on disk; Grammarinator trees are cached only in-memory (per client, bounded), so restarts lose the tree cache.
-- No grammar recombination/crossover between two corpus seeds yet (mutation is single-seed).
+- Grammar mode has no two-seed crossover/recombination (mutation is single-seed).
 
 ### CI note
 
@@ -172,35 +161,21 @@ This repo includes a grammar smoke test script at `misc/gosentry/tests/smoke_use
 └───────────────┬───────────────────────────────────────────────────────────┘
                 v
 ┌───────────────────────────────────────────────────────────────────────────┐
-│ 2) Grammarinator engine (`python3` subprocess, per client)                  │
-│    - `ProcessorTool`: turns `.g4` file(s) into a Python `*Generator.py`     │
-│    - protocol: JSON per line over stdin/stdout (generate / mutate(seed))    │
-│    - mutate = parse seed -> mutate derivation tree -> serialize back        │
-│    - validates candidates by re-parsing; retries on invalid outputs         │
+│ 2) Nautilus (in-process, per client)                                        │
+│    - loads the JSON grammar into a Nautilus context                          │
+│    - if the input dir is empty: generates an initial corpus                  │
+│    - fuzz loop stage: parse seed -> mutate tree -> unparse to bytes          │
+│    - if the seed is not parseable: fall back to generation-from-scratch      │
 └───────────────────────────────────────────────────────────────────────────┘
-
-Example protocol:
-  {"op":"generate"}
-  {"op":"mutate","input":"...seed..."}
-  "<generated or mutated input string>"
 ```
 
 Notes:
 - Your Go harness still receives standard Go fuzz inputs. In grammar mode, a one-arg fuzz target can be either `data []byte` or `s string` (the generated sample is passed as UTF-8 bytes).
 - Grammar mode works best with a single input argument; with multiple arguments, gosentry will decode the underlying byte buffer into separate values, so the original grammar-generated text won’t stay intact.
-- `golibafl` validates mutated candidates by re-parsing them with the same grammar and retries on invalid outputs (syntax-only parse for performance; it doesn’t rebuild a full Grammarinator tree for every candidate).
-- If the harness rejects inputs (example: JSON unmarshal fails), it usually means the grammar/serializer is not aligned with what the harness expects.
-- Use `GOSENTRY_VERBOSE_AFL=1` to see `golibafl: grammarinator enabled` + a few `GOLIBAFL_MUTATED_INPUT "..."` lines.
+- If the harness rejects inputs (example: JSON unmarshal fails), it usually means the grammar is not aligned with what the harness expects.
+- Use `GOSENTRY_VERBOSE_AFL=1` to see `golibafl: nautilus enabled` + a few `GOLIBAFL_MUTATED_INPUT "..."` lines.
 
 </details>
-
-Advanced flags:
-- `--grammar-actions`: enable inline actions and semantic predicates when building the Grammarinator generator (default: false; unsafe).
-- `--grammar-serializer pkg.module.func`: override the Python serializer (default: `grammarinator.runtime.simple_space_serializer`).
-- `--grammarinator-dir /path/to/grammarinator`: add a local Grammarinator checkout to `PYTHONPATH`.
-
-Runner (golibafl) knobs:
-- When running `golibafl` directly, you can also set `--grammar-max-depth` (default: 32) and `--grammar-max-tokens` (default: 512).
 
 ## Git-aware scheduling (focus on new code)
 
@@ -342,28 +317,13 @@ Example `libafl.jsonc` (all fields optional; defaults shown in comments):
   // default: auto (enabled when running with a single client)
   "debug_output": true,
 
-  // --- Grammar fuzzing (Grammarinator) ---
+  // --- Grammar fuzzing (Nautilus) ---
   // Only used with -use-grammar (or golibafl --use-grammar).
 
-  // grammar_actions: allow inline actions and semantic predicates in the grammar
-  // default: false
-  // example: true (needed if your .g4 contains `{ ... }` actions/predicates)
-  "grammar_actions": false,
-
-  // grammarinator_dir: add DIR to PYTHONPATH for importing the grammarinator python package
-  // default: null
-  // example: "/home/me/grammarinator"
-  "grammarinator_dir": null,
-
-  // grammar_max_depth: max recursion depth for grammar generation
-  // default: 32
-  // example: 64 (allow deeper nesting)
-  "grammar_max_depth": 32,
-
-  // grammar_max_tokens: max token count for grammar generation
-  // default: 512
-  // example: 2048 (allow longer outputs)
-  "grammar_max_tokens": 512
+  // nautilus_max_len: maximum expansion length used by Nautilus when generating/mutating
+  // default: 64
+  // example: 256 (allow deeper nesting and longer strings)
+  "nautilus_max_len": 64
 }
 ```
 

@@ -44,7 +44,6 @@ If the user's request is missing key details, ask up to **3** short questions, t
 
 - `misc/gosentry/nautilus/examples/json/gosentry_json.json` (small JSON subset)
 - `misc/gosentry/nautilus/examples/json/libafl_ruby_grammar.json` (larger grammar, lots of terminals)
-- `misc/gosentry/nautilus/examples/python/` (upstream Nautilus python grammars; gosentry does **not** load `.py` grammars today)
 
 ## Suggested construction pattern
 

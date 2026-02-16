@@ -64,27 +64,12 @@
   // use `null` for "auto"
   "debug_output": null,
 
-  // --- Grammar fuzzing (Grammarinator) ---
+  // --- Grammar fuzzing (Nautilus) ---
   // Only used with `--use-grammar`.
 
-  // grammar_actions: allow inline actions and semantic predicates in the grammar.
-  // default: false
-  // example: true (needed if your .g4 contains `{ ... }` actions/predicates)
-  "grammar_actions": false,
-
-  // grammarinator_dir: add DIR to PYTHONPATH for importing the grammarinator python package.
-  // default: null
-  // useful for a local checkout
-  // example: "/home/me/grammarinator"
-  "grammarinator_dir": null,
-
-  // grammar_max_depth: max recursion depth for grammar generation.
-  // default: 32
-  // example: 64 (allow deeper nesting like (((...))) or nested objects)
-  "grammar_max_depth": 32,
-
-  // grammar_max_tokens: max token count for grammar generation.
-  // default: 512
-  // example: 2048 (allow longer generated strings)
-  "grammar_max_tokens": 512
+  // nautilus_max_len: maximum expansion length used by Nautilus when generating/mutating.
+  // This bounds recursion and input size.
+  // default: 64
+  // example: 256 (allow deeper nesting and longer strings)
+  "nautilus_max_len": 64
 }
