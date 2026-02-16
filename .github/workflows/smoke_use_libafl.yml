@@ -23,15 +23,6 @@ jobs:
       - name: Set up Rust (nightly)
         uses: dtolnay/rust-toolchain@nightly
 
-      - name: Set up Java (Temurin 17)
-        uses: actions/setup-java@v4
-        with:
-          distribution: "temurin"
-          java-version: "17"
-
-      - name: Install Grammarinator (pip)
-        run: python3 -m pip install --user grammarinator
-
       - name: Build gosentry toolchain
         run: cd src && ./make.bash
 
