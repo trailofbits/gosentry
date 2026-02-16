@@ -65,6 +65,9 @@ jobs:
       - name: Smoke (grammar json)
         run: bash misc/gosentry/tests/smoke_use_libafl_grammar_json.sh
 
+      - name: Smoke (generate coverage)
+        run: bash misc/gosentry/tests/smoke_use_libafl_generate_coverage.sh
+
   smoke-panic-on:
     runs-on: ubuntu-latest
     steps:
