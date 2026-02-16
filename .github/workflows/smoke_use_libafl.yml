@@ -54,6 +54,8 @@ jobs:
         run: bash misc/gosentry/tests/smoke_use_libafl_addseed_testdata.sh
 
       - name: Smoke (grammar json)
+        env:
+          GOSENTRY_VERBOSE_AFL_ALL_INPUTS: "1"
         run: bash misc/gosentry/tests/smoke_use_libafl_grammar_json.sh
 
       - name: Smoke (generate coverage)
