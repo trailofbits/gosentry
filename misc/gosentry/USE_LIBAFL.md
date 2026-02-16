@@ -21,6 +21,23 @@ To opt out:
 go test -use-libafl=false -fuzz=FuzzXxx
 ```
 
+## Generate coverage from a LibAFL campaign (HTML)
+
+After (or while) running a LibAFL fuzz campaign, gosentry can generate a Go coverage report by replaying the current LibAFL **queue corpus**.
+
+```bash
+# Same package + same fuzz target as your fuzz campaign:
+go test -fuzz=FuzzXxx --generate-coverage .
+```
+
+This replays inputs from `<libafl output dir>/queue/` and writes:
+- `<libafl output dir>/coverage/cover.out` (Go coverprofile format)
+- `<libafl output dir>/coverage/cover.html` (HTML report)
+
+At the end, gosentry prints the full paths to both files.
+
+Note: this does **not** run fuzzing. For large corpora, consider `-timeout=0`.
+
 ## Grammar-based fuzzing (Nautilus)
 
 When running in LibAFL mode, gosentry can generate and mutate inputs using Nautilus, a grammar-based mutator integrated in LibAFL. This is useful for parsers and file formats where byte-level mutation wastes time on syntactically-invalid inputs.
@@ -130,6 +147,7 @@ Behavior notes:
 - If the LibAFL input dir is empty, `golibafl` generates an initial corpus using the grammar.
 - If you provide initial seeds (via `testdata/fuzz` or by placing files in the LibAFL input dir), they will be loaded into the corpus and Nautilus will mutate the selected corpus seed (coverage-guided) instead of overwriting it with unrelated fresh generations.
 - If a loaded corpus seed is not parseable by the grammar, `golibafl` falls back to generation-from-scratch instead of aborting the fuzz run.
+- In grammar mode, `golibafl` also runs the usual CMPLOG/I2S + havoc/token mutation stages, so the corpus may contain non-grammar bytes.
 - The `GOLIBAFL_MUTATED_INPUT` log is currently printed for the first 20 executions only.
 
 Limitations (current glue):
@@ -233,6 +251,8 @@ This is configured via the LibAFL runner JSONC config:
 - `hang_confirm_runs` (default: `3`): number of confirmation replays.
 
 On a confirmed hang, `golibafl` writes the input to `output/hangs/` (under the LibAFL output directory) and stops the fuzz campaign when `stop_all_fuzzers_on_panic=true`.
+
+Before exiting, `golibafl` attempts to minimize the crashing/hanging input (best-effort; hangs are capped to ~60s total).
 
 `golibafl` stores the generated mapping file under the LibAFL output directory as `git_recency_map.bin` (path provided to the runner via `LIBAFL_GIT_RECENCY_MAPPING_PATH`).
 On large targets, generating this file can take several minutes because it needs to run `go tool addr2line` and `git blame` for many coverage counters.

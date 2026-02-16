@@ -306,6 +306,11 @@ control the execution of any test:
 	    seeds and checks for leaked goroutines.
 	    This flag is required when -use-libafl is set.
 
+	-generate-coverage
+	    When -fuzz is set, replay the current LibAFL queue corpus under Go
+	    coverage instrumentation and generate cover.out + cover.html.
+	    This does not run fuzzing.
+
 	-libafl-config file
 	    When -use-libafl is set, pass a JSONC configuration file (JSON with // comments)
 	    to the LibAFL runner (implemented in $GOROOT/golibafl).
@@ -594,6 +599,7 @@ var (
 	testFocusOnNewCode explicitBoolFlag                  // -focus-on-new-code flag (required with -use-libafl)
 	testCatchRaces     explicitBoolFlag                  // -catch-races flag (required with -use-libafl)
 	testCatchLeaks     explicitBoolFlag                  // -catch-leaks flag (required with -use-libafl)
+	testGenerateCoverage bool                            // -generate-coverage flag (gosentry)
 	testUseGrammar     bool                              // -use-grammar flag (requires -use-libafl)
 	testGrammar        []string                          // -grammar flag (requires -use-grammar)
 	testLibAFLConfig   string                            // -libafl-config flag
@@ -750,7 +756,7 @@ func runTest(ctx context.Context, cmd *base.Command, args []string) {
 	// - When fuzzing, default to LibAFL mode.
 	//
 	// This default can be overridden explicitly via -use-libafl=false.
-	if testFuzz != "" {
+	if testFuzz != "" && !testGenerateCoverage {
 		flagsSet := map[string]bool{}
 		CmdTest.Flag.Visit(func(f *flag.Flag) {
 			flagsSet[f.Name] = true
@@ -784,57 +790,70 @@ func runTest(ctx context.Context, cmd *base.Command, args []string) {
 	work.FindExecCmd() // initialize cached result
 
 	work.BuildInit(moduleLoaderState)
-	if testLibAFLConfig != "" && !testUseLibAFL {
-		base.Fatalf("-libafl-config requires -use-libafl")
-	}
-	if testFocusOnNewCode.set && !testUseLibAFL {
-		base.Fatalf("-focus-on-new-code requires -use-libafl")
-	}
-	if testCatchRaces.set && !testUseLibAFL {
-		base.Fatalf("-catch-races requires -use-libafl")
-	}
-	if testCatchLeaks.set && !testUseLibAFL {
-		base.Fatalf("-catch-leaks requires -use-libafl")
-	}
-	if !testUseGrammar {
-		if len(testGrammar) > 0 {
-			base.Fatalf("-grammar requires -use-grammar")
-		}
-	}
-	if testUseLibAFL {
-		if !testFocusOnNewCode.set {
-			base.Fatalf("-use-libafl requires -focus-on-new-code={true|false}")
-		}
-		if !testCatchRaces.set {
-			base.Fatalf("-use-libafl requires -catch-races={true|false}")
-		}
-		if !testCatchLeaks.set {
-			base.Fatalf("-use-libafl requires -catch-leaks={true|false}")
-		}
+	if testGenerateCoverage {
 		if testFuzz == "" {
-			base.Fatalf("-use-libafl requires -fuzz")
+			base.Fatalf("-generate-coverage requires -fuzz")
 		}
-		if !cfg.BuildContext.CgoEnabled {
-			base.Fatalf("-use-libafl requires cgo; enable cgo by setting CGO_ENABLED=1")
+		if testC {
+			base.Fatalf("-generate-coverage cannot be used with -c")
 		}
-		if !slices.Contains(cfg.BuildContext.BuildTags, "libfuzzer") {
-			cfg.BuildContext.BuildTags = append(cfg.BuildContext.BuildTags, "libfuzzer")
+
+		// -generate-coverage implies -cover (the output is written to the
+		// LibAFL campaign directory, not to the current working directory).
+		cfg.BuildCover = true
+	} else {
+		if testLibAFLConfig != "" && !testUseLibAFL {
+			base.Fatalf("-libafl-config requires -use-libafl")
 		}
-	}
-	if testUseGrammar {
-		if testFuzz == "" {
-			base.Fatalf("-use-grammar requires -fuzz")
+		if testFocusOnNewCode.set && !testUseLibAFL {
+			base.Fatalf("-focus-on-new-code requires -use-libafl")
 		}
-		if !testUseLibAFL {
-			base.Fatalf("-use-grammar requires -use-libafl")
+		if testCatchRaces.set && !testUseLibAFL {
+			base.Fatalf("-catch-races requires -use-libafl")
 		}
-		if len(testGrammar) != 1 {
-			base.Fatalf("-use-grammar requires exactly one -grammar file")
+		if testCatchLeaks.set && !testUseLibAFL {
+			base.Fatalf("-catch-leaks requires -use-libafl")
 		}
-	}
-	if testCatchRaces.set && testCatchRaces.val {
-		if !platform.RaceDetectorSupported(cfg.Goos, cfg.Goarch) {
-			base.Fatalf("-catch-races is not supported on %s/%s", cfg.Goos, cfg.Goarch)
+		if !testUseGrammar {
+			if len(testGrammar) > 0 {
+				base.Fatalf("-grammar requires -use-grammar")
+			}
+		}
+		if testUseLibAFL {
+			if !testFocusOnNewCode.set {
+				base.Fatalf("-use-libafl requires -focus-on-new-code={true|false}")
+			}
+			if !testCatchRaces.set {
+				base.Fatalf("-use-libafl requires -catch-races={true|false}")
+			}
+			if !testCatchLeaks.set {
+				base.Fatalf("-use-libafl requires -catch-leaks={true|false}")
+			}
+			if testFuzz == "" {
+				base.Fatalf("-use-libafl requires -fuzz")
+			}
+			if !cfg.BuildContext.CgoEnabled {
+				base.Fatalf("-use-libafl requires cgo; enable cgo by setting CGO_ENABLED=1")
+			}
+			if !slices.Contains(cfg.BuildContext.BuildTags, "libfuzzer") {
+				cfg.BuildContext.BuildTags = append(cfg.BuildContext.BuildTags, "libfuzzer")
+			}
+		}
+		if testUseGrammar {
+			if testFuzz == "" {
+				base.Fatalf("-use-grammar requires -fuzz")
+			}
+			if !testUseLibAFL {
+				base.Fatalf("-use-grammar requires -use-libafl")
+			}
+			if len(testGrammar) != 1 {
+				base.Fatalf("-use-grammar requires exactly one -grammar file")
+			}
+		}
+		if testCatchRaces.set && testCatchRaces.val {
+			if !platform.RaceDetectorSupported(cfg.Goos, cfg.Goarch) {
+				base.Fatalf("-catch-races is not supported on %s/%s", cfg.Goos, cfg.Goarch)
+			}
 		}
 	}
 	work.VetFlags = testVet.flags
@@ -1071,7 +1090,7 @@ func runTest(ctx context.Context, cmd *base.Command, args []string) {
 	// `--catch-races` -race harness), we don't need coverage instrumentation.
 	// Keeping the replay harness uninstrumented avoids mixing fuzz coverage
 	// instrumentation with the race detector build.
-	if testFuzz != "" && os.Getenv("GOSENTRY_LIBAFL_BUILD_ONLY") != "1" {
+	if testFuzz != "" && os.Getenv("GOSENTRY_LIBAFL_BUILD_ONLY") != "1" && !testGenerateCoverage {
 		// Don't instrument packages which may affect coverage guidance but are
 		// unlikely to be useful. Most of these are used by the testing or
 		// internal/fuzz packages concurrently with fuzzing.
@@ -1337,7 +1356,7 @@ func builderTest(loaderstate *modload.State, b *work.Builder, ctx context.Contex
 
 	testBinary := testBinaryName(p)
 
-	if testFuzz != "" && testUseLibAFL {
+	if testFuzz != "" && testUseLibAFL && !testGenerateCoverage {
 		pmain.CgoFiles = append(pmain.CgoFiles, "_libaflmain.go")
 		pmain.Internal.Ldflags = append(pmain.Internal.Ldflags, "-buildmode=c-archive")
 
@@ -1354,6 +1373,10 @@ func builderTest(loaderstate *modload.State, b *work.Builder, ctx context.Contex
 			p1 := load.LoadPackage(loaderstate, ctx, pkgOpts, imp, pmain.Dir, &stk, nil, 0)
 			pmain.Internal.Imports = append(pmain.Internal.Imports, p1)
 		}
+	}
+
+	if testGenerateCoverage {
+		pmain.GoFiles = append(pmain.GoFiles, "_gosentry_generate_coverage.go")
 	}
 
 	applyPanicOnCallGcflag(pmain, ptest, pxtest, p)
@@ -1379,7 +1402,7 @@ func builderTest(loaderstate *modload.State, b *work.Builder, ctx context.Contex
 		if err := os.WriteFile(testDir+"_testmain.go", *pmain.Internal.TestmainGo, 0666); err != nil {
 			return nil, nil, nil, nil, err
 		}
-		if testFuzz != "" && testUseLibAFL {
+		if testFuzz != "" && testUseLibAFL && !testGenerateCoverage {
 			libaflMain := fmt.Sprintf(`// Code generated by 'go test -use-libafl'. DO NOT EDIT.
 
 package main
@@ -1471,15 +1494,104 @@ func LLVMFuzzerTestOneInput(data *C.char, size C.size_t) C.int {
 				return nil, nil, nil, nil, err
 			}
 		}
+		if testGenerateCoverage {
+			gosentryGenCov := fmt.Sprintf(`// Code generated by 'go test -generate-coverage'. DO NOT EDIT.
+
+package main
+
+import (
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"regexp"
+	"testing"
+)
+
+const gosentryFuzzPattern = %q
+const gosentryLibAFLOutputDir = %q
+
+func init() {
+	queueDir := filepath.Join(gosentryLibAFLOutputDir, "queue")
+	fi, err := os.Stat(queueDir)
+	if err != nil || !fi.IsDir() {
+		fmt.Fprintf(os.Stderr, "gosentry: libafl queue dir not found: %s\n", queueDir)
+		os.Exit(2)
+	}
+
+	re, err := regexp.Compile(gosentryFuzzPattern)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "gosentry: invalid -fuzz regexp: %v\n", err)
+		os.Exit(2)
+	}
+
+	var t *testing.InternalFuzzTarget
+	matches := 0
+	for i := range fuzzTargets {
+		if re.MatchString(fuzzTargets[i].Name) {
+			matches++
+			if t == nil {
+				t = &fuzzTargets[i]
+			}
+		}
+	}
+
+	switch matches {
+	case 0:
+		fmt.Fprintln(os.Stderr, "gosentry: no fuzz tests matched -fuzz (cannot select campaign)")
+		os.Exit(2)
+	case 1:
+	default:
+		fmt.Fprintln(os.Stderr, "gosentry: -fuzz matches more than one fuzz test (cannot select campaign)")
+		os.Exit(2)
+	}
+
+	if err := testing.LibAFLInit(t.Name, t.Fn); err != nil {
+		fmt.Fprintf(os.Stderr, "gosentry: libafl init failed: %v\n", err)
+		os.Exit(2)
+	}
+
+	inputs := 0
+	if err := filepath.WalkDir(queueDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if name := d.Name(); len(name) > 0 && name[0] == '.' {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		inputs++
+		testing.LibAFLFuzzOneInput(data)
+		return nil
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "gosentry: failed to replay libafl queue corpus: %v\n", err)
+		os.Exit(2)
+	}
+	if inputs == 0 {
+		fmt.Fprintf(os.Stderr, "gosentry: no inputs found in libafl queue dir: %s\n", queueDir)
+		os.Exit(2)
+	}
+}
+`, testFuzz, libaflOutputDir(p, testFuzz))
+			if err := os.WriteFile(testDir+"_gosentry_generate_coverage.go", []byte(gosentryGenCov), 0666); err != nil {
+				return nil, nil, nil, nil, err
+			}
+		}
 	}
 
 	a := b.LinkAction(loaderstate, work.ModeBuild, work.ModeBuild, pmain)
-	if testFuzz != "" && testUseLibAFL {
+	if testFuzz != "" && testUseLibAFL && !testGenerateCoverage {
 		a.Target = testDir + "libharness.a"
 	} else {
 		a.Target = testDir + testBinary + cfg.ExeSuffix
 	}
-	if cfg.Goos == "windows" && !(testFuzz != "" && testUseLibAFL) {
+	if cfg.Goos == "windows" && !(testFuzz != "" && testUseLibAFL && !testGenerateCoverage) {
 		// There are many reserved words on Windows that,
 		// if used in the name of an executable, cause Windows
 		// to try to ask for extra permissions.
@@ -1903,6 +2015,9 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 		addEnv       []string
 		addToEnv     string
 		libaflOutDir string
+		genCovOutDir  string
+		genCovProfile string
+		genCovHTML    string
 		catchRaces   bool
 		catchLeaks   bool
 		queueDir     string
@@ -1910,7 +2025,7 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 		leaksDir     string
 	)
 
-	if testFuzz != "" && testUseLibAFL {
+	if testFuzz != "" && testUseLibAFL && !testGenerateCoverage {
 		golibaflDir := filepath.Join(cfg.GOROOT, "golibafl")
 		if _, err := os.Stat(golibaflDir); err != nil {
 			return fmt.Errorf("golibafl not found at %s", golibaflDir)
@@ -2064,6 +2179,28 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 		}
 		args = str.StringList(execCmd, buildAction.BuiltTarget(), testlogArg, panicArg, fuzzArg, coverdirArg, testArgs)
 		cmdDir = a.Package.Dir
+
+		if testGenerateCoverage {
+			campaignDir := libaflOutputDir(a.Package, testFuzz)
+			if fi, err := os.Stat(campaignDir); err != nil || !fi.IsDir() {
+				return fmt.Errorf("gosentry: libafl output dir not found: %s (run fuzzing first)", campaignDir)
+			}
+			campaignQueueDir := filepath.Join(campaignDir, "queue")
+			if fi, err := os.Stat(campaignQueueDir); err != nil || !fi.IsDir() {
+				return fmt.Errorf("gosentry: libafl queue dir not found: %s (run fuzzing first)", campaignQueueDir)
+			}
+
+			genCovOutDir = filepath.Join(campaignDir, "coverage")
+			if err := sh.Mkdir(genCovOutDir); err != nil {
+				return err
+			}
+			genCovProfile = filepath.Join(genCovOutDir, "cover.out")
+			genCovHTML = filepath.Join(genCovOutDir, "cover.html")
+
+			// Don't run the built-in fuzzing engine; -fuzz is used only to select
+			// the LibAFL campaign directory and fuzz target name.
+			args = append(args, "-test.fuzz=", "-test.run=^$", "-test.coverprofile="+genCovProfile)
+		}
 	}
 
 	if testCoverProfile != "" {
@@ -2652,6 +2789,20 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 
 	mergeCoverProfile(coverProfTempFile(a))
 
+	if err == nil && testGenerateCoverage && genCovProfile != "" {
+		coverTool := base.Tool("cover")
+		coverCmd := exec.Command(coverTool, "-html="+genCovProfile, "-o", genCovHTML)
+		coverCmd.Dir = cmdDir
+		coverCmd.Env = slices.Clip(cfg.OrigEnv)
+		coverCmd.Env = base.AppendPATH(coverCmd.Env)
+		coverCmd.Env = base.AppendPWD(coverCmd.Env, coverCmd.Dir)
+		coverCmd.Stdout = stdout
+		coverCmd.Stderr = stdout
+		if cerr := coverCmd.Run(); cerr != nil {
+			err = cerr
+		}
+	}
+
 	if err == nil {
 		norun := ""
 		if !testShowPass() && !testJSON {
@@ -2672,6 +2823,10 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 			cmd.Stdout.Write([]byte("\n"))
 		}
 		fmt.Fprintf(cmd.Stdout, "ok  \t%s\t%s%s%s\n", a.Package.ImportPath, t, coveragePercentage(out), norun)
+		if testGenerateCoverage && genCovProfile != "" {
+			fmt.Fprintf(cmd.Stdout, "coverage profile: %s\n", genCovProfile)
+			fmt.Fprintf(cmd.Stdout, "coverage html: %s\n", genCovHTML)
+		}
 		r.c.saveOutput(a)
 	} else {
 		if testFailFast {

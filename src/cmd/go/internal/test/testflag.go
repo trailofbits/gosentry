@@ -73,6 +73,7 @@ func init() {
 	cf.Var(&testFocusOnNewCode, "focus-on-new-code", "")
 	cf.Var(&testCatchRaces, "catch-races", "")
 	cf.Var(&testCatchLeaks, "catch-leaks", "")
+	cf.BoolVar(&testGenerateCoverage, "generate-coverage", false, "")
 	cf.BoolVar(&testUseGrammar, "use-grammar", false, "")
 	cf.Var((*grammarFilesFlag)(&testGrammar), "grammar", "")
 	cf.StringVar(&testLibAFLConfig, "libafl-config", "", "")

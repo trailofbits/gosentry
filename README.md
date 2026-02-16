@@ -12,6 +12,7 @@ For now, it focuses on the following features:
 - Panicking on [user-provided function call](https://github.com/kevin-valerio/gosentry?tab=readme-ov-file#feature-2-panic-on-selected-functions): catching targeted bugs when certains functions are called (eg., `myapp.(*Logger).Error`).
 - Git-blame-oriented fuzzing (based on [this work](https://github.com/kevin-valerio/LibAFL-git-aware)): when fuzzing with LibAFL mode, you can orientate the fuzzer towards **recently added/edited lines**.
 - Detect **race conditions**, **goroutine leaks**, and **confirmed hangs** at fuzz-time: when fuzzing with LibAFL, gosentry can replay newly found seeds (or timed-out executions) and treat findings like bugs.
+- Generate Go coverage reports (HTML + coverprofile) from an existing LibAFL fuzz campaign corpus.
 
 It especially has **two** objectives:
 - Being easy to use and UX-friendly (_we're tired of complex tools_),
@@ -146,6 +147,14 @@ You can also pass an optional JSONC config file for LibAFL (including grammar fu
 ```bash
 ./bin/go test -fuzz=FuzzHarness --focus-on-new-code=false --catch-races=false --catch-leaks=false --libafl-config=path/to/libafl.jsonc # optional --libafl-config
 ```
+
+To generate Go coverage from the current LibAFL campaign corpus (without fuzzing):
+
+```bash
+./bin/go test -fuzz=FuzzHarness --generate-coverage .
+```
+
+This writes `<libafl output dir>/coverage/cover.out` and `<libafl output dir>/coverage/cover.html` and prints their full paths at the end.
 
 Grammar-based fuzzing (Nautilus) is documented in [Feature 6](#feature-6-grammar-based-fuzzing-nautilus).
 
@@ -311,6 +320,8 @@ When fuzzing with LibAFL, a harness execution can **timeout** (for example becau
 
 To reduce false positives, gosentry treats a timeout as a hang candidate and confirms it by replaying the timed-out input a few times with a larger timeout. On a confirmed hang, gosentry writes the input to `output/hangs/` and stops the fuzz campaign (treats it like a bug/crash).
 
+Before exiting, `golibafl` attempts to minimize the crashing/hanging input (best-effort; hangs are capped to ~60s total).
+
 Note: hang confirmation also runs during initial corpus import/generation, so targets that time out on every input can still be detected deterministically.
 
 This is configured via `--libafl-config`:
@@ -419,7 +430,7 @@ Enable goroutine leak catching with `--catch-leaks=true` or race catching with `
 
 Byte-level fuzzing is great, but parsers and file formats often need structured inputs. With `--use-grammar`, gosentry uses LibAFL’s Nautilus grammar mutator to generate and mutate inputs that conform to a user-provided grammar (JSON format), and feeds them to your regular Go fuzz harness (`testing.F.Fuzz`).
 
-In grammar mode, LibAFL still runs the normal coverage-guided loop (pick a corpus seed → mutate → execute → keep inputs that increase coverage). The difference is the mutator: instead of byte-level havoc, gosentry parses the selected corpus seed into a grammar tree, mutates that tree, and unparses it back to bytes.
+In grammar mode, LibAFL still runs the normal coverage-guided loop (pick a corpus seed → mutate → execute → keep inputs that increase coverage). The runner adds a Nautilus grammar mutator: it parses the selected corpus seed into a grammar tree, mutates that tree, and unparses it back to bytes. The usual byte-level mutation stages (CMPLOG/I2S + havoc/tokens) still run too, so the corpus may contain non-grammar bytes.
 
 > [!NOTE]
 > Grammar mode is usually slower than byte-level fuzzing. It is a trade-off: more structure vs fewer executions per second.
