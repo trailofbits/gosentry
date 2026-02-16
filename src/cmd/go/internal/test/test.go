@@ -1377,6 +1377,18 @@ func builderTest(loaderstate *modload.State, b *work.Builder, ctx context.Contex
 
 	if testGenerateCoverage {
 		pmain.GoFiles = append(pmain.GoFiles, "_gosentry_generate_coverage.go")
+
+		// Ensure the test main package's importcfg contains the dependencies for
+		// the generated coverage replay helper.
+		var stk load.ImportStack
+		for _, imp := range []string{"fmt", "io/fs", "os", "path/filepath", "regexp", "testing"} {
+			if slices.Contains(pmain.Imports, imp) {
+				continue
+			}
+			pmain.Imports = append(pmain.Imports, imp)
+			p1 := load.LoadPackage(loaderstate, ctx, pkgOpts, imp, pmain.Dir, &stk, nil, 0)
+			pmain.Internal.Imports = append(pmain.Internal.Imports, p1)
+		}
 	}
 
 	applyPanicOnCallGcflag(pmain, ptest, pxtest, p)
