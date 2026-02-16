@@ -8,7 +8,7 @@ For now, it focuses on the following features:
 
 - Integrating [go-panikint](https://github.com/trailofbits/go-panikint): instrumentation that panics on **integer overflow/underflow** (and **optionally on truncating integer conversions**).
 - Integrating [LibAFL](https://github.com/AFLplusplus/LibAFL) fuzzer: run Go fuzzing harnesses with **LibAFL** for better fuzzing performances.
-- Proposing **Grammar-based fuzzing** (Nautilus JSON grammar): generate structured inputs from a grammar ([Feature 6](#feature-6-grammar-based-fuzzing-nautilus)).
+- Proposing **Grammar-based fuzzing** (Nautilus JSON grammar): generate structured inputs from a grammar (https://github.com/nautilus-fuzz/nautilus/).
 - Panicking on [user-provided function call](https://github.com/kevin-valerio/gosentry?tab=readme-ov-file#feature-2-panic-on-selected-functions): catching targeted bugs when certains functions are called (eg., `myapp.(*Logger).Error`).
 - Git-blame-oriented fuzzing (based on [this work](https://github.com/kevin-valerio/LibAFL-git-aware)): when fuzzing with LibAFL mode, you can orientate the fuzzer towards **recently added/edited lines**.
 - Detect **race conditions**, **goroutine leaks**, and **confirmed hangs** at fuzz-time: when fuzzing with LibAFL, gosentry can replay newly found seeds (or timed-out executions) and treat findings like bugs.
@@ -559,3 +559,8 @@ Limitations (current glue):
 ## Credits
 
 Credits to Bruno Produit and Nills Ollrogge for their work on [golibafl](https://github.com/srlabs/golibafl/).
+
+Additional credits:
+- [Nautilus](https://github.com/nautilus-fuzz/nautilus/)
+- [LibAFL](https://github.com/AFLplusplus/LibAFL)
+- [goleak](https://github.com/uber-go/goleak)
