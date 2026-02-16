@@ -447,6 +447,13 @@ You can tune the Grammarinator engine via `--libafl-config` (only used with `--u
 
 Set `GOSENTRY_VERBOSE_AFL=1` to print a few generated inputs (useful to verify you are really running in grammar mode).
 
+#### Grammar authoring helpers
+
+If you need to create a new Nautilus JSON grammar for your own target format/protocol, gosentry ships:
+
+- An LLM-ready prompt: `misc/gosentry/nautilus/prompt.md`
+- A small set of example grammars: `misc/gosentry/nautilus/examples/`
+
 <details>
 <summary><strong>Command example</strong></summary>
 
