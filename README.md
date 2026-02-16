@@ -445,7 +445,7 @@ Requirements: no extra dependencies beyond the Rust toolchain already needed for
 
 You can tune Nautilus via `--libafl-config` (only used with `--use-grammar`): `nautilus_max_len` (see `misc/gosentry/libafl.config.jsonc`).
 
-Set `GOSENTRY_VERBOSE_AFL=1` to print a few generated inputs (useful to verify you are really running in grammar mode).
+Set `GOSENTRY_VERBOSE_AFL=1` to print a few generated inputs. Set `GOSENTRY_VERBOSE_AFL_ALL_INPUTS=1` to print **every** grammar-mode execution as `GOLIBAFL_MUTATED_INPUT "..."` (very noisy).
 
 #### Grammar authoring helpers
 

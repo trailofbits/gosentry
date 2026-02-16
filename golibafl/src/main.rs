@@ -701,6 +701,8 @@ const GOLIBAFL_BROKER_PORT_ENV: &str = "GOLIBAFL_BROKER_PORT";
 const GOLIBAFL_FOCUS_ON_NEW_CODE_ENV: &str = "GOLIBAFL_FOCUS_ON_NEW_CODE";
 const GOLIBAFL_TARGET_DIR_ENV: &str = "GOLIBAFL_TARGET_DIR";
 const LIBAFL_GIT_RECENCY_MAPPING_ENV: &str = "LIBAFL_GIT_RECENCY_MAPPING_PATH";
+const GOSENTRY_VERBOSE_AFL_ENV: &str = "GOSENTRY_VERBOSE_AFL";
+const GOSENTRY_VERBOSE_AFL_ALL_INPUTS_ENV: &str = "GOSENTRY_VERBOSE_AFL_ALL_INPUTS";
 
 fn notify_restarting_mgr_exit() {
     // When running under LibAFL's restarting manager in exec mode, exiting the child process
@@ -1598,7 +1600,8 @@ fn fuzz(
 ) {
     let args: Vec<String> = env::args().collect();
     let is_launcher_client = env::var_os("AFL_LAUNCHER_CLIENT").is_some();
-    let verbose = env::var_os("GOSENTRY_VERBOSE_AFL").is_some();
+    let verbose = env::var_os(GOSENTRY_VERBOSE_AFL_ENV).is_some();
+    let verbose_all_inputs = env::var_os(GOSENTRY_VERBOSE_AFL_ALL_INPUTS_ENV).is_some();
 
     // In launcher mode, `launch_with_hooks` installs signal handlers and starts background
     // threads before running the client closure. When fuzzing Go harnesses linked as a static
@@ -2266,12 +2269,14 @@ fn fuzz(
                     let mut printed_inputs = 0usize;
                     let mut harness = |input: &BytesInput| {
                         let target = input.target_bytes();
-                        if verbose && grammar_mode && printed_inputs < 20 {
+                        if grammar_mode && (verbose_all_inputs || (verbose && printed_inputs < 20)) {
                             let lossy = String::from_utf8_lossy(target.as_ref());
                             let quoted = serde_json::to_string(&lossy.as_ref())
                                 .unwrap_or_else(|_| "\"<unprintable>\"".to_string());
                             eprintln!("GOLIBAFL_MUTATED_INPUT {}", quoted);
-                            printed_inputs += 1;
+                            if !verbose_all_inputs {
+                                printed_inputs += 1;
+                            }
                         }
                         unsafe {
                             libfuzzer_test_one_input(&target);
@@ -2785,7 +2790,7 @@ fn fuzz(
     match &launch_res {
         Ok(()) | Err(Error::ShuttingDown) => (),
         Err(err) => {
-            if env::var_os("GOSENTRY_VERBOSE_AFL").is_some() {
+            if verbose {
                 let diag = launch_diagnostics(err);
                 eprint!("{diag}");
                 let diag_path = output.join(format!(

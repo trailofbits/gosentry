@@ -141,14 +141,14 @@ GOLIBAFL_MUTATED_INPUT "[true,false,null]"
 
 </details>
 
-Set `GOSENTRY_VERBOSE_AFL=1` to print a few generated inputs as `GOLIBAFL_MUTATED_INPUT "..."` (printed by `golibafl`, useful for smoke tests / CI).
+Set `GOSENTRY_VERBOSE_AFL=1` to print a few generated inputs as `GOLIBAFL_MUTATED_INPUT "..."` (printed by `golibafl`, useful for smoke tests / CI). Set `GOSENTRY_VERBOSE_AFL_ALL_INPUTS=1` to print `GOLIBAFL_MUTATED_INPUT` for **every** grammar-mode execution (very noisy).
 
 Behavior notes:
 - If the LibAFL input dir is empty, `golibafl` generates an initial corpus using the grammar.
 - If you provide initial seeds (via `testdata/fuzz` or by placing files in the LibAFL input dir), they will be loaded into the corpus and Nautilus will mutate the selected corpus seed (coverage-guided) instead of overwriting it with unrelated fresh generations.
 - If a loaded corpus seed is not parseable by the grammar, `golibafl` falls back to generation-from-scratch instead of aborting the fuzz run.
 - In grammar mode, `golibafl` also runs the usual CMPLOG/I2S + havoc/token mutation stages, so the corpus may contain non-grammar bytes.
-- The `GOLIBAFL_MUTATED_INPUT` log is currently printed for the first 20 executions only.
+- The `GOLIBAFL_MUTATED_INPUT` log is capped to the first 20 executions by default; set `GOSENTRY_VERBOSE_AFL_ALL_INPUTS=1` to remove the cap.
 
 Limitations (current glue):
 - Grammar mode works best with a single input argument; multi-arg fuzz targets will decode the underlying byte buffer into separate values.
@@ -191,7 +191,7 @@ Notes:
 - Your Go harness still receives standard Go fuzz inputs. In grammar mode, a one-arg fuzz target can be either `data []byte` or `s string` (the generated sample is passed as UTF-8 bytes).
 - Grammar mode works best with a single input argument; with multiple arguments, gosentry will decode the underlying byte buffer into separate values, so the original grammar-generated text won’t stay intact.
 - If the harness rejects inputs (example: JSON unmarshal fails), it usually means the grammar is not aligned with what the harness expects.
-- Use `GOSENTRY_VERBOSE_AFL=1` to see `golibafl: nautilus enabled` + a few `GOLIBAFL_MUTATED_INPUT "..."` lines.
+- Use `GOSENTRY_VERBOSE_AFL=1` to see `golibafl: nautilus enabled` + a few `GOLIBAFL_MUTATED_INPUT "..."` lines (or `GOSENTRY_VERBOSE_AFL_ALL_INPUTS=1` for all of them).
 
 </details>
 
