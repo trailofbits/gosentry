@@ -12,7 +12,7 @@ For now, it focuses on the following features:
 - Panicking on [user-provided function call](https://github.com/kevin-valerio/gosentry?tab=readme-ov-file#feature-2-panic-on-selected-functions): catching targeted bugs when certains functions are called (eg., `myapp.(*Logger).Error`).
 - Git-blame-oriented fuzzing (based on [this work](https://github.com/kevin-valerio/LibAFL-git-aware)): when fuzzing with LibAFL mode, you can orientate the fuzzer towards **recently added/edited lines**.
 - Detect **race conditions**, **goroutine leaks**, and **confirmed hangs** at fuzz-time: when fuzzing with LibAFL, gosentry can replay newly found seeds (or timed-out executions) and treat findings like bugs.
-- Generate Go coverage reports (HTML + coverprofile) from an existing LibAFL fuzz campaign corpus.
+- Generate [Go coverage reports](#feature-7-generate-go-coverage-reports-from-fuzzing-campaign) (HTML + coverprofile) from an existing fuzzing campaign corpus (LibAFL).
 
 It especially has **two** objectives:
 - Being easy to use and UX-friendly (_we're tired of complex tools_),
@@ -27,6 +27,7 @@ It especially has **two** objectives:
   - [Feature 4: Git-blame-oriented fuzzing (experimental)](#feature-4-git-blame-oriented-fuzzing-experimental)
   - [Feature 5: Detect race conditions, goroutine leaks, and hangs at fuzz-time](#feature-5-detect-race-conditions-goroutine-leaks-and-hangs-at-fuzz-time)
   - [Feature 6: Grammar-based fuzzing (Nautilus)](#feature-6-grammar-based-fuzzing-nautilus)
+  - [Feature 7: Generate Go coverage reports from fuzzing campaign](#feature-7-generate-go-coverage-reports-from-fuzzing-campaign)
 - [Credits](#credits)
 
 ## Build
@@ -148,13 +149,7 @@ You can also pass an optional JSONC config file for LibAFL (including grammar fu
 ./bin/go test -fuzz=FuzzHarness --focus-on-new-code=false --catch-races=false --catch-leaks=false --libafl-config=path/to/libafl.jsonc # optional --libafl-config
 ```
 
-To generate Go coverage from the current LibAFL campaign corpus (without fuzzing):
-
-```bash
-./bin/go test -fuzz=FuzzHarness --generate-coverage .
-```
-
-This writes `<libafl output dir>/coverage/cover.out` and `<libafl output dir>/coverage/cover.html` and prints their full paths at the end.
+Coverage report generation from a LibAFL campaign corpus is documented in [Feature 7](#feature-7-generate-go-coverage-reports-from-fuzzing-campaign).
 
 Grammar-based fuzzing (Nautilus) is documented in [Feature 6](#feature-6-grammar-based-fuzzing-nautilus).
 
@@ -566,6 +561,24 @@ This is the file format expected by `--grammar=...`:
 Limitations (current glue):
 - Grammar mode works best with a single input argument; multi-arg fuzz targets will decode the underlying byte buffer into separate values.
 - No grammar recombination/crossover between two corpus seeds yet (mutation is single-seed).
+
+## Feature 7: Generate Go coverage reports from fuzzing campaign
+
+After (or while) running a LibAFL fuzz campaign, gosentry can generate a Go coverage report by replaying the current LibAFL **queue corpus** (no fuzzing).
+
+```bash
+# Same package + same fuzz target as your fuzz campaign:
+./bin/go test -fuzz=FuzzHarness --generate-coverage .
+```
+
+This replays inputs from `<libafl output dir>/queue/` and writes:
+- `<libafl output dir>/coverage/cover.out` (Go coverprofile format)
+- `<libafl output dir>/coverage/cover.html` (HTML report)
+
+At the end, gosentry prints the full paths to both files.
+
+> [!NOTE]
+> For large corpora, consider `-timeout=0`.
 
 ## Credits
 - [golibafl](https://github.com/srlabs/golibafl/)
