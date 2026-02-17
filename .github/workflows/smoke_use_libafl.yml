@@ -58,6 +58,9 @@ jobs:
           GOSENTRY_VERBOSE_AFL_ALL_INPUTS: "1"
         run: bash misc/gosentry/tests/smoke_use_libafl_grammar_json.sh
 
+      - name: Smoke (grammar cmplog/i2s)
+        run: bash misc/gosentry/tests/smoke_use_libafl_grammar_cmplog_i2s.sh
+
       - name: Smoke (generate coverage)
         run: bash misc/gosentry/tests/smoke_use_libafl_generate_coverage.sh
 
