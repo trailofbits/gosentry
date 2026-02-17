@@ -30,6 +30,12 @@ After (or while) running a LibAFL fuzz campaign, gosentry can generate a Go cove
 go test -fuzz=FuzzXxx --generate-coverage .
 ```
 
+Notes:
+- Use the same `-fuzz` spelling you used for the campaign you want to replay. gosentry uses `-fuzz` to locate the LibAFL output directory (and its `queue/` corpus).
+  - `-fuzz=FuzzXxx` and `-fuzz='^FuzzXxx$'` refer to the same campaign.
+  - If you fuzzed with a broader regexp (example: `-fuzz='Fuzz.*Parser'`), reuse the exact same regexp for coverage.
+- `-fuzz` must match exactly one fuzz target, otherwise gosentry can’t select which campaign to replay.
+
 This replays inputs from `<libafl output dir>/queue/` and writes:
 - `<libafl output dir>/coverage/cover.out` (Go coverprofile format)
 - `<libafl output dir>/coverage/cover.html` (HTML report)

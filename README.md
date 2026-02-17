@@ -8,7 +8,7 @@ For now, it focuses on the following features:
 
 - Integrating [go-panikint](https://github.com/trailofbits/go-panikint): instrumentation that panics on **integer overflow/underflow** (and **optionally on truncating integer conversions**).
 - Integrating [LibAFL](https://github.com/AFLplusplus/LibAFL) fuzzer: run Go fuzzing harnesses with **LibAFL** for better fuzzing performances.
-- Proposing **Grammar-based fuzzing** using [Nautilus](https://github.com/nautilus-fuzz/nautilus/): generate structured inputs from a grammar.
+- Proposing **Grammar-based fuzzing** using [Nautilus](https://github.com/nautilus-fuzz/nautilus/): generate structured bytes/strings from a grammar.
 - Panicking on [user-provided function call](https://github.com/kevin-valerio/gosentry?tab=readme-ov-file#feature-2-panic-on-selected-functions): catching targeted bugs when certains functions are called (eg., `myapp.(*Logger).Error`).
 - Git-blame-oriented fuzzing (based on [this work](https://github.com/kevin-valerio/LibAFL-git-aware)): when fuzzing with LibAFL mode, you can orientate the fuzzer towards **recently added/edited lines**.
 - Detect **race conditions**, [goroutine leaks](https://github.com/uber-go/goleak), and **timeout detection** at fuzz-time: gosentry can replay newly found seeds (or timed-out executions) and treat these findings like bugs.
@@ -224,6 +224,22 @@ cd test/gosentry/examples/reverse
 
 Stop the fuzz campaign with Ctrl+C.
 
+##### LibAFL output directory (campaign identity / corpus reuse)
+
+gosentry stores LibAFL’s campaign state (corpus, crashes, etc.) under Go’s fuzz cache root (roughly `$(go env GOCACHE)/fuzz`), in a deterministic directory derived from the **same package + same fuzz target** (and the same project root).
+
+This means that stopping (Ctrl+C) and restarting the same fuzz campaign will, by default, continue from the previous LibAFL `queue/` corpus.
+
+The path is printed at the end of the run:
+
+```text
+libafl output dir: /full/path/to/.../fuzz/<pkg import path>/libafl/<project>/<harness>
+```
+
+Notes:
+- `<harness>` is the fuzz target name when `-fuzz` is a simple identifier like `FuzzXxx` (or `^FuzzXxx$`), otherwise it’s `pattern-<hash>`.
+- Coverage generation (`--generate-coverage`) uses the same rule to find the right `queue/` corpus, so it must be run from the same package with the same `-fuzz=...`.
+
 ## Feature 4: Git-blame-oriented fuzzing (experimental)
 
 #### Overview
@@ -313,7 +329,7 @@ git-aware median (capped to timeout): 87.432s
 
 When fuzzing with LibAFL, a harness execution can **timeout** (for example because of a deadlock / goroutines stuck waiting, or an extremely slow path).
 
-To reduce false positives, gosentry treats a timeout as a hang candidate and confirms it by replaying the timed-out input a few times with a larger timeout. On a confirmed hang, gosentry writes the input to `output/hangs/` and stops the fuzz campaign (treats it like a bug/crash).
+To reduce false positives, gosentry treats a timeout as a hang candidate and confirms it by replaying the timed-out input a few times with a larger timeout. On a confirmed hang, gosentry writes the input to `<libafl output dir>/hangs/` and stops the fuzz campaign (treats it like a bug/crash).
 
 Before exiting, `golibafl` attempts to minimize the crashing/hanging input (best-effort; hangs are capped to ~60s total).
 
@@ -343,6 +359,8 @@ This mode starts a small monitor inside `go test` (same parent process), and it 
 - Monitoring: before fuzzing starts, gosentry snapshots the initial contents of `<libafl output dir>/queue/` into a `seen` set. A goroutine then polls `<libafl output dir>/queue/` every ~1s and only replays newly created seeds (skips dotfiles and `*.metadata`).
 
 ```text
+Legend: output/... = <libafl output dir>/...
+
 ┌───────────────────────────────────────────────────────────────────────────┐
 │ 1) Main LibAFL fuzzing run                                                 │
 │    - `golibafl` writes new seeds to `output/queue/`                        │
@@ -374,7 +392,7 @@ This mode starts a small monitor inside `go test` (same parent process), and it 
 
 gosentry can also run a `goleak` replay loop that watches the LibAFL `queue/` directory and replays newly discovered seeds with `go.uber.org/goleak` enabled.
 
-On a detected goroutine leak, gosentry prints the exact seed path and copies it into `output/leaks/`.
+On a detected goroutine leak, gosentry prints the exact seed path and copies it into `<libafl output dir>/leaks/`.
 
 Note: `goleak` is for **goroutine leaks**, not memory leaks.
 
@@ -385,6 +403,8 @@ This mode also starts a small monitor inside `go test` (same parent process), an
 - Monitoring: a goroutine polls `<libafl output dir>/queue/` every ~1s and replays each new seed with `GOSENTRY_LIBAFL_CATCH_LEAKS=1` (enables `go.uber.org/goleak` after each execution).
 
 ```text
+Legend: output/... = <libafl output dir>/...
+
 ┌───────────────────────────────────────────────────────────────────────────┐
 │ 1) Main LibAFL fuzzing run                                                 │
 │    - `golibafl` writes new seeds to `output/queue/`                        │
@@ -439,6 +459,25 @@ f.Fuzz(func(t *testing.T, s string) { /* parse s */ })
 ```
 
 Grammar mode works best with a single input argument (`[]byte` or `string`). Multi-arg fuzz callbacks cause gosentry to decode the underlying byte buffer into separate values, so the original grammar-generated text won’t stay intact.
+
+Grammar mode still generates **bytes/strings**. If you need structured inputs (or you’re doing differential fuzzing), your harness is where you convert `data` into domain values (parse/unmarshal) and compare behaviors. (Outside of grammar mode, gosentry can also fuzz some composite Go types by decoding them from bytes.)
+
+<details>
+<summary><strong>Differential fuzzing harness sketch</strong></summary>
+
+```go
+f.Fuzz(func(t *testing.T, data []byte) {
+	gotA, errA := ParseA(data)
+	gotB, errB := ParseB(data)
+	if (errA == nil) != (errB == nil) {
+		t.Fatalf("parser disagreement: A=%v B=%v", errA, errB)
+	}
+	_ = gotA
+	_ = gotB
+})
+```
+
+</details>
 
 #### How to use 
 Requirements: no extra dependencies beyond the Rust toolchain already needed for LibAFL mode.
@@ -526,6 +565,8 @@ This is the file format expected by `--grammar=...`:
 <summary><strong>How grammar fuzzing works in gosentry</strong></summary>
 
 ```text
+Legend: output/... = <libafl output dir>/...
+
 ┌───────────────────────────────────────────────────────────────────────────┐
 │ 0) gosentry `go test -fuzz=FuzzXxx` (LibAFL + --use-grammar)               │
 │    - captures your `testing.F.Fuzz` callback + its parameter types          │
@@ -570,6 +611,12 @@ After (or while) running a LibAFL fuzz campaign, gosentry can generate a Go cove
 # Same package + same fuzz target as your fuzz campaign:
 ./bin/go test -fuzz=FuzzHarness --generate-coverage .
 ```
+
+Notes:
+- Use the same `-fuzz` spelling you used for the campaign you want to replay. gosentry uses `-fuzz` to locate the LibAFL output directory (and its `queue/` corpus).
+  - `-fuzz=FuzzHarness` and `-fuzz='^FuzzHarness$'` refer to the same campaign.
+  - If you fuzzed with a broader regexp (example: `-fuzz='Fuzz.*Parser'`), reuse the exact same regexp for coverage.
+- `-fuzz` must match exactly one fuzz target, otherwise gosentry can’t select which campaign to replay.
 
 This replays inputs from `<libafl output dir>/queue/` and writes:
 - `<libafl output dir>/coverage/cover.out` (Go coverprofile format)
