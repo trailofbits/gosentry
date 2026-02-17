@@ -155,6 +155,7 @@ struct LibAflFuzzConfig {
     // --- Grammar fuzzing (Nautilus) ---
     // Only used with `--use-grammar`.
     nautilus_max_len: Option<usize>,
+    nautilus_cmplog_i2s: Option<bool>,
 }
 
 #[derive(Debug, Clone)]
@@ -2094,6 +2095,7 @@ fn fuzz(
     let mut go_maxprocs_single = true;
     let mut tui_monitor = std::io::stdout().is_terminal();
     let mut debug_output_override: Option<bool> = None;
+    let mut nautilus_cmplog_i2s = true;
 
     if let Some(config_path) = config_path.as_ref() {
         let config = read_fuzz_config(config_path);
@@ -2207,6 +2209,9 @@ fn fuzz(
             tui_monitor = v;
         }
         debug_output_override = config.debug_output;
+        if let Some(v) = config.nautilus_cmplog_i2s {
+            nautilus_cmplog_i2s = v;
+        }
         if let Some(n) = config.nautilus_max_len {
             if n == 0 {
                 eprintln!(
@@ -2221,12 +2226,13 @@ fn fuzz(
         }
 
         println!(
-            "GOLIBAFL_CONFIG_APPLIED cores_ids={} exec_timeout_ms={} catch_hangs={} hang_timeout_ms={} hang_confirm_runs={}",
+            "GOLIBAFL_CONFIG_APPLIED cores_ids={} exec_timeout_ms={} catch_hangs={} hang_timeout_ms={} hang_confirm_runs={} nautilus_cmplog_i2s={}",
             cores_ids_csv(&effective_cores),
             exec_timeout.as_millis(),
             catch_hangs,
             hang_timeout.as_millis(),
             hang_confirm_runs,
+            nautilus_cmplog_i2s,
         );
     }
 
@@ -2922,95 +2928,182 @@ fn fuzz(
 	                    }
 
                         if let Some(ctx) = nautilus_ctx.as_ref() {
-                            let cmplog_i2s_stage = StdMutationalStage::with_max_iterations(
-                                NautilusCmpLogI2SMutator::new(ctx.clone()),
-                                std::num::NonZeroUsize::new(1).unwrap(),
-                            );
                             let grammar_stage = StdMutationalStage::with_max_iterations(
                                 NautilusBytesMutator::new(ctx.clone()),
                                 std::num::NonZeroUsize::new(1).unwrap(),
                             );
-                            let mut stages =
-                                tuple_list!(calibration, tracing, cmplog_i2s_stage, grammar_stage);
 
-                            loop {
-                                if let Err(err) =
-                                    restarting_mgr.maybe_report_progress(&mut state, monitor_timeout)
-                                {
-                                    if matches!(err, Error::ShuttingDown) {
-                                        let _ = restarting_mgr.send_exiting();
-                                        notify_restarting_mgr_exit();
+                            if nautilus_cmplog_i2s {
+                                let cmplog_i2s_stage = StdMutationalStage::with_max_iterations(
+                                    NautilusCmpLogI2SMutator::new(ctx.clone()),
+                                    std::num::NonZeroUsize::new(1).unwrap(),
+                                );
+
+                                let mut stages =
+                                    tuple_list!(calibration, tracing, cmplog_i2s_stage, grammar_stage);
+
+                                loop {
+                                    if let Err(err) =
+                                        restarting_mgr.maybe_report_progress(&mut state, monitor_timeout)
+                                    {
+                                        if matches!(err, Error::ShuttingDown) {
+                                            let _ = restarting_mgr.send_exiting();
+                                            notify_restarting_mgr_exit();
+                                        }
+                                        return Err(err);
                                     }
-                                    return Err(err);
-                                }
 
-                                if let Err(err) = fuzzer.fuzz_one(
-                                    &mut stages,
-                                    &mut executor,
-                                    &mut state,
-                                    &mut restarting_mgr,
-                                ) {
-                                    if matches!(err, Error::ShuttingDown) {
-                                        let _ = restarting_mgr.send_exiting();
-                                        notify_restarting_mgr_exit();
-                                    }
-                                    return Err(err);
-                                }
-
-                                if catch_hangs && hang_candidate_path.exists() {
-                                    let exe = env::current_exe().unwrap_or_else(|err| {
-                                        eprintln!("golibafl: failed to get current exe path: {err}");
-                                        std::process::exit(2);
-                                    });
-                                    match confirm_timeout_candidate(
-                                        &exe,
-                                        &hang_candidate_path,
-                                        hang_timeout,
-                                        hang_confirm_runs,
-                                        &hangs_dir,
-                                        &crashes_dir,
-                                        &client_id,
+                                    if let Err(err) = fuzzer.fuzz_one(
+                                        &mut stages,
+                                        &mut executor,
+                                        &mut state,
+                                        &mut restarting_mgr,
                                     ) {
-                                        TimeoutCandidateVerdict::NotHang => (),
-                                        TimeoutCandidateVerdict::Hang(p)
-                                        | TimeoutCandidateVerdict::Crash(p) => {
-                                            if verbose {
-                                                eprintln!(
-                                                    "golibafl: timeout candidate confirmed; saved: {}",
-                                                    p.display()
-                                                );
-                                            }
-                                            if stop_all_fuzzers_on_panic {
-                                                let executions = *state.executions();
-                                                restarting_mgr.fire(
-                                                    &mut state,
-                                                    EventWithStats::with_current_time(
-                                                        Event::<BytesInput>::Stop,
-                                                        executions,
-                                                    ),
-                                                )?;
-                                                state.request_stop();
-                                                restarting_mgr.send_exiting()?;
-                                                return Err(Error::shutting_down());
+                                        if matches!(err, Error::ShuttingDown) {
+                                            let _ = restarting_mgr.send_exiting();
+                                            notify_restarting_mgr_exit();
+                                        }
+                                        return Err(err);
+                                    }
+
+                                    if catch_hangs && hang_candidate_path.exists() {
+                                        let exe = env::current_exe().unwrap_or_else(|err| {
+                                            eprintln!("golibafl: failed to get current exe path: {err}");
+                                            std::process::exit(2);
+                                        });
+                                        match confirm_timeout_candidate(
+                                            &exe,
+                                            &hang_candidate_path,
+                                            hang_timeout,
+                                            hang_confirm_runs,
+                                            &hangs_dir,
+                                            &crashes_dir,
+                                            &client_id,
+                                        ) {
+                                            TimeoutCandidateVerdict::NotHang => (),
+                                            TimeoutCandidateVerdict::Hang(p)
+                                            | TimeoutCandidateVerdict::Crash(p) => {
+                                                if verbose {
+                                                    eprintln!(
+                                                        "golibafl: timeout candidate confirmed; saved: {}",
+                                                        p.display()
+                                                    );
+                                                }
+                                                if stop_all_fuzzers_on_panic {
+                                                    let executions = *state.executions();
+                                                    restarting_mgr.fire(
+                                                        &mut state,
+                                                        EventWithStats::with_current_time(
+                                                            Event::<BytesInput>::Stop,
+                                                            executions,
+                                                        ),
+                                                    )?;
+                                                    state.request_stop();
+                                                    restarting_mgr.send_exiting()?;
+                                                    return Err(Error::shutting_down());
+                                                }
                                             }
                                         }
                                     }
-                                }
 
-                                if stop_all_fuzzers_on_panic
-                                    && state.solutions().count() > initial_solutions
-                                {
-                                    let executions = *state.executions();
-                                    restarting_mgr.fire(
+                                    if stop_all_fuzzers_on_panic
+                                        && state.solutions().count() > initial_solutions
+                                    {
+                                        let executions = *state.executions();
+                                        restarting_mgr.fire(
+                                            &mut state,
+                                            EventWithStats::with_current_time(
+                                                Event::<BytesInput>::Stop,
+                                                executions,
+                                            ),
+                                        )?;
+                                        state.request_stop();
+                                        restarting_mgr.send_exiting()?;
+                                        return Err(Error::shutting_down());
+                                    }
+                                }
+                            } else {
+                                let mut stages = tuple_list!(calibration, grammar_stage);
+
+                                loop {
+                                    if let Err(err) =
+                                        restarting_mgr.maybe_report_progress(&mut state, monitor_timeout)
+                                    {
+                                        if matches!(err, Error::ShuttingDown) {
+                                            let _ = restarting_mgr.send_exiting();
+                                            notify_restarting_mgr_exit();
+                                        }
+                                        return Err(err);
+                                    }
+
+                                    if let Err(err) = fuzzer.fuzz_one(
+                                        &mut stages,
+                                        &mut executor,
                                         &mut state,
-                                        EventWithStats::with_current_time(
-                                            Event::<BytesInput>::Stop,
-                                            executions,
-                                        ),
-                                    )?;
-                                    state.request_stop();
-                                    restarting_mgr.send_exiting()?;
-                                    return Err(Error::shutting_down());
+                                        &mut restarting_mgr,
+                                    ) {
+                                        if matches!(err, Error::ShuttingDown) {
+                                            let _ = restarting_mgr.send_exiting();
+                                            notify_restarting_mgr_exit();
+                                        }
+                                        return Err(err);
+                                    }
+
+                                    if catch_hangs && hang_candidate_path.exists() {
+                                        let exe = env::current_exe().unwrap_or_else(|err| {
+                                            eprintln!("golibafl: failed to get current exe path: {err}");
+                                            std::process::exit(2);
+                                        });
+                                        match confirm_timeout_candidate(
+                                            &exe,
+                                            &hang_candidate_path,
+                                            hang_timeout,
+                                            hang_confirm_runs,
+                                            &hangs_dir,
+                                            &crashes_dir,
+                                            &client_id,
+                                        ) {
+                                            TimeoutCandidateVerdict::NotHang => (),
+                                            TimeoutCandidateVerdict::Hang(p)
+                                            | TimeoutCandidateVerdict::Crash(p) => {
+                                                if verbose {
+                                                    eprintln!(
+                                                        "golibafl: timeout candidate confirmed; saved: {}",
+                                                        p.display()
+                                                    );
+                                                }
+                                                if stop_all_fuzzers_on_panic {
+                                                    let executions = *state.executions();
+                                                    restarting_mgr.fire(
+                                                        &mut state,
+                                                        EventWithStats::with_current_time(
+                                                            Event::<BytesInput>::Stop,
+                                                            executions,
+                                                        ),
+                                                    )?;
+                                                    state.request_stop();
+                                                    restarting_mgr.send_exiting()?;
+                                                    return Err(Error::shutting_down());
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    if stop_all_fuzzers_on_panic
+                                        && state.solutions().count() > initial_solutions
+                                    {
+                                        let executions = *state.executions();
+                                        restarting_mgr.fire(
+                                            &mut state,
+                                            EventWithStats::with_current_time(
+                                                Event::<BytesInput>::Stop,
+                                                executions,
+                                            ),
+                                        )?;
+                                        state.request_stop();
+                                        restarting_mgr.send_exiting()?;
+                                        return Err(Error::shutting_down());
+                                    }
                                 }
                             }
                         } else {

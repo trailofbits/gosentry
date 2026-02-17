@@ -57,7 +57,9 @@ Flags (gosentry `go test`):
   - Start symbol is implicit: the first rule’s nonterminal in the JSON file.
 
 Tuning:
-- In `--libafl-config`, set `nautilus_max_len` (only used with `--use-grammar`).
+- In `--libafl-config`, set:
+  - `nautilus_max_len` (only used with `--use-grammar`).
+  - `nautilus_cmplog_i2s` (default: true). Set to `false` to disable the grammar CMPLOG/I2S stage.
 
 Requirements:
 - No extra dependencies beyond the Rust toolchain already needed for LibAFL mode.
@@ -153,7 +155,7 @@ Behavior notes:
 - If the LibAFL input dir is empty, `golibafl` generates an initial corpus using the grammar.
 - If you provide initial seeds (via `testdata/fuzz` or by placing files in the LibAFL input dir), they will be loaded into the corpus and Nautilus will mutate the selected corpus seed (coverage-guided) instead of overwriting it with unrelated fresh generations.
 - If a loaded corpus seed is not parseable by the grammar, `golibafl` falls back to generation-from-scratch instead of aborting the fuzz run.
-- In grammar mode, `golibafl` keeps inputs grammar-valid: it uses Nautilus mutation plus a CMPLOG-guided, I2S-like stage that rewrites Nautilus leaf terminals (no raw byte-level havoc/token stages), so the corpus stays parseable by the grammar.
+- In grammar mode, `golibafl` keeps inputs grammar-valid: it uses Nautilus mutation plus (by default) a CMPLOG-guided, I2S-like stage that rewrites Nautilus leaf terminals (no raw byte-level havoc/token stages), so the corpus stays parseable by the grammar. You can disable that stage with `--libafl-config` by setting `nautilus_cmplog_i2s=false` (byte-level fuzzing still keeps CMPLOG/I2S always on).
 - The `GOLIBAFL_MUTATED_INPUT` log is capped to the first 20 executions by default; set `GOSENTRY_VERBOSE_AFL_ALL_INPUTS=1` to remove the cap.
 
 Limitations (current glue):
@@ -347,12 +349,16 @@ Example `libafl.jsonc` (all fields optional; defaults shown in comments):
   // --- Grammar fuzzing (Nautilus) ---
   // Only used with -use-grammar (or golibafl --use-grammar).
 
-  // nautilus_max_len: maximum expansion length used by Nautilus when generating/mutating
-  // default: 64
-  // example: 256 (allow deeper nesting and longer strings)
-  "nautilus_max_len": 64
-}
-```
+	  // nautilus_max_len: maximum expansion length used by Nautilus when generating/mutating
+	  // default: 64
+	  // example: 256 (allow deeper nesting and longer strings)
+	  "nautilus_max_len": 64,
+
+	  // nautilus_cmplog_i2s: enable/disable the grammar CMPLOG/I2S stage
+	  // default: true
+	  "nautilus_cmplog_i2s": true
+	}
+	```
 
 A ready-to-edit template lives at `misc/gosentry/libafl.config.jsonc`.
 

@@ -445,7 +445,7 @@ Enable goroutine leak catching with `--catch-leaks=true` or race catching with `
 
 Byte-level fuzzing is great, but parsers and file formats often need structured inputs. With `--use-grammar`, gosentry uses LibAFL’s Nautilus grammar mutator to generate and mutate inputs that conform to a user-provided grammar (JSON format), and feeds them to your regular Go fuzz harness (`testing.F.Fuzz`).
 
-In grammar mode, LibAFL still runs the normal coverage-guided loop (pick a corpus seed → mutate → execute → keep inputs that increase coverage). The runner adds Nautilus mutation (seed → grammar tree → mutate → unparse) plus a CMPLOG-guided, I2S-like stage that rewrites Nautilus **leaf terminals** based on runtime comparisons. This keeps inputs grammar-valid (it does not run the raw byte-level havoc/token stages in grammar mode).
+In grammar mode, LibAFL still runs the normal coverage-guided loop (pick a corpus seed → mutate → execute → keep inputs that increase coverage). The runner adds Nautilus mutation (seed → grammar tree → mutate → unparse) plus (by default) a CMPLOG-guided, I2S-like stage that rewrites Nautilus **leaf terminals** based on runtime comparisons. This keeps inputs grammar-valid (it does not run the raw byte-level havoc/token stages in grammar mode). You can disable the CMPLOG/I2S stage in `--libafl-config` via `nautilus_cmplog_i2s=false` (byte-level fuzzing still keeps CMPLOG/I2S always on).
 
 > [!NOTE]
 > Grammar mode is usually slower than byte-level fuzzing. It is a trade-off: more structure vs fewer executions per second.
@@ -482,7 +482,7 @@ f.Fuzz(func(t *testing.T, data []byte) {
 #### How to use 
 Requirements: no extra dependencies beyond the Rust toolchain already needed for LibAFL mode.
 
-You can tune Nautilus via `--libafl-config` (only used with `--use-grammar`): `nautilus_max_len` (see `misc/gosentry/libafl.config.jsonc`).
+You can tune Nautilus via `--libafl-config` (only used with `--use-grammar`): `nautilus_max_len` and `nautilus_cmplog_i2s` (see `misc/gosentry/libafl.config.jsonc`).
 
 Set `GOSENTRY_VERBOSE_AFL=1` to print a few generated inputs. Set `GOSENTRY_VERBOSE_AFL_ALL_INPUTS=1` to print **every** grammar-mode execution as `GOLIBAFL_MUTATED_INPUT "..."` (very noisy).
 

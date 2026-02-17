@@ -51,6 +51,6 @@ This is a pointer document. For user-facing usage, see `README.md`.
 - `go test` flags: `-use-grammar`, `-grammar` (`src/cmd/go/internal/test/testflag.go`)
 - Runner implementation:
   - Nautilus integration: `NautilusBytesGenerator` / `NautilusBytesMutator` in `golibafl/src/main.rs`
-  - CMPLOG-guided grammar "I2S": `NautilusCmpLogI2SMutator` in `golibafl/src/main.rs`
+  - CMPLOG-guided grammar "I2S" (default; configurable via `--libafl-config` `nautilus_cmplog_i2s=false`): `NautilusCmpLogI2SMutator` in `golibafl/src/main.rs`
   - Protocol + caveats: `misc/gosentry/USE_LIBAFL.md`
 - Example: `test/gosentry/examples/grammar_json`

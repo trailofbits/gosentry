@@ -71,5 +71,10 @@
   // This bounds recursion and input size.
   // default: 64
   // example: 256 (allow deeper nesting and longer strings)
-  "nautilus_max_len": 64
+  "nautilus_max_len": 64,
+
+  // nautilus_cmplog_i2s: enable/disable the CMPLOG-guided, grammar-valid "I2S-like" stage.
+  // default: true
+  // set false to disable (only affects --use-grammar; byte-level fuzzing still keeps CMPLOG/I2S on).
+  "nautilus_cmplog_i2s": true
 }
