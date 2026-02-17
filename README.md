@@ -484,6 +484,26 @@ Requirements: no extra dependencies beyond the Rust toolchain already needed for
 
 You can tune Nautilus via `--libafl-config` (only used with `--use-grammar`): `nautilus_max_len` and `nautilus_cmplog_i2s` (see `misc/gosentry/libafl.config.jsonc`).
 
+<details>
+<summary><strong>Benchmark: Nautilus grammar CMPLOG/I2S stage (on vs off)</strong></summary>
+
+Executed on Feb 17, 2026 using the repo’s JSON grammar example (`test/gosentry/examples/grammar_json`, `FuzzGrammarJSON`, grammar `testdata/JSON.json`) with:
+- single LibAFL client (`go test` semantics)
+- `LIBAFL_RAND_SEED=1`
+- `tui_monitor=false`
+- ~60s fuzzing per variant (then Ctrl+C)
+
+Results (LibAFL `UserStats` line closest to 60s):
+
+| mode | `nautilus_cmplog_i2s` | run time | executions | exec/sec | edges |
+|---|---:|---:|---:|---:|---:|
+| on | `true` | 1m-5s | 103818 | 1.586k | 388/8008 (4%) |
+| off | `false` | 1m-0s | 256659 | 4.251k | 388/8008 (4%) |
+
+Note: `edges` is LibAFL’s coverage map edges, not Go source lines.
+
+</details>
+
 Set `GOSENTRY_VERBOSE_AFL=1` to print a few generated inputs. Set `GOSENTRY_VERBOSE_AFL_ALL_INPUTS=1` to print **every** grammar-mode execution as `GOLIBAFL_MUTATED_INPUT "..."` (very noisy).
 
 #### Grammar authoring helpers
