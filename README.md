@@ -11,8 +11,8 @@ For now, it focuses on the following features:
 - Proposing **Grammar-based fuzzing** using [Nautilus](https://github.com/nautilus-fuzz/nautilus/): generate structured inputs from a grammar.
 - Panicking on [user-provided function call](https://github.com/kevin-valerio/gosentry?tab=readme-ov-file#feature-2-panic-on-selected-functions): catching targeted bugs when certains functions are called (eg., `myapp.(*Logger).Error`).
 - Git-blame-oriented fuzzing (based on [this work](https://github.com/kevin-valerio/LibAFL-git-aware)): when fuzzing with LibAFL mode, you can orientate the fuzzer towards **recently added/edited lines**.
-- Detect **race conditions**, [**goroutine leaks**](https://github.com/uber-go/goleak), and **timeout detection** at fuzz-time: gosentry can replay newly found seeds (or timed-out executions) and treat these findings like bugs.
-- Generate [**coverage reports**](#feature-7-generate-go-coverage-reports-from-fuzzing-campaign) from an fuzzing campaign.
+- Detect **race conditions**, [goroutine leaks](https://github.com/uber-go/goleak), and **timeout detection** at fuzz-time: gosentry can replay newly found seeds (or timed-out executions) and treat these findings like bugs.
+- Generate **coverage reports** from an fuzzing campaign.
 
 It especially has **two** objectives:
 - Being easy to use and UX-friendly (_we're tired of complex tools_),
