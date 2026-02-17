@@ -153,7 +153,7 @@ Behavior notes:
 - If the LibAFL input dir is empty, `golibafl` generates an initial corpus using the grammar.
 - If you provide initial seeds (via `testdata/fuzz` or by placing files in the LibAFL input dir), they will be loaded into the corpus and Nautilus will mutate the selected corpus seed (coverage-guided) instead of overwriting it with unrelated fresh generations.
 - If a loaded corpus seed is not parseable by the grammar, `golibafl` falls back to generation-from-scratch instead of aborting the fuzz run.
-- In grammar mode, `golibafl` also runs the usual CMPLOG/I2S + havoc/token mutation stages, so the corpus may contain non-grammar bytes.
+- In grammar mode, `golibafl` keeps inputs grammar-valid: it uses Nautilus mutation plus a CMPLOG-guided, I2S-like stage that rewrites Nautilus leaf terminals (no raw byte-level havoc/token stages), so the corpus stays parseable by the grammar.
 - The `GOLIBAFL_MUTATED_INPUT` log is capped to the first 20 executions by default; set `GOSENTRY_VERBOSE_AFL_ALL_INPUTS=1` to remove the cap.
 
 Limitations (current glue):
@@ -163,6 +163,7 @@ Limitations (current glue):
 ### CI note
 
 This repo includes a grammar smoke test script at `misc/gosentry/tests/smoke_use_libafl_grammar_json.sh` (run by `.github/workflows/smoke_use_libafl.yml`).
+It also includes a CMPLOG/I2S integration smoke test for grammar mode at `misc/gosentry/tests/smoke_use_libafl_grammar_cmplog_i2s.sh`.
 
 <details>
 <summary><strong>How grammar fuzzing works in gosentry (detailed)</strong></summary>

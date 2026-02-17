@@ -311,6 +311,381 @@ where
     }
 }
 
+#[derive(Copy, Clone, Debug)]
+struct LeafSpan {
+    node: libafl::common::nautilus::grammartec::newtypes::NodeId,
+    start: usize,
+    end: usize,
+}
+
+#[derive(Clone)]
+struct NautilusCmpLogI2SMutator {
+    ctx: Arc<libafl::generators::NautilusContext>,
+}
+
+impl NautilusCmpLogI2SMutator {
+    fn new(ctx: Arc<libafl::generators::NautilusContext>) -> Self {
+        Self { ctx }
+    }
+}
+
+impl libafl_bolts::Named for NautilusCmpLogI2SMutator {
+    fn name(&self) -> &std::borrow::Cow<'static, str> {
+        static NAME: std::borrow::Cow<'static, str> =
+            std::borrow::Cow::Borrowed("NautilusCmpLogI2SMutator");
+        &NAME
+    }
+}
+
+fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() {
+        return Some(0);
+    }
+    if needle.len() > haystack.len() {
+        return None;
+    }
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
+}
+
+fn trim_cmplog_padded_bytes(bytes: &[u8]) -> &[u8] {
+    let Some(pos0) = bytes.iter().position(|&b| b == 0) else {
+        return bytes;
+    };
+    if bytes[pos0..].iter().all(|&b| b == 0) {
+        &bytes[..pos0]
+    } else {
+        bytes
+    }
+}
+
+fn collect_leaf_spans(
+    tree: &libafl::common::nautilus::grammartec::tree::Tree,
+    ctx: &libafl::common::nautilus::grammartec::context::Context,
+) -> Option<(Vec<LeafSpan>, usize)> {
+    use libafl::common::nautilus::grammartec::{
+        newtypes::NodeId,
+        rule::{Rule, RuleChild},
+        tree::TreeLike,
+    };
+
+    if tree.size() == 0 {
+        return Some((Vec::new(), 0));
+    }
+
+    #[derive(Copy, Clone)]
+    enum Step<'a> {
+        Term { data: &'a [u8], node: NodeId },
+        Nonterm(libafl::common::nautilus::grammartec::newtypes::NTermId),
+    }
+
+    let mut is_leaf = vec![false; tree.size()];
+    for i in 0..tree.size() {
+        let node = NodeId::from(i);
+        is_leaf[i] = tree.get_rule(node, ctx).number_of_nonterms() == 0;
+    }
+
+    let root_nt = tree.get_rule(NodeId::from(0), ctx).nonterm();
+    let mut stack: Vec<Step<'_>> = vec![Step::Nonterm(root_nt)];
+    let mut node_i = 0usize;
+    let mut offset = 0usize;
+    let mut spans: Vec<LeafSpan> = Vec::new();
+
+    while let Some(step) = stack.pop() {
+        match step {
+            Step::Term { data, node } => {
+                if data.is_empty() {
+                    continue;
+                }
+                let start = offset;
+                let end = start + data.len();
+                if is_leaf[node.to_i()] {
+                    let mut merged = false;
+                    if let Some(last) = spans.last_mut() {
+                        if last.node == node && last.end == start {
+                            last.end = end;
+                            merged = true;
+                        }
+                    }
+                    if !merged {
+                        spans.push(LeafSpan { node, start, end });
+                    }
+                }
+                offset = end;
+            }
+            Step::Nonterm(nt) => {
+                let node = NodeId::from(node_i);
+                let rule = tree.get_rule(node, ctx);
+                debug_assert_eq!(nt, rule.nonterm());
+                node_i += 1;
+                match rule {
+                    Rule::Plain(r) => {
+                        for child in r.children.iter().rev() {
+                            match child {
+                                RuleChild::Term(data) => {
+                                    stack.push(Step::Term {
+                                        data: data.as_slice(),
+                                        node,
+                                    });
+                                }
+                                RuleChild::NTerm(id) => stack.push(Step::Nonterm(*id)),
+                            }
+                        }
+                    }
+                    Rule::RegExp(_) => {
+                        let data = tree.get_custom_rule_data(node);
+                        stack.push(Step::Term { data, node });
+                    }
+                }
+            }
+        }
+    }
+
+    Some((spans, offset))
+}
+
+fn spans_exact_cover(spans: &[LeafSpan], start: usize, end: usize) -> Option<Vec<usize>> {
+    if start >= end {
+        return None;
+    }
+
+    let mut idx = None;
+    for (i, span) in spans.iter().enumerate() {
+        if span.start == start {
+            idx = Some(i);
+            break;
+        }
+        if span.start > start {
+            return None;
+        }
+    }
+    let mut i = idx?;
+
+    let mut covered = start;
+    let mut out = Vec::new();
+    while covered < end {
+        let span = spans.get(i)?;
+        if span.start != covered {
+            return None;
+        }
+        covered = span.end;
+        out.push(i);
+        i += 1;
+    }
+    if covered == end { Some(out) } else { None }
+}
+
+fn find_leaf_plain_rule_id_for_bytes(
+    ctx: &libafl::common::nautilus::grammartec::context::Context,
+    nt: libafl::common::nautilus::grammartec::newtypes::NTermId,
+    desired: &[u8],
+) -> Option<libafl::common::nautilus::grammartec::newtypes::RuleId> {
+    use libafl::common::nautilus::grammartec::rule::{Rule, RuleChild};
+
+    for rule_id in ctx.get_rules_for_nt(nt) {
+        let rule = ctx.get_rule(*rule_id);
+        if rule.number_of_nonterms() != 0 {
+            continue;
+        }
+        let Rule::Plain(r) = rule else {
+            continue;
+        };
+
+        let mut offset = 0usize;
+        let mut ok = true;
+        for child in &r.children {
+            let RuleChild::Term(data) = child else {
+                ok = false;
+                break;
+            };
+            let Some(rem) = desired.get(offset..) else {
+                ok = false;
+                break;
+            };
+            if !rem.starts_with(data.as_slice()) {
+                ok = false;
+                break;
+            }
+            offset += data.len();
+        }
+        if ok && offset == desired.len() {
+            return Some(*rule_id);
+        }
+    }
+
+    None
+}
+
+fn try_apply_cmp_leaf_patch(
+    input: &mut libafl::inputs::NautilusInput,
+    ctx: &libafl::common::nautilus::grammartec::context::Context,
+    spans: &[LeafSpan],
+    haystack: &[u8],
+    from_bytes: &[u8],
+    to_bytes: &[u8],
+) -> bool {
+    use libafl::common::nautilus::grammartec::tree::TreeLike;
+
+    if from_bytes.is_empty() || to_bytes.is_empty() || from_bytes == to_bytes {
+        return false;
+    }
+
+    let mut search_start = 0usize;
+    while search_start <= haystack.len().saturating_sub(from_bytes.len()) {
+        let pos = match find_subslice(&haystack[search_start..], from_bytes) {
+            Some(rel) => search_start + rel,
+            None => break,
+        };
+        let end = pos + from_bytes.len();
+
+        if let Some(span_idxs) = spans_exact_cover(spans, pos, end) {
+            let tree = input.tree_mut();
+
+            if span_idxs.len() == 1 {
+                let span = spans[span_idxs[0]];
+                let nt = tree.get_rule(span.node, ctx).nonterm();
+                if let Some(rule_id) = find_leaf_plain_rule_id_for_bytes(ctx, nt, to_bytes) {
+                    tree.rules[span.node.to_i()] =
+                        libafl::common::nautilus::grammartec::rule::RuleIdOrCustom::Rule(rule_id);
+                    return true;
+                }
+            } else if to_bytes.len() == from_bytes.len()
+                && to_bytes.len() == (end - pos)
+                && span_idxs.iter().all(|idx| (spans[*idx].end - spans[*idx].start) == 1)
+            {
+                let mut updates = Vec::with_capacity(span_idxs.len());
+                for (j, idx) in span_idxs.iter().enumerate() {
+                    let span = spans[*idx];
+                    let nt = tree.get_rule(span.node, ctx).nonterm();
+                    let desired = [to_bytes[j]];
+                    let Some(rule_id) = find_leaf_plain_rule_id_for_bytes(ctx, nt, &desired) else {
+                        updates.clear();
+                        break;
+                    };
+                    updates.push((span.node, rule_id));
+                }
+
+                if !updates.is_empty() {
+                    for (node, rule_id) in updates {
+                        tree.rules[node.to_i()] =
+                            libafl::common::nautilus::grammartec::rule::RuleIdOrCustom::Rule(
+                                rule_id,
+                            );
+                    }
+                    return true;
+                }
+            }
+        }
+
+        search_start = pos + 1;
+    }
+
+    false
+}
+
+impl<S> libafl::mutators::Mutator<BytesInput, S> for NautilusCmpLogI2SMutator
+where
+    S: libafl::state::HasRand + HasMetadata,
+{
+    fn mutate(
+        &mut self,
+        state: &mut S,
+        input: &mut BytesInput,
+    ) -> Result<libafl::mutators::MutationResult, Error> {
+        use libafl::inputs::FromTargetBytesConverter;
+        use libafl::observers::cmp::{CmpValues, CmpValuesMetadata, CmplogBytes};
+        use libafl_bolts::AsSlice;
+
+        let mut cmp_pairs: Vec<(CmplogBytes, CmplogBytes)> =
+            if let Some(meta) = state.metadata_map().get::<CmpValuesMetadata>() {
+                meta.list
+                    .iter()
+                    .filter_map(|v| match v {
+                        CmpValues::Bytes((a, b)) => Some((*a, *b)),
+                        _ => None,
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
+        if cmp_pairs.is_empty() {
+            return Ok(libafl::mutators::MutationResult::Skipped);
+        }
+
+        // Prefer longer byte comparisons first (more likely to be magic strings / keywords).
+        cmp_pairs.sort_by_key(|(a, b)| {
+            let a_len = trim_cmplog_padded_bytes(a.as_slice()).len();
+            let b_len = trim_cmplog_padded_bytes(b.as_slice()).len();
+            std::cmp::max(a_len, b_len)
+        });
+        cmp_pairs.reverse();
+
+        let seed_bytes = input.target_bytes();
+        let seed_bytes = seed_bytes.as_ref();
+        if seed_bytes.is_empty() {
+            return Ok(libafl::mutators::MutationResult::Skipped);
+        }
+
+        let mut converter = libafl::inputs::NautilusBytesConverter::new(&self.ctx);
+        let mut nautilus_input = match converter.convert_from_target_bytes(state, seed_bytes) {
+            Ok(v) => v,
+            Err(_) => return Ok(libafl::mutators::MutationResult::Skipped),
+        };
+
+        let Some((spans, total_len)) = collect_leaf_spans(nautilus_input.tree(), &self.ctx.ctx)
+        else {
+            return Ok(libafl::mutators::MutationResult::Skipped);
+        };
+        if total_len != seed_bytes.len() {
+            return Ok(libafl::mutators::MutationResult::Skipped);
+        }
+
+        const MAX_CMP_TRIES: usize = 128;
+        for (a, b) in cmp_pairs.iter().take(MAX_CMP_TRIES) {
+            let a_bytes: &[u8] = trim_cmplog_padded_bytes(a.as_slice());
+            let b_bytes: &[u8] = trim_cmplog_padded_bytes(b.as_slice());
+            if a_bytes.is_empty() || b_bytes.is_empty() {
+                continue;
+            }
+
+            if try_apply_cmp_leaf_patch(
+                &mut nautilus_input,
+                &self.ctx.ctx,
+                &spans,
+                seed_bytes,
+                a_bytes,
+                b_bytes,
+            ) || try_apply_cmp_leaf_patch(
+                &mut nautilus_input,
+                &self.ctx.ctx,
+                &spans,
+                seed_bytes,
+                b_bytes,
+                a_bytes,
+            ) {
+                let mut out = Vec::new();
+                nautilus_input.unparse(&self.ctx, &mut out);
+                if out.is_empty() {
+                    return Ok(libafl::mutators::MutationResult::Skipped);
+                }
+                *input = BytesInput::new(out);
+                return Ok(libafl::mutators::MutationResult::Mutated);
+            }
+        }
+
+        Ok(libafl::mutators::MutationResult::Skipped)
+    }
+
+    fn post_exec(
+        &mut self,
+        _state: &mut S,
+        _new_corpus_id: Option<CorpusId>,
+    ) -> Result<(), Error> {
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone)]
 struct CrashAndHangObjective {
     crash: CrashFeedback,
@@ -2547,11 +2922,16 @@ fn fuzz(
 	                    }
 
                         if let Some(ctx) = nautilus_ctx.as_ref() {
+                            let cmplog_i2s_stage = StdMutationalStage::with_max_iterations(
+                                NautilusCmpLogI2SMutator::new(ctx.clone()),
+                                std::num::NonZeroUsize::new(1).unwrap(),
+                            );
                             let grammar_stage = StdMutationalStage::with_max_iterations(
                                 NautilusBytesMutator::new(ctx.clone()),
                                 std::num::NonZeroUsize::new(1).unwrap(),
                             );
-                            let mut stages = tuple_list!(calibration, tracing, grammar_stage);
+                            let mut stages =
+                                tuple_list!(calibration, tracing, cmplog_i2s_stage, grammar_stage);
 
                             loop {
                                 if let Err(err) =

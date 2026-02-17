@@ -445,7 +445,7 @@ Enable goroutine leak catching with `--catch-leaks=true` or race catching with `
 
 Byte-level fuzzing is great, but parsers and file formats often need structured inputs. With `--use-grammar`, gosentry uses LibAFL’s Nautilus grammar mutator to generate and mutate inputs that conform to a user-provided grammar (JSON format), and feeds them to your regular Go fuzz harness (`testing.F.Fuzz`).
 
-In grammar mode, LibAFL still runs the normal coverage-guided loop (pick a corpus seed → mutate → execute → keep inputs that increase coverage). The runner adds a Nautilus grammar mutator: it parses the selected corpus seed into a grammar tree, mutates that tree, and unparses it back to bytes. The usual byte-level mutation stages (CMPLOG/I2S + havoc/tokens) still run too, so the corpus may contain non-grammar bytes.
+In grammar mode, LibAFL still runs the normal coverage-guided loop (pick a corpus seed → mutate → execute → keep inputs that increase coverage). The runner adds Nautilus mutation (seed → grammar tree → mutate → unparse) plus a CMPLOG-guided, I2S-like stage that rewrites Nautilus **leaf terminals** based on runtime comparisons. This keeps inputs grammar-valid (it does not run the raw byte-level havoc/token stages in grammar mode).
 
 > [!NOTE]
 > Grammar mode is usually slower than byte-level fuzzing. It is a trade-off: more structure vs fewer executions per second.
