@@ -80,6 +80,10 @@ where
         // `go test -fuzz` semantics: stop the whole fuzz run once a crash is found.
         if self.enabled && matches!(event.event(), Event::Objective { .. }) {
             state.request_stop();
+            // `request_stop` is not always sufficient to make the broker/launcher exit promptly
+            // (especially in multi-client mode). Propagate an explicit shutdown signal so
+            // `Launcher::launch_with_hooks` returns and the fuzz run can terminate.
+            return Err(Error::shutting_down());
         }
         Ok(true)
     }
