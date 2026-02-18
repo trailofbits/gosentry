@@ -2621,6 +2621,18 @@ fn fuzz(
                     };
                     let grammar_mode = nautilus_ctx.is_some();
 
+                    // When running multiple clients, a crash may be discovered by only one client.
+                    // If that client is restarted (or fails to broadcast a stop event), other
+                    // clients can keep running indefinitely even though `crashes/` already
+                    // contains the failing input.
+                    //
+                    // Implement `go test -fuzz` semantics robustly by polling for new on-disk
+                    // crash/hang inputs and stopping all clients once they appear.
+                    let global_stop_poll_enabled =
+                        stop_all_fuzzers_on_panic && effective_cores.ids.len() > 1;
+                    let global_stop_poll_interval = Duration::from_millis(200);
+                    let mut last_global_stop_poll = Instant::now();
+
                     if focus_on_new_code {
                         let map_path = git_recency_map_path.as_ref().unwrap_or_else(|| {
                             panic!(
@@ -2943,6 +2955,19 @@ fn fuzz(
                                     tuple_list!(calibration, tracing, cmplog_i2s_stage, grammar_stage);
 
                                 loop {
+                                    if global_stop_poll_enabled
+                                        && last_global_stop_poll.elapsed() >= global_stop_poll_interval
+                                    {
+                                        last_global_stop_poll = Instant::now();
+                                        if count_crash_inputs(&crashes_dir) > initial_crash_inputs
+                                            || (catch_hangs
+                                                && count_hang_inputs(&hangs_dir) > initial_hang_inputs)
+                                        {
+                                            restarting_mgr.send_exiting()?;
+                                            return Err(Error::shutting_down());
+                                        }
+                                    }
+
                                     if let Err(err) =
                                         restarting_mgr.maybe_report_progress(&mut state, monitor_timeout)
                                     {
@@ -3026,6 +3051,19 @@ fn fuzz(
                                 let mut stages = tuple_list!(calibration, grammar_stage);
 
                                 loop {
+                                    if global_stop_poll_enabled
+                                        && last_global_stop_poll.elapsed() >= global_stop_poll_interval
+                                    {
+                                        last_global_stop_poll = Instant::now();
+                                        if count_crash_inputs(&crashes_dir) > initial_crash_inputs
+                                            || (catch_hangs
+                                                && count_hang_inputs(&hangs_dir) > initial_hang_inputs)
+                                        {
+                                            restarting_mgr.send_exiting()?;
+                                            return Err(Error::shutting_down());
+                                        }
+                                    }
+
                                     if let Err(err) =
                                         restarting_mgr.maybe_report_progress(&mut state, monitor_timeout)
                                     {
@@ -3125,6 +3163,19 @@ fn fuzz(
                             let mut stages = tuple_list!(calibration, tracing, i2s, power);
 
                             loop {
+                                if global_stop_poll_enabled
+                                    && last_global_stop_poll.elapsed() >= global_stop_poll_interval
+                                {
+                                    last_global_stop_poll = Instant::now();
+                                    if count_crash_inputs(&crashes_dir) > initial_crash_inputs
+                                        || (catch_hangs
+                                            && count_hang_inputs(&hangs_dir) > initial_hang_inputs)
+                                    {
+                                        restarting_mgr.send_exiting()?;
+                                        return Err(Error::shutting_down());
+                                    }
+                                }
+
                                 if let Err(err) =
                                     restarting_mgr.maybe_report_progress(&mut state, monitor_timeout)
                                 {

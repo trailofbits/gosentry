@@ -26,20 +26,27 @@ run_expect_crash() {
     exit 1
   fi
 
-  if ! grep -Eq "${GOSENTRY_LIBAFL_CRASH_RE}" "${output_file}"; then
-    # Some multi-client runs can get wedged after finding an objective, before
-    # printing the final crash summary. Accept the presence of on-disk crash
-    # inputs as success.
-    local in_dir out_dir crashes_dir
-    in_dir="$(libafl_input_dir "${fuzz_name}")"
-    out_dir="$(dirname "${in_dir}")"
-    crashes_dir="${out_dir}/crashes"
-    if [[ -d "${crashes_dir}" ]] && find "${crashes_dir}" -maxdepth 1 -type f ! -name '.*' -print -quit | grep -q .; then
-      return
-    fi
+  local in_dir out_dir crashes_dir
+  in_dir="$(libafl_input_dir "${fuzz_name}")"
+  out_dir="$(dirname "${in_dir}")"
+  crashes_dir="${out_dir}/crashes"
 
+  if [[ "${status}" -eq 124 || "${status}" -eq 137 || "${status}" -eq 143 ]]; then
+    echo "expected fuzz run to stop on crash, but it timed out (exit ${status})"
+    echo "output file: ${output_file}"
+    echo "crashes dir: ${crashes_dir}"
+    exit 1
+  fi
+
+  if ! grep -Eq "${GOSENTRY_LIBAFL_CRASH_RE}" "${output_file}"; then
     echo "expected output to contain: Found N crashing input(s)."
-    echo "and expected crashes dir to contain crash inputs: ${crashes_dir}"
+    echo "output file: ${output_file}"
+    echo "crashes dir: ${crashes_dir}"
+    exit 1
+  fi
+
+  if [[ ! -d "${crashes_dir}" ]] || ! find "${crashes_dir}" -maxdepth 1 -type f ! -name '.*' -print -quit | grep -q .; then
+    echo "expected crashes dir to contain at least one crash input: ${crashes_dir}"
     exit 1
   fi
 }

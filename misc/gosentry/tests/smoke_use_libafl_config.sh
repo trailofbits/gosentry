@@ -30,8 +30,18 @@ EOF
 
 cd "${ROOT_DIR}/test/gosentry/examples/reverse"
 in_dir="$(libafl_input_dir FuzzReverse)"
+out_dir="$(dirname "${in_dir}")"
 mkdir -p "${in_dir}"
-printf 'FUZZING!' > "${in_dir}/seed-crash"
+
+if [[ "${cores}" == *","* ]]; then
+  # Seed a crash into a single client's queue to ensure:
+  # - only one client finds the objective
+  # - the other client still stops (no silent wedged fuzzing after a crash)
+  mkdir -p "${out_dir}/queue/2"
+  printf 'FUZZING!' > "${out_dir}/queue/2/seed-crash"
+else
+  printf 'FUZZING!' > "${in_dir}/seed-crash"
+fi
 
 output_file="${tmp_dir}/output.txt"
 run_expect_crash reverse FuzzReverse 5m "${output_file}" --libafl-config="${cfg_path}"
