@@ -2517,7 +2517,7 @@ fn fuzz(
 
 	        // In-process crashes abort the fuzzing instance, and the restarting manager respawns it.
 	        // Implement `go test -fuzz` semantics: stop the whole run on the first crash.
-	        if stop_all_fuzzers_on_panic && count_crash_inputs(&crashes_dir) > initial_crash_inputs {
+	        if stop_all_fuzzers_on_panic && count_crash_inputs(&crashes_dir) > 0 {
 	            restarting_mgr.send_exiting()?;
 	            return Err(Error::shutting_down());
 	        }
@@ -2959,7 +2959,7 @@ fn fuzz(
                                         && last_global_stop_poll.elapsed() >= global_stop_poll_interval
                                     {
                                         last_global_stop_poll = Instant::now();
-                                        if count_crash_inputs(&crashes_dir) > initial_crash_inputs
+                                        if count_crash_inputs(&crashes_dir) > 0
                                             || (catch_hangs
                                                 && count_hang_inputs(&hangs_dir) > initial_hang_inputs)
                                         {
@@ -3055,7 +3055,7 @@ fn fuzz(
                                         && last_global_stop_poll.elapsed() >= global_stop_poll_interval
                                     {
                                         last_global_stop_poll = Instant::now();
-                                        if count_crash_inputs(&crashes_dir) > initial_crash_inputs
+                                        if count_crash_inputs(&crashes_dir) > 0
                                             || (catch_hangs
                                                 && count_hang_inputs(&hangs_dir) > initial_hang_inputs)
                                         {
@@ -3167,7 +3167,7 @@ fn fuzz(
                                     && last_global_stop_poll.elapsed() >= global_stop_poll_interval
                                 {
                                     last_global_stop_poll = Instant::now();
-                                    if count_crash_inputs(&crashes_dir) > initial_crash_inputs
+                                    if count_crash_inputs(&crashes_dir) > 0
                                         || (catch_hangs
                                             && count_hang_inputs(&hangs_dir) > initial_hang_inputs)
                                     {
@@ -3341,7 +3341,11 @@ fn fuzz(
     };
     let new_crashes = crash_inputs.len().saturating_sub(initial_crash_inputs);
 
-    if new_hangs > 0 || new_crashes > 0 {
+    let any_crashes = !crash_inputs.is_empty();
+    if new_hangs > 0
+        || new_crashes > 0
+        || (stop_all_fuzzers_on_panic && any_crashes)
+    {
         if !is_launcher_client {
             if new_hangs > 0 {
                 eprintln!("Found {new_hangs} hanging input(s).");
@@ -3373,8 +3377,13 @@ fn fuzz(
                 }
             }
 
-            if new_crashes > 0 {
-                eprintln!("Found {new_crashes} crashing input(s).");
+            if new_crashes > 0 || (stop_all_fuzzers_on_panic && any_crashes) {
+                let n = if new_crashes > 0 {
+                    new_crashes
+                } else {
+                    crash_inputs.len()
+                };
+                eprintln!("Found {n} crashing input(s).");
                 eprintln!("libafl output dir: {}", output.display());
                 eprintln!("crashes dir: {}", crashes_dir.display());
 
@@ -3384,7 +3393,7 @@ fn fuzz(
                         .and_then(|m| m.modified())
                         .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
                 });
-                for p in sorted.iter().rev().take(new_crashes) {
+                for p in sorted.iter().rev().take(n) {
                     eprintln!("crash input: {}", p.display());
                     if let Ok(exe) = env::current_exe() {
                         eprintln!("repro: {} run --input {}", exe.display(), p.display());
@@ -3398,7 +3407,7 @@ fn fuzz(
                 );
             }
 
-            if stop_all_fuzzers_on_panic {
+            if stop_all_fuzzers_on_panic && (new_hangs > 0 || any_crashes) {
                 notify_restarting_mgr_exit();
                 std::process::exit(1);
             }
