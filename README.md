@@ -462,24 +462,6 @@ Grammar mode works best with a single input argument (`[]byte` or `string`). Mul
 
 Grammar mode still generates **bytes/strings**. If you need structured inputs (or you’re doing differential fuzzing), your harness is where you convert `data` into domain values (parse/unmarshal) and compare behaviors. (Outside of grammar mode, gosentry can also fuzz some composite Go types by decoding them from bytes.)
 
-<details>
-<summary><strong>Differential fuzzing harness sketch</strong></summary>
-
-```go
-f.Fuzz(func(t *testing.T, data []byte) {
-	gotA, errA := ParseA(data)
-	gotB, errB := ParseB(data)
-	if (errA == nil) != (errB == nil) {
-		t.Fatalf("parser disagreement: A=%v B=%v", errA, errB)
-	}
-	_ = gotA
-	_ = gotB
-})
-```
-
-</details>
-
-#### How to use 
 Requirements: no extra dependencies beyond the Rust toolchain already needed for LibAFL mode.
 
 You can tune Nautilus via `--libafl-config` (only used with `--use-grammar`): `nautilus_max_len` and `nautilus_cmplog_i2s` (see `misc/gosentry/libafl.config.jsonc`).
@@ -487,13 +469,9 @@ You can tune Nautilus via `--libafl-config` (only used with `--use-grammar`): `n
 <details>
 <summary><strong>Benchmark: Nautilus grammar CMPLOG/I2S stage (on vs off)</strong></summary>
 
-Executed on Feb 17, 2026 using the repo’s JSON grammar example (`test/gosentry/examples/grammar_json`, `FuzzGrammarJSON`, grammar `testdata/JSON.json`) with:
-- single LibAFL client (`go test` semantics)
-- `LIBAFL_RAND_SEED=1`
-- `tui_monitor=false`
-- ~60s fuzzing per variant (then Ctrl+C)
+Executed on Feb 17, 2026 using the repo’s JSON grammar example (`test/gosentry/examples/grammar_json`, `FuzzGrammarJSON`, grammar `testdata/JSON.json`).
 
-Results (LibAFL `UserStats` line closest to 60s):
+Results (LibAFL `UserStats`):
 
 | mode | `nautilus_cmplog_i2s` | run time | executions | exec/sec | edges |
 |---|---:|---:|---:|---:|---:|
@@ -512,19 +490,6 @@ If you need to create a new Nautilus JSON grammar for your own target format/pro
 
 - An LLM-ready prompt: [misc/gosentry/nautilus/prompt.md](misc/gosentry/nautilus/prompt.md)
 - A small set of example grammars: [misc/gosentry/nautilus/examples/](misc/gosentry/nautilus/examples/)
-
-<details>
-<summary><strong>Command example</strong></summary>
-
-```bash
-# Example (from this repo): JSON grammar + JSON harness.
-cd test/gosentry/examples/grammar_json
-GOSENTRY_VERBOSE_AFL=1 CGO_ENABLED=1 ../../../../bin/go test -fuzz=FuzzGrammarJSON \
-  --use-grammar --grammar=testdata/JSON.json \
-  --focus-on-new-code=false --catch-races=false --catch-leaks=false .
-```
-
-</details>
 
 <details>
 <summary><strong>Go fuzz harness example (JSON)</strong></summary>
@@ -553,6 +518,20 @@ func FuzzGrammarJSON(f *testing.F) {
 		}
 	})
 }
+```
+
+Differential fuzzing harness sketch (two parsers):
+
+```go
+f.Fuzz(func(t *testing.T, data []byte) {
+	gotA, errA := ParseA(data)
+	gotB, errB := ParseB(data)
+	if (errA == nil) != (errB == nil) {
+		t.Fatalf("parser disagreement: A=%v B=%v", errA, errB)
+	}
+	_ = gotA
+	_ = gotB
+})
 ```
 
 </details>
