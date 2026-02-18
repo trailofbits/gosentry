@@ -2,17 +2,17 @@
 
 [![integration tests](https://github.com/kevin-valerio/gosentry/actions/workflows/go.yml/badge.svg?branch=master)](https://github.com/kevin-valerio/gosentry/actions/workflows/go.yml)
 
-gosentry is a security-focused fork of the Go toolchain. In a _very_ simple phrasing, it's copy of the Go compiler that finds bugs. If you are a security researcher auditing Go codebases, you should probably use this tool and consider it as a great swiss-knife.
+gosentry is a security-focused fork of the Go toolchain. In a _very_ simple phrasing, it's a copy of the Go compiler that finds bugs. If you are a security researcher auditing Go codebases, you should probably use this tool and consider it a great Swiss Army knife.
 
 For now, it focuses on the following features:
 
 - Integrating [go-panikint](https://github.com/trailofbits/go-panikint): instrumentation that panics on **integer overflow/underflow** (and **optionally on truncating integer conversions**).
 - Integrating [LibAFL](https://github.com/AFLplusplus/LibAFL) fuzzer: run Go fuzzing harnesses with **LibAFL** for better fuzzing performances.
 - Proposing **Grammar-based fuzzing** using [Nautilus](https://github.com/nautilus-fuzz/nautilus/): generate structured bytes/strings from a grammar.
-- Panicking on [user-provided function call](https://github.com/kevin-valerio/gosentry?tab=readme-ov-file#feature-2-panic-on-selected-functions): catching targeted bugs when certains functions are called (eg., `myapp.(*Logger).Error`).
-- Git-blame-oriented fuzzing (based on [this work](https://github.com/kevin-valerio/LibAFL-git-aware)): when fuzzing with LibAFL mode, you can orientate the fuzzer towards **recently added/edited lines**.
+- Panicking on [user-provided function call](https://github.com/kevin-valerio/gosentry?tab=readme-ov-file#feature-2-panic-on-selected-functions): catching targeted bugs when certain functions are called (e.g., `myapp.(*Logger).Error`).
+- Git-blame-oriented fuzzing (based on [this work](https://github.com/kevin-valerio/LibAFL-git-aware)): when fuzzing with LibAFL mode, you can orient the fuzzer toward **recently added/edited lines**.
 - Detect **race conditions**, [goroutine leaks](https://github.com/uber-go/goleak), and **timeout detection** at fuzz-time: gosentry can replay newly found seeds (or timed-out executions) and treat these findings like bugs.
-- Generate **coverage reports** from an fuzzing campaign.
+- Generate **coverage reports** from a fuzzing campaign.
 
 It especially has **two** objectives:
 - Being easy to use and UX-friendly (_we're tired of complex tools_),
@@ -49,7 +49,7 @@ Start at `docs/gosentry/index.md` for:
 
 #### Overview
 
-This work is inspired from the previously developed [go-panikint](https://github.com/trailofbits/go-panikint). It adds overflow/underflow detection for integer arithmetic operations and (optionnally) type truncation detection for integer conversions. When overflow or truncation is detected, a panic with a detailed error message is triggered, including the specific operation type and integer types involved.
+This work is inspired by the previously developed [go-panikint](https://github.com/trailofbits/go-panikint). It adds overflow/underflow detection for integer arithmetic operations and (optionally) type truncation detection for integer conversions. When overflow or truncation is detected, a panic with a detailed error message is triggered, including the specific operation type and integer types involved.
 
 _Arithmetic operations_: Handles addition `+`, subtraction `-`, multiplication `*`, and division `/` for both signed and unsigned integer types. For signed integers, covers `int8`, `int16`, `int32`. For unsigned integers, covers `uint8`, `uint16`, `uint32`, `uint64`. The division case specifically detects the `MIN_INT / -1` overflow condition for signed integers. `int64` and `uintptr` are not checked for arithmetic operations.
 
@@ -81,7 +81,7 @@ sum2 := a + b // overflow_false_positive
 x2 := uint8(big) // truncation_false_positive
 ```
 
-Sometimes this might not work, that's because Go is in-lining the function. If `// overflow_false_poistive` isn't enough, add `//go:noinline` before the signature of your function.
+Sometimes this might not work, that's because Go is inlining the function. If `// overflow_false_positive` isn't enough, add `//go:noinline` before the signature of your function.
 
 ## Feature 2: Panic on selected functions
 
@@ -198,9 +198,9 @@ if input == "IMARANDOMSTRINGJUSTCMPLOGMEMAN" {
 	panic("this string is illegal")
 }
 ```
-SOTA fuzzers like AFL++ or LibAFL would find the panic instantly in that case. However, Go native fuzzer wouldn't. That is a massive gap that restrains coverage exploration by a **lot**.
+State-of-the-art (SOTA) fuzzers like AFL++ or LibAFL would find the panic instantly in that case. However, Go's native fuzzer wouldn't. That is a massive gap that restrains coverage exploration by a **lot**.
 
-The benchmark below show those limits. Note that those benchmarks can be **reproduced** and improved via the [gosentry-bench-libafl repository](https://github.com/kevin-valerio/gosentry-bench-libafl/tree/main).
+The benchmarks below show those limits. Note that those benchmarks can be **reproduced** and improved via the [gosentry-bench-libafl repository](https://github.com/kevin-valerio/gosentry-bench-libafl/tree/main).
 
 ##### Benchmark 1:
 
