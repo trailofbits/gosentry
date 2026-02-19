@@ -295,6 +295,8 @@ go test -fuzz=FuzzXxx --focus-on-new-code=false --catch-races=false --catch-leak
 
 `golibafl` also needs a TCP broker port for LibAFL's internal event manager. By default, it picks a **random free port** (instead of always `1337`). If you need a fixed port, set `GOLIBAFL_BROKER_PORT=1337` (or pass `-p/--port 1337` when running `golibafl` directly).
 
+Implementation note: `golibafl` configures LibAFL's broker to exit cleanly after the **first** client has connected (instead of waiting for all configured cores to connect). This avoids hangs in multi-client runs if a client exits early (or never connects) during shutdown.
+
 Example `libafl.jsonc` (all fields optional; defaults shown in comments):
 
 ```jsonc

@@ -25,6 +25,7 @@ use libafl::{
     schedulers::Scheduler,
     Error, HasMetadata,
 };
+use libafl::events::llmp::{setup_restarting_mgr_llmp, ManagerKind};
 use libafl_bolts::{
     prelude::{Cores, StdShMemProvider},
     rands::StdRand,
@@ -3285,6 +3286,37 @@ fn fuzz(
 
     let launch_res = if tui_monitor {
         let monitor = TuiMonitor::builder().build();
+        let spawn_shmem_provider = shmem_provider.clone();
+        let hooks = tuple_list!(StopOnObjectiveHook {
+            enabled: stop_all_fuzzers_on_panic,
+        });
+        let spawn_mgr = move |_launcher: &Launcher<'_, _, _, _>,
+                               client_description: Option<ClientDescription>,
+                               broker_monitor: Option<_>| {
+            if let Some(client_description) = client_description {
+                setup_restarting_mgr_llmp(
+                    spawn_shmem_provider.clone(),
+                    EventConfig::from_name("default"),
+                    broker_monitor,
+                    broker_port,
+                    ManagerKind::Client { client_description },
+                    None,
+                    ShouldSaveState::OOMSafeOnRestart,
+                    hooks,
+                )
+            } else {
+                setup_restarting_mgr_llmp(
+                    spawn_shmem_provider.clone(),
+                    EventConfig::from_name("default"),
+                    broker_monitor,
+                    broker_port,
+                    ManagerKind::Broker,
+                    Some(std::num::NonZeroUsize::new(1).unwrap()),
+                    ShouldSaveState::OOMSafeOnRestart,
+                    hooks,
+                )
+            }
+        };
         Launcher::builder()
             .shmem_provider(shmem_provider)
             .configuration(EventConfig::from_name("default"))
@@ -3295,11 +3327,40 @@ fn fuzz(
             .serialize_state(ShouldSaveState::OOMSafeOnRestart)
             .fork(false)
             .build()
-            .launch_with_hooks::<_, BytesInput, _>(tuple_list!(StopOnObjectiveHook {
-                enabled: stop_all_fuzzers_on_panic,
-            }))
+            .launch_with_manager(spawn_mgr)
     } else {
         let monitor = SimpleMonitor::new(|s| println!("{s}"));
+        let spawn_shmem_provider = shmem_provider.clone();
+        let hooks = tuple_list!(StopOnObjectiveHook {
+            enabled: stop_all_fuzzers_on_panic,
+        });
+        let spawn_mgr = move |_launcher: &Launcher<'_, _, _, _>,
+                               client_description: Option<ClientDescription>,
+                               broker_monitor: Option<_>| {
+            if let Some(client_description) = client_description {
+                setup_restarting_mgr_llmp(
+                    spawn_shmem_provider.clone(),
+                    EventConfig::from_name("default"),
+                    broker_monitor,
+                    broker_port,
+                    ManagerKind::Client { client_description },
+                    None,
+                    ShouldSaveState::OOMSafeOnRestart,
+                    hooks,
+                )
+            } else {
+                setup_restarting_mgr_llmp(
+                    spawn_shmem_provider.clone(),
+                    EventConfig::from_name("default"),
+                    broker_monitor,
+                    broker_port,
+                    ManagerKind::Broker,
+                    Some(std::num::NonZeroUsize::new(1).unwrap()),
+                    ShouldSaveState::OOMSafeOnRestart,
+                    hooks,
+                )
+            }
+        };
         Launcher::builder()
             .shmem_provider(shmem_provider)
             .configuration(EventConfig::from_name("default"))
@@ -3310,9 +3371,7 @@ fn fuzz(
             .serialize_state(ShouldSaveState::OOMSafeOnRestart)
             .fork(false)
             .build()
-            .launch_with_hooks::<_, BytesInput, _>(tuple_list!(StopOnObjectiveHook {
-                enabled: stop_all_fuzzers_on_panic,
-            }))
+            .launch_with_manager(spawn_mgr)
     };
 
     match &launch_res {

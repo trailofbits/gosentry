@@ -137,6 +137,7 @@ You must also explicitly choose whether to enable data race catching: `--catch-r
 You must also explicitly choose whether to enable goroutine leak catching: `--catch-leaks=true|false` (see Feature 5).
 
 When a crash or failure is found, gosentry prints the Go backtrace above the LibAFL summary output (panic backtrace, and also stack traces for `t.Fatal`/`t.Fatalf`).
+In multi-client mode, it also ensures the LibAFL run terminates cleanly even if one of the configured clients never connects (avoids CI hangs).
 
 To opt out:
 - `--use-libafl=false`: use Go's native fuzzing engine instead of LibAFL.
