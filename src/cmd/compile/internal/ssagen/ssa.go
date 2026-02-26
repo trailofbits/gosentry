@@ -466,15 +466,6 @@ func buildssa(fn *ir.Func, worker int, isPgoHot bool) *ssa.Func {
 	var params *abi.ABIParamResultInfo
 	params = s.f.ABISelf.ABIAnalyze(fn.Type(), true)
 
-	abiRegIndexToRegister := func(reg abi.RegIndex) int8 {
-		i := s.f.ABISelf.FloatIndexFor(reg)
-		if i >= 0 { // float PR
-			return s.f.Config.FloatParamReg(abi.RegIndex(i))
-		} else {
-			return s.f.Config.IntParamReg(reg)
-		}
-	}
-
 	// The backend's stackframe pass prunes away entries from the fn's
 	// Dcl list, including PARAMOUT nodes that correspond to output
 	// params passed in registers. Walk the Dcl list and capture these
@@ -484,16 +475,6 @@ func buildssa(fn *ir.Func, worker int, isPgoHot bool) *ssa.Func {
 	for _, n := range fn.Dcl {
 		if n.Class == ir.PPARAMOUT && n.IsOutputParamInRegisters() {
 			debugInfo.RegOutputParams = append(debugInfo.RegOutputParams, n)
-			op := params.OutParam(len(debugInfo.RegOutputParamRegList))
-			debugInfo.RegOutputParamRegList = append(debugInfo.RegOutputParamRegList, make([]int8, len(op.Registers)))
-			for i, reg := range op.Registers {
-				idx := len(debugInfo.RegOutputParamRegList) - 1
-				// TODO(deparker) This is a rather large amount of conversions to get from
-				// an abi.RegIndex to a Dwarf register number. Can this be simplified?
-				abiReg := s.f.Config.Reg(abiRegIndexToRegister(reg))
-				dwarfReg := base.Ctxt.Arch.DWARFRegisters[abiReg]
-				debugInfo.RegOutputParamRegList[idx][i] = int8(dwarfReg)
-			}
 		}
 	}
 	fn.DebugInfo = &debugInfo
@@ -4527,6 +4508,11 @@ func (s *state) assignWhichMayOverlap(left ir.Node, right *ssa.Value, deref bool
 			// Grab old value of structure.
 			old := s.expr(left.X)
 
+			if left.Type().Size() == 0 {
+				// Nothing to do when assigning zero-sized things.
+				return
+			}
+
 			// Make new structure.
 			new := s.newValue0(ssa.OpStructMake, t)
 
@@ -4562,8 +4548,20 @@ func (s *state) assignWhichMayOverlap(left ir.Node, right *ssa.Value, deref bool
 				return
 			}
 			if n != 1 {
-				s.Fatalf("assigning to non-1-length array")
+				// This can happen in weird, always-panics cases, like:
+				//     var x [0][2]int
+				//     x[i][j] = 5
+				// We know it always panics because the LHS is ssa-able,
+				// and arrays of length > 1 can't be ssa-able unless
+				// they are somewhere inside an outer [0].
+				// We can ignore the actual assignment, it is dynamically
+				// unreachable. See issue 77635.
+				return
 			}
+			if t.Size() == 0 {
+				return
+			}
+
 			// Rewrite to a = [1]{v}
 			len := s.constInt(types.Types[types.TINT], 1)
 			s.boundsCheck(i, len, ssa.BoundsIndex, false) // checks i == 0
@@ -4609,6 +4607,9 @@ func (s *state) assignWhichMayOverlap(left ir.Node, right *ssa.Value, deref bool
 
 // zeroVal returns the zero value for type t.
 func (s *state) zeroVal(t *types.Type) *ssa.Value {
+	if t.Size() == 0 {
+		return s.entryNewValue0(ssa.OpEmpty, t)
+	}
 	switch {
 	case t.IsInteger():
 		switch t.Size() {
@@ -4661,13 +4662,8 @@ func (s *state) zeroVal(t *types.Type) *ssa.Value {
 			v.AddArg(s.zeroVal(t.FieldType(i)))
 		}
 		return v
-	case t.IsArray():
-		switch t.NumElem() {
-		case 0:
-			return s.entryNewValue0(ssa.OpArrayMake0, t)
-		case 1:
-			return s.entryNewValue1(ssa.OpArrayMake1, t, s.zeroVal(t.Elem()))
-		}
+	case t.IsArray() && t.NumElem() == 1:
+		return s.entryNewValue1(ssa.OpArrayMake1, t, s.zeroVal(t.Elem()))
 	case t.IsSIMD():
 		return s.newValue0(ssa.OpZeroSIMD, t)
 	}
@@ -5254,7 +5250,15 @@ func (s *state) addr(n ir.Node) *ssa.Value {
 	}
 
 	if s.canSSA(n) {
-		s.Fatalf("addr of canSSA expression: %+v", n)
+		// This happens in weird, always-panics cases, like:
+		//     var x [0][2]int
+		//     x[i][j] = 5
+		// The outer assignment, ...[j] = 5, is a fine
+		// assignment to do, but requires computing the address
+		// &x[i], which will always panic when evaluated.
+		// We just return something reasonable in this case.
+		// It will be dynamically unreachable. See issue 77635.
+		return s.newValue1A(ssa.OpAddr, n.Type().PtrTo(), ir.Syms.Zerobase, s.sb)
 	}
 
 	t := types.NewPtr(n.Type())
@@ -8113,7 +8117,6 @@ func genssa(f *ssa.Func, pp *objw.Progs) {
 			ssa.BuildFuncDebugNoOptimized(base.Ctxt, f, base.Debug.LocationLists > 1, StackOffset, debugInfo)
 		} else {
 			ssa.BuildFuncDebug(base.Ctxt, f, base.Debug.LocationLists, StackOffset, debugInfo)
-			populateReturnValueBlockRanges(f, debugInfo)
 		}
 		bstart := s.bstart
 		idToIdx := make([]int, f.NumBlocks())
@@ -8137,20 +8140,6 @@ func genssa(f *ssa.Func, pp *objw.Progs) {
 				return valueToProgAfter[blk.Values[nv-1].ID].Pc
 			case ssa.FuncEnd.ID:
 				return e.curfn.LSym.Size
-			case ssa.FuncLocalEnd.ID:
-				// Find the closest RET instruction to this block.
-				// This ensures that location lists are correct for functions
-				// with multiple returns.
-				blk := f.Blocks[idToIdx[b]]
-				nv := len(blk.Values)
-				pa := valueToProgAfter[blk.Values[nv-1].ID]
-				for {
-					if pa.Link == nil || pa.As == obj.ARET {
-						break
-					}
-					pa = pa.Link
-				}
-				return pa.Pc + 1
 			default:
 				return valueToProgAfter[v].Pc
 			}
@@ -8928,33 +8917,6 @@ func SpillSlotAddr(spill ssa.Spill, baseReg int16, extraOffset int64) obj.Addr {
 
 func isStructNotSIMD(t *types.Type) bool {
 	return t.IsStruct() && !t.IsSIMD()
-}
-
-// populateReturnValueBlockRanges analyzes the SSA to find when return values
-// are assigned and creates precise block ranges for their liveness.
-func populateReturnValueBlockRanges(f *ssa.Func, debugInfo *ssa.FuncDebug) {
-	if debugInfo == nil || len(debugInfo.RegOutputParams) == 0 {
-		return
-	}
-
-	// Find assignment points for each return parameter.
-	for _, b := range f.Blocks {
-		// Check if this is a return block
-		if b.Kind != ssa.BlockRet && b.Kind != ssa.BlockRetJmp {
-			continue
-		}
-		val := b.Values[0]
-		for i := range b.Values {
-			// Not skipping these causes a panic when using the value to lookup within `valueToProgAfter`.
-			op := b.Values[i].Op
-			if op == ssa.OpArgIntReg || op == ssa.OpArgFloatReg {
-				continue
-			}
-			val = b.Values[i]
-			break
-		}
-		debugInfo.RegOutputParamStartIDs = append(debugInfo.RegOutputParamStartIDs, val.ID)
-	}
 }
 
 var BoundsCheckFunc [ssa.BoundsKindCount]*obj.LSym
