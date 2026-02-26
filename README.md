@@ -36,7 +36,10 @@ cd src && ./make.bash # Produces `../bin/go` (or `./bin/go` from repo root). See
 > [!TIP]
 > If you’re in `src/`, run the toolchain as `../bin/go ...` (the binaries are in `bin/` at repo root).
 
-## Developer docs (repo map)
+
+> [!TIP]
+> Developer & contributor docs:  reda `docs/gosentry/index.md` for a code/architecture map, the recommended dev loop, CI entrypoints and benchmark scripts.
+
 
 Start at `docs/gosentry/index.md` for:
 - a code/architecture map (features ↔ files),
