@@ -4,16 +4,16 @@
 
 gosentry is a security-focused fork of the Go toolchain. In a _very_ simple phrasing, it's copy of the Go compiler that finds bugs. If you are a security researcher auditing Go codebases, you should probably use this tool and consider it as a great swiss-knife.
 
-For now, it focuses on the following features:
+**TLDR**:
 
-- Native **struct-aware** fuzzing: fuzz structs directly without having to manually parse your input, and add struct values as initial corpus seeds via `f.Add(MyStruct{...})`.
-- Integrating [go-panikint](https://github.com/trailofbits/go-panikint): instrumentation that panics on **integer overflow/underflow** (and **optionally on truncating integer conversions**).
-- Integrating [LibAFL](https://github.com/AFLplusplus/LibAFL) fuzzer: run Go fuzzing harnesses with **LibAFL** for better fuzzing performances.
-- Proposing **Grammar-based fuzzing** using [Nautilus](https://github.com/nautilus-fuzz/nautilus/): generate structured bytes/strings from a grammar.
-- Panicking on [user-provided function call](https://github.com/kevin-valerio/gosentry?tab=readme-ov-file#feature-3-panic-on-selected-functions): catching targeted bugs when certains functions are called (eg., `myapp.(*Logger).Error`).
-- Git-blame-oriented fuzzing (based on [this work](https://github.com/kevin-valerio/LibAFL-git-aware)): when fuzzing with LibAFL mode, you can orientate the fuzzer towards **recently added/edited lines**.
-- Detect **race conditions**, [goroutine leaks](https://github.com/uber-go/goleak), and **timeout detection** at fuzz-time: gosentry can replay newly found seeds (or timed-out executions) and treat these findings like bugs.
-- Generate **coverage reports** from an fuzzing campaign.
+- **Struct-aware fuzzing**: fuzz `struct` inputs directly (no custom parser needed). Example: `f.Add(Input{N: 7, S: "hi"})` then `f.Fuzz(func(t *testing.T, in Input) { ... })`.
+- **Overflow/truncation bugs**  panic on integer overflow. Example: `var x uint8 = 255; _ = x + 1` -> now detectable.
+- **LibAFL fuzzing**: fuzz `go test -fuzz=...` with LibAFL for state-of-the-art fuzzing techniques.
+- **Grammar fuzzing**: generate/mutate inputs from a grammar to avoid useless mutations. Example: mutation generates valid maths operation like `X + Y - Z * 3` can become `X / U + Z - 14` .
+- **Panic on selected functions**: crash when a function you pick is called (so fuzzers see it). Example: `--panic-on="mypkg.(*Logger).Error"`.
+- **Git-aware scheduling**: focus the fuzzer on recently changed lines AND on new coverage
+- **Catch races/leaks/hangs**: detect data races, goroutine leaks and timeouts while fuzzing.
+- **Coverage reports**: generate an HTML coverage report from a fuzz campaign corpus with one CLI.
 
 ## Table of Contents
 
