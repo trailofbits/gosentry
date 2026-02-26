@@ -4,16 +4,16 @@
 
 gosentry is a security-focused fork of the Go toolchain. In a _very_ simple phrasing, it's copy of the Go compiler that finds bugs. If you are a security researcher auditing Go codebases, you should probably use this tool and consider it as a great swiss-knife.
 
-**TLDR**:
+**TLDR (features and options)**:
 
-- **Struct-aware fuzzing**: fuzz `struct` inputs directly (no custom parser needed). Example: `f.Add(Input{N: 7, S: "hi"})` then `f.Fuzz(func(t *testing.T, in Input) { ... })`.
-- **Overflow/truncation bugs**  panic on integer overflow. Example: `var x uint8 = 255; _ = x + 1` -> now detectable.
-- **LibAFL fuzzing**: fuzz `go test -fuzz=...` with LibAFL for state-of-the-art fuzzing techniques.
-- **Grammar fuzzing**: generate/mutate inputs from a grammar to avoid useless mutations. Example: mutation generates valid maths operation like `X + Y - Z * 3` can become `X / U + Z - 14` .
-- **Panic on selected functions**: crash when a function you pick is called (so fuzzers see it). Example: `--panic-on="mypkg.(*Logger).Error"`.
-- **Git-aware scheduling**: focus the fuzzer on recently changed lines AND on new coverage
-- **Catch races/leaks/hangs**: detect data races, goroutine leaks and timeouts while fuzzing.
-- **Coverage reports**: generate an HTML coverage report from a fuzz campaign corpus with one CLI.
+- Fuzz `struct` inputs directly (no custom parser needed). Add seeds with `f.Add(Input{N: 7, S: "hi"})` then `f.Fuzz(func(t *testing.T, in Input) { ... })`.
+- Panic on integer overflow and detect arithmetic issues
+- Fuzz with LibAFL for state-of-the-art fuzzing techniques like path constraints solving
+- Generate/mutate inputs from a grammar to avoid useless mutations. Mutation generates valid maths operation like `X + Y - Z` can become `X / U + Z - 14` instead of `X + Yè - Z`
+- Panic on selected functions (like critcal errors loggers) and crash when it's called 
+- Focus the fuzzer on recently changed lines AND on new coverage to target new commits mainly
+- Catch races/leaks/timeouts while fuzzing
+- Generate an HTML coverage report from a fuzz campaign corpus with one CLI
 
 ## Table of Contents
 
