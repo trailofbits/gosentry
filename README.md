@@ -2,32 +2,30 @@
 
 [![integration tests](https://github.com/kevin-valerio/gosentry/actions/workflows/go.yml/badge.svg?branch=master)](https://github.com/kevin-valerio/gosentry/actions/workflows/go.yml)
 
-gosentry is a security-focused fork of the Go toolchain. In a _very_ simple phrasing, it's a copy of the Go compiler that finds bugs. If you are a security researcher auditing Go codebases, you should probably use this tool and consider it a great Swiss Army knife.
+gosentry is a security-focused fork of the Go toolchain. In a _very_ simple phrasing, it's copy of the Go compiler that finds bugs. If you are a security researcher auditing Go codebases, you should probably use this tool and consider it as a great swiss-knife.
 
 For now, it focuses on the following features:
 
+- Native **struct-aware** fuzzing: fuzz structs directly without having to manually parse your input, and add struct values as initial corpus seeds via `f.Add(MyStruct{...})`.
 - Integrating [go-panikint](https://github.com/trailofbits/go-panikint): instrumentation that panics on **integer overflow/underflow** (and **optionally on truncating integer conversions**).
 - Integrating [LibAFL](https://github.com/AFLplusplus/LibAFL) fuzzer: run Go fuzzing harnesses with **LibAFL** for better fuzzing performances.
 - Proposing **Grammar-based fuzzing** using [Nautilus](https://github.com/nautilus-fuzz/nautilus/): generate structured bytes/strings from a grammar.
-- Panicking on [user-provided function call](https://github.com/kevin-valerio/gosentry?tab=readme-ov-file#feature-2-panic-on-selected-functions): catching targeted bugs when certain functions are called (e.g., `myapp.(*Logger).Error`).
-- Git-blame-oriented fuzzing (based on [this work](https://github.com/kevin-valerio/LibAFL-git-aware)): when fuzzing with LibAFL mode, you can orient the fuzzer toward **recently added/edited lines**.
+- Panicking on [user-provided function call](https://github.com/kevin-valerio/gosentry?tab=readme-ov-file#feature-3-panic-on-selected-functions): catching targeted bugs when certains functions are called (eg., `myapp.(*Logger).Error`).
+- Git-blame-oriented fuzzing (based on [this work](https://github.com/kevin-valerio/LibAFL-git-aware)): when fuzzing with LibAFL mode, you can orientate the fuzzer towards **recently added/edited lines**.
 - Detect **race conditions**, [goroutine leaks](https://github.com/uber-go/goleak), and **timeout detection** at fuzz-time: gosentry can replay newly found seeds (or timed-out executions) and treat these findings like bugs.
-- Generate **coverage reports** from a fuzzing campaign.
-
-It especially has **two** objectives:
-- Being easy to use and UX-friendly (_we're tired of complex tools_),
-- Helping to find bugs in Go codebases via built-in security implementations.
+- Generate **coverage reports** from an fuzzing campaign.
 
 ## Table of Contents
 
 - [Build](#build)
-  - [Feature 1: Integer overflow and truncation issues detection](#feature-1-integer-overflow-and-truncation-issues-detection)
-  - [Feature 2: Panic on selected functions](#feature-2-panic-on-selected-functions)
-  - [Feature 3: LibAFL state-of-the-art fuzzing](#feature-3-libafl-state-of-the-art-fuzzing)
-  - [Feature 4: Git-blame-oriented fuzzing (experimental)](#feature-4-git-blame-oriented-fuzzing-experimental)
-  - [Feature 5: Detect race conditions, goroutine leaks, and hangs at fuzz-time](#feature-5-detect-race-conditions-goroutine-leaks-and-hangs-at-fuzz-time)
-  - [Feature 6: Grammar-based fuzzing (Nautilus)](#feature-6-grammar-based-fuzzing-nautilus)
-  - [Feature 7: Generate fuzzing coverage reports from campaign](#feature-7-generate-go-coverage-reports-from-fuzzing-campaign)
+  - [Feature 1: Struct-aware fuzzing (fuzz structs as inputs)](#feature-1-struct-aware-fuzzing-fuzz-structs-as-inputs)
+  - [Feature 2: Integer overflow and truncation issues detection](#feature-2-integer-overflow-and-truncation-issues-detection)
+  - [Feature 3: Panic on selected functions](#feature-3-panic-on-selected-functions)
+  - [Feature 4: LibAFL state-of-the-art fuzzing](#feature-4-libafl-state-of-the-art-fuzzing)
+  - [Feature 5: Git-blame-oriented fuzzing (experimental)](#feature-5-git-blame-oriented-fuzzing-experimental)
+  - [Feature 6: Detect race conditions, goroutine leaks, and hangs at fuzz-time](#feature-6-detect-race-conditions-goroutine-leaks-and-hangs-at-fuzz-time)
+  - [Feature 7: Grammar-based fuzzing (Nautilus)](#feature-7-grammar-based-fuzzing-nautilus)
+  - [Feature 8: Generate fuzzing coverage reports from campaign](#feature-8-generate-go-coverage-reports-from-fuzzing-campaign)
 - [Credits](#credits)
 
 ## Build
@@ -45,11 +43,45 @@ Start at `docs/gosentry/index.md` for:
 - the recommended dev loop (fast feedback),
 - CI entrypoints and benchmark scripts.
 
-## Feature 1: Integer overflow and truncation issues detection
+## Feature 1: Struct-aware fuzzing (fuzz structs as inputs)
 
 #### Overview
 
-This work is inspired by the previously developed [go-panikint](https://github.com/trailofbits/go-panikint). It adds overflow/underflow detection for integer arithmetic operations and (optionally) type truncation detection for integer conversions. When overflow or truncation is detected, a panic with a detailed error message is triggered, including the specific operation type and integer types involved.
+Go’s native fuzzing (`go test -fuzz=...`) only supports a small set of scalar types as fuzz parameters (`[]byte`, `string`, numbers, ...). In gosentry, you can also fuzz **composite types** built from those scalars: structs, arrays, slices, and pointers.
+
+This is useful when your code naturally takes structured inputs and you don’t want to build a custom encoder/decoder just to seed and mutate the corpus.
+
+#### Simple example
+
+```go
+type Input struct {
+	Data []byte
+	S    string
+	N    int
+	OK   bool
+}
+
+func FuzzStructInput(f *testing.F) {
+	// Seed the initial corpus with a Go struct (gosentry feature).
+	f.Add(Input{Data: []byte("A"), S: "B", N: 7, OK: true})
+
+	f.Fuzz(func(t *testing.T, in Input) {
+		if in.OK && in.N == 7 && in.S == "B" && bytes.Equal(in.Data, []byte("A")) {
+			t.Fatalf("boom")
+		}
+	})
+}
+```
+
+See also:
+- `test/gosentry/examples/multiargs` (struct input, used in CI smoke tests)
+- `test/gosentry/examples/composite` (pointers + slices + unexported fields)
+
+## Feature 2: Integer overflow and truncation issues detection
+
+#### Overview
+
+This work is inspired from the previously developed [go-panikint](https://github.com/trailofbits/go-panikint). It adds overflow/underflow detection for integer arithmetic operations and (optionnally) type truncation detection for integer conversions. When overflow or truncation is detected, a panic with a detailed error message is triggered, including the specific operation type and integer types involved.
 
 _Arithmetic operations_: Handles addition `+`, subtraction `-`, multiplication `*`, and division `/` for both signed and unsigned integer types. For signed integers, covers `int8`, `int16`, `int32`. For unsigned integers, covers `uint8`, `uint16`, `uint32`, `uint64`. The division case specifically detects the `MIN_INT / -1` overflow condition for signed integers. `int64` and `uintptr` are not checked for arithmetic operations.
 
@@ -81,9 +113,9 @@ sum2 := a + b // overflow_false_positive
 x2 := uint8(big) // truncation_false_positive
 ```
 
-Sometimes this might not work, that's because Go is inlining the function. If `// overflow_false_positive` isn't enough, add `//go:noinline` before the signature of your function.
+Sometimes this might not work, that's because Go is in-lining the function. If `// overflow_false_poistive` isn't enough, add `//go:noinline` before the signature of your function.
 
-## Feature 2: Panic on selected functions
+## Feature 3: Panic on selected functions
 
 When fuzzing targets, we may be interested in triggering a panic when certain functions are called. For example, some software may emit `log.error` messages instead of panicking, even though such conditions often indicate states that security researchers would want to detect during fuzzing.
 However, these errors are usually handled internally (e.g., through retry or pause mechanisms, or by printing messages to logs), which makes them largely invisible to fuzzers. The objective of this feature is to address this issue.
@@ -123,36 +155,20 @@ The example above would panic when either `(*Logger).Warning` or `(*Logger).Erro
 In practice, this makes any matched call site behave like a crash/panic for fuzzers (note: only static call sites can be trapped).
 </details>
 
-## Feature 3: LibAFL state-of-the-art fuzzing
+## Feature 4: LibAFL state-of-the-art fuzzing
 
 LibAFL performs *way* better than the traditional Go fuzzer. When fuzzing (`go test -fuzz=...`), gosentry uses [LibAFL](https://github.com/AFLplusplus/LibAFL) **by default** (runner in `golibafl/`).
-
-> [!IMPORTANT]
-> `go test -fuzz=...` uses LibAFL by default, and you must explicitly pass `--focus-on-new-code=...`, `--catch-races=...`, and `--catch-leaks=...` (no implicit defaults). Use `--use-libafl=false` to switch back to Go’s native fuzzer.
-
-When using LibAFL (default), you must explicitly choose whether to enable git-aware scheduling: `--focus-on-new-code=true|false`.
-
-You must also explicitly choose whether to enable data race catching: `--catch-races=true|false` (see Feature 5).
-
-You must also explicitly choose whether to enable goroutine leak catching: `--catch-leaks=true|false` (see Feature 5).
-
-When a crash or failure is found, gosentry prints the Go backtrace above the LibAFL summary output (panic backtrace, and also stack traces for `t.Fatal`/`t.Fatalf`).
-In multi-client mode, it also ensures the LibAFL run terminates cleanly even if one of the configured clients never connects (avoids CI hangs).
-
-To opt out:
-- `--use-libafl=false`: use Go's native fuzzing engine instead of LibAFL.
-
-More documentation in [this Markdown file.](misc/gosentry/USE_LIBAFL.md)
-
+ 
+When using LibAFL (default), you must explicitly choose whether to enable git-aware scheduling: `--focus-on-new-code=true|false`. More documentation in [this Markdown file.](misc/gosentry/USE_LIBAFL.md)
 You can also pass an optional JSONC config file for LibAFL (including grammar fuzzing options), see [here.](misc/gosentry/libafl.config.jsonc)
 
 ```bash
 ./bin/go test -fuzz=FuzzHarness --focus-on-new-code=false --catch-races=false --catch-leaks=false --libafl-config=path/to/libafl.jsonc # optional --libafl-config
 ```
 
-Coverage report generation from a LibAFL campaign corpus is documented in [Feature 7](#feature-7-generate-go-coverage-reports-from-fuzzing-campaign).
+Coverage report generation from a LibAFL campaign corpus is documented in [Feature 8](#feature-8-generate-go-coverage-reports-from-fuzzing-campaign).
 
-Grammar-based fuzzing (Nautilus) is documented in [Feature 6](#feature-6-grammar-based-fuzzing-nautilus).
+Grammar-based fuzzing (Nautilus) is documented in [Feature 7](#feature-7-grammar-based-fuzzing-nautilus).
 
 <details>
 <summary><strong>How Go + LibAFL are wired together</strong></summary>
@@ -199,9 +215,9 @@ if input == "IMARANDOMSTRINGJUSTCMPLOGMEMAN" {
 	panic("this string is illegal")
 }
 ```
-State-of-the-art (SOTA) fuzzers like AFL++ or LibAFL would find the panic instantly in that case. However, Go's native fuzzer wouldn't. That is a massive gap that restrains coverage exploration by a **lot**.
+SOTA fuzzers like AFL++ or LibAFL would find the panic instantly in that case. However, Go native fuzzer wouldn't. That is a massive gap that restrains coverage exploration by a **lot**.
 
-The benchmarks below show those limits. Note that those benchmarks can be **reproduced** and improved via the [gosentry-bench-libafl repository](https://github.com/kevin-valerio/gosentry-bench-libafl/tree/main).
+The benchmark below show those limits. Note that those benchmarks can be **reproduced** and improved via the [gosentry-bench-libafl repository](https://github.com/kevin-valerio/gosentry-bench-libafl/tree/main).
 
 ##### Benchmark 1:
 
@@ -241,7 +257,7 @@ Notes:
 - `<harness>` is the fuzz target name when `-fuzz` is a simple identifier like `FuzzXxx` (or `^FuzzXxx$`), otherwise it’s `pattern-<hash>`.
 - Coverage generation (`--generate-coverage`) uses the same rule to find the right `queue/` corpus, so it must be run from the same package with the same `-fuzz=...`.
 
-## Feature 4: Git-blame-oriented fuzzing (experimental)
+## Feature 5: Git-blame-oriented fuzzing (experimental)
 
 #### Overview
 
@@ -324,7 +340,7 @@ git-aware median (capped to timeout): 87.432s
 ```
 </details>
 
-## Feature 5: Detect race conditions, goroutine leaks, and hangs (timeouts) at fuzz-time
+## Feature 6: Detect race conditions, goroutine leaks, and hangs (timeouts) at fuzz-time
 
 ##### Catching confirmed hangs (LibAFL timeouts)
 
@@ -440,7 +456,7 @@ Enable goroutine leak catching with `--catch-leaks=true` or race catching with `
 ./bin/go test -fuzz=FuzzHarness --use-libafl --focus-on-new-code=false --catch-races=true --catch-leaks=true
 ```
 
-## Feature 6: Grammar-based fuzzing (Nautilus)
+## Feature 7: Grammar-based fuzzing (Nautilus)
 
 #### Overview
 
@@ -461,9 +477,8 @@ f.Fuzz(func(t *testing.T, s string) { /* parse s */ })
 
 Grammar mode works best with a single input argument (`[]byte` or `string`). Multi-arg fuzz callbacks cause gosentry to decode the underlying byte buffer into separate values, so the original grammar-generated text won’t stay intact.
 
-Grammar mode still generates **bytes/strings**. If you need structured inputs (or you’re doing differential fuzzing), your harness is where you convert `data` into domain values (parse/unmarshal) and compare behaviors. (Outside of grammar mode, gosentry can also fuzz some composite Go types by decoding them from bytes.)
-
-Requirements: no extra dependencies beyond the Rust toolchain already needed for LibAFL mode.
+> [!NOTE]
+> Grammar mode still generates **bytes/strings**. If you need structured inputs (or you’re doing differential fuzzing), your harness is where you convert `data` into domain values (parse/unmarshal). (Outside of grammar mode, gosentry can also fuzz composite Go > types by decoding them from bytes; see [Feature 1](#feature-1-struct-aware-fuzzing-fuzz-structs-as-inputs).)
 
 You can tune Nautilus via `--libafl-config` (only used with `--use-grammar`): `nautilus_max_len` and `nautilus_cmplog_i2s` (see `misc/gosentry/libafl.config.jsonc`).
 
@@ -496,15 +511,6 @@ If you need to create a new Nautilus JSON grammar for your own target format/pro
 <summary><strong>Go fuzz harness example (JSON)</strong></summary>
 
 ```go
-package mypkg
-
-import (
-	"bytes"
-	"encoding/json"
-	"io"
-	"testing"
-)
-
 func FuzzGrammarJSON(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
 		dec := json.NewDecoder(bytes.NewReader(data))
@@ -533,6 +539,46 @@ f.Fuzz(func(t *testing.T, data []byte) {
 	_ = gotA
 	_ = gotB
 })
+```
+
+</details>
+
+<details>
+<summary><strong>Example: grammar fuzzing a "real input language" (no custom encoder)</strong></summary>
+
+This example fuzzes a tiny arithmetic expression evaluator by generating **valid expressions** from a grammar. There’s no ad-hoc “struct to bytes” encoding: the fuzzer produces the same kind of input your code would normally parse.
+
+Harness (1-arg `string` input works best in grammar mode):
+
+```go
+func FuzzExprEval(f *testing.F) {
+	f.Add("1+2")
+	f.Add("(3*4)-5")
+
+	f.Fuzz(func(t *testing.T, expr string) {
+		// Parse+eval your language/protocol.
+    // You can be **sure** that `expr` will always be a valid math operation. Just decode/parse/unmarshall it afterwards. 
+		_, _ = Eval(expr)
+	})
+}
+```
+
+Grammar sketch (Nautilus JSON format):
+
+```json
+[
+  ["Expr", "{Term}"],
+  ["Expr", "{Term}+{Expr}"],
+  ["Expr", "{Term}-{Expr}"],
+  ["Term", "{Factor}"],
+  ["Term", "{Factor}*{Term}"],
+  ["Factor", "{Num}"],
+  ["Factor", "({Expr})"],
+  ["Num", "0"],
+  ["Num", "1"],
+  ["Num", "2"],
+  ["Num", "3"]
+]
 ```
 
 </details>
@@ -603,7 +649,7 @@ Limitations (current glue):
 - Grammar mode works best with a single input argument; multi-arg fuzz targets will decode the underlying byte buffer into separate values.
 - No grammar recombination/crossover between two corpus seeds yet (mutation is single-seed).
 
-## Feature 7: Generate Go coverage reports from fuzzing campaign
+## Feature 8: Generate Go coverage reports from fuzzing campaign
 
 After (or while) running a LibAFL fuzz campaign, gosentry can generate a Go coverage report by replaying the current LibAFL **queue corpus** (no fuzzing).
 
@@ -621,11 +667,7 @@ Notes:
 This replays inputs from `<libafl output dir>/queue/` and writes:
 - `<libafl output dir>/coverage/cover.out` (Go coverprofile format)
 - `<libafl output dir>/coverage/cover.html` (HTML report)
-
-At the end, gosentry prints the full paths to both files.
-
-> [!NOTE]
-> For large corpora, consider `-timeout=0`.
+ 
 
 ## Credits
 - [golibafl](https://github.com/srlabs/golibafl/)

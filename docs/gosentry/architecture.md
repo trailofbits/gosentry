@@ -2,14 +2,20 @@
 
 This is a pointer document. For user-facing usage, see `README.md`.
 
-## Feature 1: integer overflow/truncation detection (go-panikint-style)
+## Feature 1: struct-aware fuzzing (composite inputs)
+
+- `testing` type support + bytes-backed fuzzing glue: `src/testing/fuzz.go`
+- Composite marshal/unmarshal for both native fuzzing and LibAFL mode: `src/testing/libafl.go`
+- Examples: `test/gosentry/examples/multiargs`, `test/gosentry/examples/composite`
+
+## Feature 2: integer overflow/truncation detection (go-panikint-style)
 
 - Compiler flags: `-overflowdetect`, `-truncationdetect` (`src/cmd/compile/internal/base/flag.go`)
 - SSA instrumentation: `src/cmd/compile/internal/ssagen/ssa.go`
 - Runtime panics: `panicoverflow{,detailed}`, `panictruncate{,detailed}` (`src/runtime/panic.go`)
 - Tests: `tests/arithmetic_test.go`, `tests/truncation_test.go`
 
-## Feature 2: panic on selected functions (“panic-on-call”)
+## Feature 3: panic on selected functions (“panic-on-call”)
 
 - `go test` flag: `-panic-on` (`src/cmd/go/internal/test/testflag.go`)
 - Pattern validation (AST scan): `src/cmd/go/internal/test/panic_on.go`
@@ -18,7 +24,7 @@ This is a pointer document. For user-facing usage, see `README.md`.
 - Runtime helper: `runtime.panicOnCall` (`src/runtime/panic_on_call.go`)
 - Examples: `test/gosentry/examples/panic_on`, `test/gosentry/examples/panic_on_nodot`
 
-## Feature 3: LibAFL fuzzing via `go test -fuzz` (default)
+## Feature 4: LibAFL fuzzing via `go test -fuzz` (default)
 
 - `go test` flags and defaulting behavior: `src/cmd/go/internal/test/testflag.go`, `src/cmd/go/internal/test/test.go`
 - Generated bridge (`_libaflmain.go`) exports:
@@ -32,13 +38,13 @@ This is a pointer document. For user-facing usage, see `README.md`.
   - CLI + fuzz loop: `golibafl/src/main.rs`
   - Go wrappers: `golibafl/harness_wrappers/*`
 
-## Feature 4: git-aware scheduling (`-focus-on-new-code`)
+## Feature 5: git-aware scheduling (`-focus-on-new-code`)
 
 - `go test` flag: `-focus-on-new-code={true|false}` (required in LibAFL mode)
 - Env wiring to runner: `src/cmd/go/internal/test/test.go`
 - Runner implementation: `GitAwareStdWeightedScheduler` usage in `golibafl/src/main.rs`
 
-## Feature 5: catch-races / catch-leaks / catch-hangs
+## Feature 6: catch-races / catch-leaks / catch-hangs
 
 - `go test` flags: `-catch-races`, `-catch-leaks` (required in LibAFL mode)
 - Sidecar replays (watch `queue/`): `src/cmd/go/internal/test/test.go`
@@ -46,7 +52,7 @@ This is a pointer document. For user-facing usage, see `README.md`.
   - vendor: `src/vendor/go.uber.org/goleak/*`
   - in-process check: `src/testing/libafl.go`
 
-## Feature 6: grammar-based fuzzing (Nautilus)
+## Feature 7: grammar-based fuzzing (Nautilus)
 
 - `go test` flags: `-use-grammar`, `-grammar` (`src/cmd/go/internal/test/testflag.go`)
 - Runner implementation:
@@ -54,3 +60,9 @@ This is a pointer document. For user-facing usage, see `README.md`.
   - CMPLOG-guided grammar "I2S" (default; configurable via `--libafl-config` `nautilus_cmplog_i2s=false`): `NautilusCmpLogI2SMutator` in `golibafl/src/main.rs`
   - Protocol + caveats: `misc/gosentry/USE_LIBAFL.md`
 - Example: `test/gosentry/examples/grammar_json`
+
+## Feature 8: generate coverage from a LibAFL campaign corpus
+
+- `go test` flag: `-generate-coverage` (`src/cmd/go/internal/test/testflag.go`)
+- Corpus discovery + replay: `src/cmd/go/internal/test/test.go`
+- User docs: `README.md` (Feature 8), `misc/gosentry/USE_LIBAFL.md` (coverage section)
