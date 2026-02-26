@@ -38,13 +38,8 @@ cd src && ./make.bash # Produces `../bin/go` (or `./bin/go` from repo root). See
 
 
 > [!TIP]
-> Developer & contributor docs:  reda `docs/gosentry/index.md` for a code/architecture map, the recommended dev loop, CI entrypoints and benchmark scripts.
+> Contributor docs:  reda `docs/gosentry/index.md` for a code/architecture map, the recommended dev loop, CI entrypoints and benchmark scripts.
 
-
-Start at `docs/gosentry/index.md` for:
-- a code/architecture map (features ↔ files),
-- the recommended dev loop (fast feedback),
-- CI entrypoints and benchmark scripts.
 
 ## Feature 1: Struct-aware fuzzing (fuzz structs as inputs)
 
