@@ -12,8 +12,10 @@ gosentry is a security-focused fork of the Go toolchain. In a _very_ simple phra
 - Generate/mutate inputs from a grammar to avoid useless mutations. Mutation generates valid maths operation like `X + Y - Z` can become `X / U + Z - 14` instead of `X + Yè - Z`
 - Panic on selected functions (like critcal errors loggers) and crash when it's called 
 - Focus the fuzzer on recently changed lines AND on new coverage to target new commits mainly
-- Catch races/leaks/timeouts while fuzzing
-- Generate an HTML coverage report from a fuzz campaign corpus with one CLI
+- Catch data races at fuzz-time
+- Catch Go leaks at fuzz-time
+- Catch stuck executions with timeouts at fuzz-time
+- Generate a HTML coverage report from a fuzz campaign corpus with one CLI
 
 ## Table of Contents
 
@@ -46,8 +48,8 @@ cd src && ./make.bash # Produces `../bin/go` (or `./bin/go` from repo root). See
 #### Overview
 
 Go’s native fuzzing (`go test -fuzz=...`) only supports a small set of scalar types as fuzz parameters (`[]byte`, `string`, numbers, ...). In gosentry, you can also fuzz **composite types** built from those scalars: structs, arrays, slices, and pointers.
-
-This is useful when your code naturally takes structured inputs and you don’t want to build a custom encoder/decoder just to seed and mutate the corpus.
+This is useful when your code naturally takes structured inputs and you don’t want to build a custom encoder/decoder just to seed and mutate the corpus. 
+See `test/gosentry/examples/multiargs` and `test/gosentry/examples/composite` for examples.
 
 #### Simple example
 
@@ -64,16 +66,36 @@ func FuzzStructInput(f *testing.F) {
 	f.Add(Input{Data: []byte("A"), S: "B", N: 7, OK: true})
 
 	f.Fuzz(func(t *testing.T, in Input) {
-		if in.OK && in.N == 7 && in.S == "B" && bytes.Equal(in.Data, []byte("A")) {
+		if in.OK && in.N == 1337 && in.S == "BOOMMOOB" && bytes.Equal(in.Data, []byte("A")) {
 			t.Fatalf("boom")
 		}
 	})
 }
 ```
 
-See also:
-- `test/gosentry/examples/multiargs` (struct input, used in CI smoke tests)
-- `test/gosentry/examples/composite` (pointers + slices + unexported fields)
+<details>
+<summary><strong>How struct seeds (<code>f.Add</code>) and struct fuzzing work (the glue made)</strong></summary>
+
+Go’s native fuzzer cannot fuzz a `struct` value directly (it only knows how to mutate a small list of scalar types). gosentry adds a small glue layer: when your fuzz target uses composite types (like `Input`), gosentry fuzzes a single `[]byte` behind the scenes. On every execution, it **decodes** those bytes into your struct (field-by-field, recursively for slices/arrays/pointers) and then calls your `f.Fuzz` callback with the decoded value. The same **encoding** is used for seeds, so `f.Add(Input{...})` becomes an encoded `[]byte` corpus entry that the fuzzer can reuse and mutate like any other seed.
+
+Fuzzers (including LibAFL) mutate raw bytes, so we want a decoder that can turn **any** byte slice into "some" struct value and keep going. JSON/`gob` would reject most random inputs (bad for coverage), and they also don’t populate unexported fields, while fuzzing often benefits from breaking invariants. This custom format is small, fast, deterministic, and tolerant to malformed data.
+
+Under the hood, this uses gosentry’s own simple binary format (not `gob`, not JSON). The code lives in `src/testing/libafl.go`:
+- Encode: `libaflMarshalInputs` / `libaflAppendValue`
+- Decode: `libaflUnmarshalArgs` / `libaflDecodeValue`
+
+Encoding rules (high level):
+- `bool`: 1 byte (`0` or `1`)
+- Integers: little-endian bytes (`int`/`uint` are 8 bytes)
+- Floats: IEEE-754 bits in little-endian (`float32` = 4 bytes, `float64` = 8 bytes)
+- `string`: `uvarint(len)` then raw string bytes
+- `[]byte`: `uvarint(len)` then raw bytes
+- Other slices: `uvarint(len)` then each element encoded
+- Structs: fields encoded in declaration order
+- Pointers: 1 byte (`0` = nil, `1` = present) then the pointed value
+ 
+ 
+</details>
 
 ## Feature 2: Integer overflow and truncation issues detection
 
