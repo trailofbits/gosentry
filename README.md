@@ -223,6 +223,13 @@ Grammar-based fuzzing (Nautilus) is documented in [Feature 7](#feature-7-grammar
 In `--use-libafl` mode, gosentry builds `libharness.a` and the Rust `golibafl` runner drives it in-process via the libFuzzer entrypoints. Note: `HARNESS_LIB` can point to any harness archive name (for example `libharness_race.a` used by `--catch-races`).
 </details>
 
+<details>
+<summary><strong>How coverage instrumentation works (LibAFL + Go target)</strong></summary>
+
+In `--use-libafl` mode, gosentry compiles the Go harness with coverage instrumentation enabled. This adds small counters to the code that change when different parts of your program run. When the harness starts inside `golibafl`, the Go runtime exposes these counters to LibAFL. LibAFL reads them after each input to see what code ran, and uses that coverage to guide the next mutations.
+
+</details>
+
 
 
 ##### Limitations
