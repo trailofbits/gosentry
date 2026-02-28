@@ -37,7 +37,7 @@ cd src && ./make.bash # Produces `../bin/go`. See `GOFLAGS` below.
 ```
  
 > [!TIP]
-> Contributor docs:  reda `docs/gosentry/index.md` for a code/architecture map, the recommended dev loop, CI entrypoints and benchmark scripts.
+> Contributor docs:  read `docs/gosentry/index.md` for a code map, recommended dev loop, CI entrypoints and benchmark scripts.
 
 
 ## Feature 1: Struct-aware fuzzing (fuzz structs as inputs)
