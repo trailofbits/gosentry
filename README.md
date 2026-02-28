@@ -2,7 +2,8 @@
 
 [![integration tests](https://github.com/kevin-valerio/gosentry/actions/workflows/go.yml/badge.svg?branch=master)](https://github.com/kevin-valerio/gosentry/actions/workflows/go.yml)
 
-gosentry is a security-focused fork of the Go toolchain. In a _very_ simple phrasing, it's copy of the Go compiler that finds bugs. If you are a security researcher auditing Go codebases, you should probably use this tool and consider it as a great swiss-knife.
+gosentry is a security-focused fork of the Go toolchain, integrating numerous features for state-of-the-art fuzzing campaigns on Go codebases. If you were using `go test -fuzz` before, you should use gosentry as a replacement.
+It comes with various fuzzing improvements and bug detectors that are not present natively in the Go toolchain. See TLDR; below.
 
 **TLDR (features and options)**:
 
@@ -32,13 +33,9 @@ gosentry is a security-focused fork of the Go toolchain. In a _very_ simple phra
 
 ## Build
 ```bash
-cd src && ./make.bash # Produces `../bin/go` (or `./bin/go` from repo root). See `GOFLAGS` below.
+cd src && ./make.bash # Produces `../bin/go`. See `GOFLAGS` below.
 ```
-
-> [!TIP]
-> If you’re in `src/`, run the toolchain as `../bin/go ...` (the binaries are in `bin/` at repo root).
-
-
+ 
 > [!TIP]
 > Contributor docs:  reda `docs/gosentry/index.md` for a code/architecture map, the recommended dev loop, CI entrypoints and benchmark scripts.
 
