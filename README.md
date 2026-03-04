@@ -683,16 +683,7 @@ After (or while) running a LibAFL fuzz campaign, gosentry can generate a Go cove
 ./bin/go test -fuzz=FuzzHarness --generate-coverage .
 ```
 
-Notes:
-- Use the same `-fuzz` spelling you used for the campaign you want to replay. gosentry uses `-fuzz` to locate the LibAFL output directory (and its `queue/` corpus).
-  - `-fuzz=FuzzHarness` and `-fuzz='^FuzzHarness$'` refer to the same campaign.
-  - If you fuzzed with a broader regexp (example: `-fuzz='Fuzz.*Parser'`), reuse the exact same regexp for coverage.
-- `-fuzz` must match exactly one fuzz target, otherwise gosentry can’t select which campaign to replay.
-
-This replays inputs from `<libafl output dir>/queue/` and writes:
-- `<libafl output dir>/coverage/cover.out` (Go coverprofile format)
-- `<libafl output dir>/coverage/cover.html` (HTML report)
- 
+This replays inputs from `<libafl output dir>/queue/` and writes over.out and cover.html 
 
 ## Trophies
 
@@ -713,3 +704,5 @@ Those bugs were found by doing differential-fuzzing campaign using gosentry's gr
 - [Nautilus](https://github.com/nautilus-fuzz/nautilus/)
 - [LibAFL](https://github.com/AFLplusplus/LibAFL)
 - [goleak](https://github.com/uber-go/goleak)
+- [go](https://github.com/golang/go)
+- [go-panikint](https://github.com/trailofbits/go-panikint)
