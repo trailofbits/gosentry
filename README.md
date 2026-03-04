@@ -29,6 +29,7 @@ It comes with various fuzzing improvements and bug detectors that are not presen
   - [Feature 6: Detect race conditions, goroutine leaks, and hangs at fuzz-time](#feature-6-detect-race-conditions-goroutine-leaks-and-hangs-at-fuzz-time)
   - [Feature 7: Grammar-based fuzzing (Nautilus)](#feature-7-grammar-based-fuzzing-nautilus)
   - [Feature 8: Generate fuzzing coverage reports from campaign](#feature-8-generate-go-coverage-reports-from-fuzzing-campaign)
+- [Trophies](#trophies)
 - [Credits](#credits)
 
 ## Build
@@ -692,6 +693,20 @@ This replays inputs from `<libafl output dir>/queue/` and writes:
 - `<libafl output dir>/coverage/cover.out` (Go coverprofile format)
 - `<libafl output dir>/coverage/cover.html` (HTML report)
  
+
+## Trophies
+
+Those bugs were found by doing differential-fuzzing campaign using gosentry's grammar fuzzing feature.
+
+#### Optimism
+
+- [Kona and op-node can disagree on brotli channels](https://github.com/ethereum-optimism/optimism/issues/19333)
+- [Unknown batch type panics and causes denial of service in kona-protocol](https://github.com/ethereum-optimism/optimism/issues/19334)
+- [Kona frame parsing mismatch against op-node and OP Stack Specs](https://github.com/ethereum-optimism/optimism/issues/19335)
+
+#### REVM
+
+- [Failed deposit in op-revm stopping with `OutOfFunds` doesn't bump nonce, leading to state root mismatch against other clients](https://github.com/bluealloy/revm/issues/3458)
 
 ## Credits
 - [golibafl](https://github.com/srlabs/golibafl/)
