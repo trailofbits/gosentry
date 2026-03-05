@@ -2383,15 +2383,40 @@ fn fuzz(
         }
 
         if stop_all_fuzzers_on_panic && !reproduced.is_empty() {
+            let label_width = "libafl output dir:".len();
+
+            eprintln!();
             eprintln!("Found {} pre-existing crashing input(s).", reproduced.len());
-            eprintln!("libafl output dir: {}", output.display());
-            eprintln!("crashes dir: {}", crashes_dir.display());
-            for p in &reproduced {
-                eprintln!("crash input: {}", p.display());
+            eprintln!();
+            eprintln!(
+                "{:<label_width$} {}",
+                "libafl output dir:",
+                output.display(),
+            );
+            eprintln!(
+                "{:<label_width$} {}",
+                "crashes dir:",
+                crashes_dir.display(),
+            );
+            eprintln!();
+            for (i, p) in reproduced.iter().enumerate() {
+                if i > 0 {
+                    eprintln!();
+                }
+                eprintln!("{:<label_width$} {}", "crash input:", p.display(),);
                 if let Some(exe) = exe.as_ref() {
-                    eprintln!("repro: {} run --input {}", exe.display(), p.display());
+                    eprintln!(
+                        "{:<label_width$} {} run --input {}",
+                        "repro:",
+                        exe.display(),
+                        p.display(),
+                    );
                 } else {
-                    eprintln!("repro: golibafl run --input {}", p.display());
+                    eprintln!(
+                        "{:<label_width$} golibafl run --input {}",
+                        "repro:",
+                        p.display(),
+                    );
                 }
             }
             notify_restarting_mgr_exit();
@@ -3411,9 +3436,18 @@ fn fuzz(
     {
         if !is_launcher_client {
             if new_hangs > 0 {
+                let label_width = "libafl output dir:".len();
+
+                eprintln!();
                 eprintln!("Found {new_hangs} hanging input(s).");
-                eprintln!("libafl output dir: {}", output.display());
-                eprintln!("hangs dir: {}", hangs_dir.display());
+                eprintln!();
+                eprintln!(
+                    "{:<label_width$} {}",
+                    "libafl output dir:",
+                    output.display(),
+                );
+                eprintln!("{:<label_width$} {}", "hangs dir:", hangs_dir.display(),);
+                eprintln!();
 
                 let mut sorted = hang_inputs;
                 sorted.sort_by_key(|p| {
@@ -3421,18 +3455,23 @@ fn fuzz(
                         .and_then(|m| m.modified())
                         .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
                 });
-                for p in sorted.iter().rev().take(new_hangs) {
-                    eprintln!("hang input: {}", p.display());
+                for (i, p) in sorted.iter().rev().take(new_hangs).enumerate() {
+                    if i > 0 {
+                        eprintln!();
+                    }
+                    eprintln!("{:<label_width$} {}", "hang input:", p.display(),);
                     if let Ok(exe) = env::current_exe() {
                         eprintln!(
-                            "repro (kill after {}ms): {} run --input {}",
+                            "{:<label_width$} (kill after {}ms) {} run --input {}",
+                            "repro:",
                             hang_timeout.as_millis(),
                             exe.display(),
                             p.display()
                         );
                     } else {
                         eprintln!(
-                            "repro (kill after {}ms): golibafl run --input {}",
+                            "{:<label_width$} (kill after {}ms) golibafl run --input {}",
+                            "repro:",
                             hang_timeout.as_millis(),
                             p.display()
                         );
@@ -3446,9 +3485,22 @@ fn fuzz(
                 } else {
                     crash_inputs.len()
                 };
+                let label_width = "libafl output dir:".len();
+
+                eprintln!();
                 eprintln!("Found {n} crashing input(s).");
-                eprintln!("libafl output dir: {}", output.display());
-                eprintln!("crashes dir: {}", crashes_dir.display());
+                eprintln!();
+                eprintln!(
+                    "{:<label_width$} {}",
+                    "libafl output dir:",
+                    output.display(),
+                );
+                eprintln!(
+                    "{:<label_width$} {}",
+                    "crashes dir:",
+                    crashes_dir.display(),
+                );
+                eprintln!();
 
                 let mut sorted = crash_inputs;
                 sorted.sort_by_key(|p| {
@@ -3456,15 +3508,28 @@ fn fuzz(
                         .and_then(|m| m.modified())
                         .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
                 });
-                for p in sorted.iter().rev().take(n) {
-                    eprintln!("crash input: {}", p.display());
+                for (i, p) in sorted.iter().rev().take(n).enumerate() {
+                    if i > 0 {
+                        eprintln!();
+                    }
+                    eprintln!("{:<label_width$} {}", "crash input:", p.display(),);
                     if let Ok(exe) = env::current_exe() {
-                        eprintln!("repro: {} run --input {}", exe.display(), p.display());
+                        eprintln!(
+                            "{:<label_width$} {} run --input {}",
+                            "repro:",
+                            exe.display(),
+                            p.display(),
+                        );
                     } else {
-                        eprintln!("repro: golibafl run --input {}", p.display());
+                        eprintln!(
+                            "{:<label_width$} golibafl run --input {}",
+                            "repro:",
+                            p.display(),
+                        );
                     }
                 }
 
+                eprintln!();
                 eprintln!(
                     "(Crash output is printed above; rerun the repro command to see it again.)"
                 );

@@ -510,6 +510,20 @@ When a crash is found, `golibafl` prints:
 
 The harness output is printed above that (panic backtrace, or a stack trace for `t.Fatal`/`t.Fatalf`).
 
+Example:
+
+```text
+Found 1 crashing input(s).
+
+libafl output dir: /full/path/to/.../libafl/<project>/<harness>
+crashes dir:      /full/path/to/.../libafl/<project>/<harness>/crashes
+
+crash input:      /full/path/to/.../crashes/<id>
+repro:            golibafl run --input /full/path/to/.../crashes/<id>
+
+(Crash output is printed above; rerun the repro command to see it again.)
+```
+
 To keep fuzzing after crashes, set `"stop_all_fuzzers_on_panic": false` in the LibAFL JSONC config.
 
 Note: reproducing may require the same runtime environment variables as fuzzing (e.g. `LD_LIBRARY_PATH` for native deps).
