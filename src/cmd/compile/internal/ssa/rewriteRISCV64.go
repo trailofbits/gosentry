@@ -805,6 +805,9 @@ func rewriteValueRISCV64(v *Value) bool {
 	case OpTailCall:
 		v.Op = OpRISCV64CALLtail
 		return true
+	case OpTailCallInter:
+		v.Op = OpRISCV64CALLtailinter
+		return true
 	case OpTrunc16to8:
 		v.Op = OpCopy
 		return true
@@ -3585,6 +3588,18 @@ func rewriteValueRISCV64_OpRISCV64CZEROEQZ(v *Value) bool {
 		v.AddArg2(x, y)
 		return true
 	}
+	// match: (CZEROEQZ x (NEG y))
+	// result: (CZEROEQZ x y)
+	for {
+		x := v_0
+		if v_1.Op != OpRISCV64NEG {
+			break
+		}
+		y := v_1.Args[0]
+		v.reset(OpRISCV64CZEROEQZ)
+		v.AddArg2(x, y)
+		return true
+	}
 	// match: (CZEROEQZ x x)
 	// result: x
 	for {
@@ -3631,6 +3646,18 @@ func rewriteValueRISCV64_OpRISCV64CZERONEZ(v *Value) bool {
 		}
 		y := v_1.Args[0]
 		v.reset(OpRISCV64CZEROEQZ)
+		v.AddArg2(x, y)
+		return true
+	}
+	// match: (CZERONEZ x (NEG y))
+	// result: (CZERONEZ x y)
+	for {
+		x := v_0
+		if v_1.Op != OpRISCV64NEG {
+			break
+		}
+		y := v_1.Args[0]
+		v.reset(OpRISCV64CZERONEZ)
 		v.AddArg2(x, y)
 		return true
 	}

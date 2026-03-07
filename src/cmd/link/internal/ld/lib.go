@@ -2274,6 +2274,13 @@ func trimLinkerArgv(argv []string) []string {
 		"--stdlib",
 		"-unwindlib",
 		"--unwindlib",
+		"-nostdlib++",
+		"-nostdlib",
+		"-nodefaultlibs",
+		"-nostartfiles",
+		"-nostdinc++",
+		"-nostdinc",
+		"-nobuiltininc",
 	}
 
 	var flags []string
@@ -3040,7 +3047,7 @@ func AddGotSym(target *Target, ldr *loader.Loader, syms *ArchSyms, s loader.Sym,
 			// Mach-O relocations are a royal pain to lay out.
 			// They use a compact stateful bytecode representation.
 			// Here we record what are needed and encode them later.
-			MachoAddBind(int64(ldr.SymGot(s)), s)
+			MachoAddBind(syms.GOT, int64(ldr.SymGot(s)), s)
 		}
 	} else {
 		ldr.Errorf(s, "addgotsym: unsupported binary format")

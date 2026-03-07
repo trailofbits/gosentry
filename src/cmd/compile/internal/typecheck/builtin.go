@@ -177,6 +177,7 @@ var runtimeDecls = [...]struct {
 	{"moveSliceNoCapNoScan", funcTag, 135},
 	{"memmove", funcTag, 136},
 	{"memclrNoHeapPointers", funcTag, 137},
+	{"memclrNoHeapPointersPreemptible", funcTag, 137},
 	{"memclrHasPointers", funcTag, 137},
 	{"memequal", funcTag, 138},
 	{"memequal0", funcTag, 139},

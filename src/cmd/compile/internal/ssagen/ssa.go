@@ -3574,9 +3574,9 @@ func (s *state) exprCheckPtr(n ir.Node, checkPtrOK bool) *ssa.Value {
 					// use constants for the bounds check.
 					z := s.constInt(types.Types[types.TINT], 0)
 					s.boundsCheck(z, z, ssa.BoundsIndex, false)
-					// The return value won't be live, return junk.
-					// But not quite junk, in case bounds checks are turned off. See issue 48092.
-					return s.zeroVal(n.Type())
+					// The return value won't be live. In case bounds checks
+					// are turned off, load from (*T)(nil) to cause a segfault.
+					return s.load(n.Type(), s.constNil(n.Type().PtrTo()))
 				}
 				len := s.constInt(types.Types[types.TINT], bound)
 				s.boundsCheck(i, len, ssa.BoundsIndex, n.Bounded()) // checks i == 0
@@ -5033,7 +5033,7 @@ func (s *state) call(n *ir.CallExpr, k callKind, returnResultAddr bool, deferExt
 		fn := fn.(*ir.SelectorExpr)
 		var iclosure *ssa.Value
 		iclosure, rcvr = s.getClosureAndRcvr(fn)
-		if k == callNormal {
+		if k == callNormal || k == callTail {
 			codeptr = s.load(types.Types[types.TUINTPTR], iclosure)
 		} else {
 			closure = iclosure
@@ -5149,6 +5149,10 @@ func (s *state) call(n *ir.CallExpr, k callKind, returnResultAddr bool, deferExt
 			// Note that the "receiver" parameter is nil because the actual receiver is the first input parameter.
 			aux := ssa.InterfaceAuxCall(params)
 			call = s.newValue1A(ssa.OpInterLECall, aux.LateExpansionResultType(), aux, codeptr)
+			if k == callTail {
+				call.Op = ssa.OpTailLECallInter
+				stksize = 0 // Tail call does not use stack. We reuse caller's frame.
+			}
 		case calleeLSym != nil:
 			aux := ssa.StaticAuxCall(calleeLSym, params)
 			call = s.newValue0A(ssa.OpStaticLECall, aux.LateExpansionResultType(), aux)

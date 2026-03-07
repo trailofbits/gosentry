@@ -562,11 +562,14 @@ func (f *chattyFlag) Get() any {
 	return f.on
 }
 
-const marker = byte(0x16) // ^V for framing
+const (
+	markFraming byte = 'V' &^ '@' // ^V: framing
+	markEscape  byte = '[' &^ '@' // ^[: escape
+)
 
 func (f *chattyFlag) prefix() string {
 	if f.json {
-		return string(marker)
+		return string(markFraming)
 	}
 	return ""
 }
@@ -588,7 +591,7 @@ func newChattyPrinter(w io.Writer) *chattyPrinter {
 // that as not in json mode (because it's not chatty at all).
 func (p *chattyPrinter) prefix() string {
 	if p != nil && p.json {
-		return string(marker)
+		return string(markFraming)
 	}
 	return ""
 }
@@ -869,8 +872,8 @@ func (w indenter) Write(b []byte) (n int, err error) {
 		// An indent of 4 spaces will neatly align the dashes with the status
 		// indicator of the parent.
 		line := b[:end]
-		if line[0] == marker {
-			w.c.output = append(w.c.output, marker)
+		if line[0] == markFraming {
+			w.c.output = append(w.c.output, markFraming)
 			line = line[1:]
 		}
 		w.c.output = append(w.c.output, indent...)
@@ -1170,6 +1173,9 @@ func (o *outputWriter) Write(p []byte) (int, error) {
 // writeLine generates the output for a given line.
 func (o *outputWriter) writeLine(b []byte) {
 	if !o.c.done && (o.c.chatty != nil) {
+		// Escape the framing marker.
+		b = escapeMarkers(b)
+
 		if o.c.bench {
 			// Benchmarks don't print === CONT, so we should skip the test
 			// printer and just print straight to stdout.
@@ -1181,6 +1187,39 @@ func (o *outputWriter) writeLine(b []byte) {
 	}
 	o.c.output = append(o.c.output, indent...)
 	o.c.output = append(o.c.output, b...)
+}
+
+func escapeMarkers(b []byte) []byte {
+	j := nextMark(b)
+	if j < 0 {
+		// Allocation-free fast path.
+		return b
+	}
+
+	c := make([]byte, 0, len(b)+10)
+	i := 0
+	for i < len(b) && j >= i {
+		if j > i {
+			c = append(c, b[i:j]...)
+		}
+		c = append(c, markEscape, b[j])
+		i = j + 1
+		j = i + nextMark(b[i:])
+	}
+	if i < len(b) {
+		c = append(c, b[i:]...)
+	}
+	return c
+}
+
+func nextMark(b []byte) int {
+	for i, b := range b {
+		switch b {
+		case markFraming, markEscape:
+			return i
+		}
+	}
+	return -1
 }
 
 // Log formats its arguments using default formatting, analogous to [fmt.Println],
@@ -1367,30 +1406,7 @@ func (c *common) makeArtifactDir() (string, error) {
 		return c.makeTempDir()
 	}
 
-	// If the test name is longer than maxNameSize, truncate it and replace the last
-	// hashSize bytes with a hash of the full name.
-	const maxNameSize = 64
-	name := strings.ReplaceAll(c.name, "/", "__")
-	if len(name) > maxNameSize {
-		h := fmt.Sprintf("%0x", hashString(name))
-		name = name[:maxNameSize-len(h)] + h
-	}
-
-	// Remove the module path prefix from the import path.
-	pkg := strings.TrimPrefix(c.importPath, c.modulePath+"/")
-
-	// Join with /, not filepath.Join: the import path is /-separated,
-	// and we don't want removeSymbolsExcept to strip \ separators on Windows.
-	base := "/" + pkg + "/" + name
-	base = removeSymbolsExcept(base, "!#$%&()+,-.=@^_{}~ /")
-	base, err := filepath.Localize(base)
-	if err != nil {
-		// This name can't be safely converted into a local filepath.
-		// Drop it and just use _artifacts/<random>.
-		base = ""
-	}
-
-	artifactBase := filepath.Join(artifactDir, base)
+	artifactBase := filepath.Join(artifactDir, c.relativeArtifactBase())
 	if err := os.MkdirAll(artifactBase, 0o777); err != nil {
 		return "", err
 	}
@@ -1402,6 +1418,39 @@ func (c *common) makeArtifactDir() (string, error) {
 		c.chatty.Updatef(c.name, "=== ARTIFACTS %s %v\n", c.name, dir)
 	}
 	return dir, nil
+}
+
+func (c *common) relativeArtifactBase() string {
+	// If the test name is longer than maxNameSize, truncate it and replace the last
+	// hashSize bytes with a hash of the full name.
+	const maxNameSize = 64
+	name := strings.ReplaceAll(c.name, "/", "__")
+	if len(name) > maxNameSize {
+		h := fmt.Sprintf("%0x", hashString(name))
+		name = name[:maxNameSize-len(h)] + h
+	}
+
+	// Remove the module path prefix from the import path.
+	// If this is the root package, pkg will be empty.
+	pkg := strings.TrimPrefix(c.importPath, c.modulePath)
+	// Remove the leading slash.
+	pkg = strings.TrimPrefix(pkg, "/")
+
+	base := name
+	if pkg != "" {
+		// Join with /, not filepath.Join: the import path is /-separated,
+		// and we don't want removeSymbolsExcept to strip \ separators on Windows.
+		base = pkg + "/" + name
+	}
+	base = removeSymbolsExcept(base, "!#$%&()+,-.=@^_{}~ /")
+	base, err := filepath.Localize(base)
+	if err != nil {
+		// This name can't be safely converted into a local filepath.
+		// Drop it and just use _artifacts/<random>.
+		base = ""
+	}
+
+	return base
 }
 
 func removeSymbolsExcept(s, allowed string) string {
