@@ -2338,18 +2338,10 @@ fn fuzz(
             .map(|rd| rd.filter_map(Result::ok).map(|e| e.path()).collect())
             .unwrap_or_default();
 
+        let replay_timeout = if catch_hangs { exec_timeout } else { hang_timeout };
         for f in crash_inputs {
             let still_crashes = match exe.as_ref() {
-                Some(exe) => match Command::new(exe)
-                    .args(["run", "--input"])
-                    .arg(&f)
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status()
-                {
-                    Ok(st) => !st.success(),
-                    Err(_) => true,
-                },
+                Some(exe) => matches!(run_once_with_timeout(exe, &f, replay_timeout), RunOnceOutcome::Crash),
                 None => true,
             };
             if still_crashes {
