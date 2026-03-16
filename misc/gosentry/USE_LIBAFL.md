@@ -360,7 +360,7 @@ Example `libafl.jsonc` (all fields optional; defaults shown in comments):
 	  // default: true
 	  "nautilus_cmplog_i2s": true
 	}
-	```
+```
 
 A ready-to-edit template lives at `misc/gosentry/libafl.config.jsonc`.
 
