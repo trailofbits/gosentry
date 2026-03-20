@@ -222,10 +222,10 @@ func main() {
 			throw("_cgo_pthread_key_created missing")
 		}
 
-		if _cgo_thread_start == nil {
-			throw("_cgo_thread_start missing")
-		}
 		if GOOS != "windows" {
+			if _cgo_thread_start == nil {
+				throw("_cgo_thread_start missing")
+			}
 			if _cgo_setenv == nil {
 				throw("_cgo_setenv missing")
 			}
@@ -2913,11 +2913,8 @@ func newm(fn func(), pp *p, id int64) {
 }
 
 func newm1(mp *m) {
-	if iscgo {
+	if iscgo && _cgo_thread_start != nil {
 		var ts cgothreadstart
-		if _cgo_thread_start == nil {
-			throw("_cgo_thread_start missing")
-		}
 		ts.g.set(mp.g0)
 		ts.tls = (*uint64)(unsafe.Pointer(&mp.tls[0]))
 		ts.fn = unsafe.Pointer(abi.FuncPCABI0(mstart))
@@ -8154,5 +8151,26 @@ func doInit1(t *initTask) {
 		}
 
 		t.state = 2 // initialization done
+	}
+}
+
+// libInit is common startup code for most architectures when
+// using -buildmode=c-archive or -buildmode=c-shared.
+//
+// May run with m.p==nil, so write barriers are not allowed.
+//
+//go:nowritebarrierrec
+//go:nosplit
+func libInit() {
+	// Synchronous initialization.
+	libpreinit()
+
+	// Asynchronous initialization.
+	// Prefer creating a thread via cgo if it is available.
+	if _cgo_sys_thread_create != nil {
+		asmcgocall(_cgo_sys_thread_create, unsafe.Pointer(abi.FuncPCABIInternal(rt0_lib_go)))
+	} else {
+		const stackSize = 0x800000 // 8192KB
+		newosproc0(stackSize, unsafe.Pointer(abi.FuncPCABIInternal(rt0_lib_go)))
 	}
 }
