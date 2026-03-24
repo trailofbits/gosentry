@@ -170,7 +170,7 @@ func init() {
 	testHookOnPanicMu = new(sync.Mutex)
 }
 
-func SetTestHookOnPanic(t testing.TB, f func(sc *serverConn, panicVal interface{}) (rePanic bool)) {
+func SetTestHookOnPanic(t testing.TB, f func(sc *serverConn, panicVal any) (rePanic bool)) {
 	testHookOnPanicMu.Lock()
 	defer testHookOnPanicMu.Unlock()
 	old := testHookOnPanic
@@ -201,10 +201,6 @@ func init() {
 
 func EncodeHeaderRaw(t testing.TB, headers ...string) []byte {
 	return encodeHeaderRaw(t, headers...)
-}
-
-func NewPriorityWriteSchedulerRFC7540(cfg *PriorityWriteSchedulerConfig) WriteScheduler {
-	return newPriorityWriteSchedulerRFC7540(cfg)
 }
 
 func NewPriorityWriteSchedulerRFC9218() WriteScheduler {
