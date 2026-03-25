@@ -1,6 +1,6 @@
 <!--{
 	"Title": "The Go Programming Language Specification",
-	"Subtitle": "Language version go1.27 (March 16, 2026)",
+	"Subtitle": "Language version go1.27 (March 20, 2026)",
 	"Path": "/ref/spec"
 }-->
 
@@ -825,8 +825,11 @@ type literals.
 </p>
 
 <p>
-Predeclared types, defined types, and type parameters are called <i>named types</i>.
-An alias denotes a named type if the type given in the alias declaration is a named type.
+<a href="#Predeclared_identifiers">Predeclared</a> types (excluding <code>any</code>),
+<a href="#Type_definitions">defined types</a>, and
+<a href="#Type_parameter_declarations">type parameters</a> are called <i>named types</i>.
+An <a href="#Alias_declarations">alias</a> denotes a named type if the type given in the alias declaration is a named type.
+All named types are <a href="#Type_identity">distinct</a>.
 </p>
 
 <h3 id="Boolean_types">Boolean types</h3>
@@ -835,7 +838,7 @@ An alias denotes a named type if the type given in the alias declaration is a na
 A <i>boolean type</i> represents the set of Boolean truth values
 denoted by the predeclared constants <code>true</code>
 and <code>false</code>. The predeclared boolean type is <code>bool</code>;
-it is a <a href="#Type_definitions">defined type</a>.
+it is a <a href="#Types">named type</a>.
 </p>
 
 <h3 id="Numeric_types">Numeric types</h3>
@@ -884,8 +887,7 @@ uintptr  an unsigned integer large enough to store the uninterpreted bits of a p
 </pre>
 
 <p>
-To avoid portability issues all numeric types are <a href="#Type_definitions">defined
-types</a> and thus distinct except
+To avoid portability issues all numeric types are <a href="#Types">named types</a> and thus distinct except
 <code>byte</code>, which is an <a href="#Alias_declarations">alias</a> for <code>uint8</code>, and
 <code>rune</code>, which is an alias for <code>int32</code>.
 Explicit conversions
@@ -904,7 +906,7 @@ The number of bytes is called the length of the string and is never negative.
 Strings are immutable: once created,
 it is impossible to change the contents of a string.
 The predeclared string type is <code>string</code>;
-it is a <a href="#Type_definitions">defined type</a>.
+it is a <a href="#Types">named type</a>.
 </p>
 
 <p>
@@ -1347,7 +1349,8 @@ interface{}
 </pre>
 
 <p>
-For convenience, the predeclared type <code>any</code> is an alias for the empty interface.
+For convenience, the predeclared type <code>any</code> is an alias for the empty interface;
+it is not a <a href="#Types">named type</a>.
 [<a href="#Go_1.18">Go 1.18</a>]
 </p>
 
@@ -2986,7 +2989,7 @@ Its type must be a <a href="#Type_definitions">defined</a> type <code>T</code> o
 pointer to a defined type <code>T</code>, possibly followed by a list of type parameter
 names <code>[P1, P2, …]</code> enclosed in square brackets.
 <code>T</code> is called the receiver <i>base type</i>. A receiver base type cannot be
-a pointer or interface type and it must be defined in the same package as the method.
+a pointer or interface type and it must be declared in the same package as the method.
 The method is said to be <i>bound</i> to its receiver base type and the method name
 is visible only within <a href="#Selectors">selectors</a> for type <code>T</code>
 or <code>*T</code>.
@@ -3407,7 +3410,7 @@ func(ch chan int) { ch &lt;- ACK }(replyChan)
 
 <p>
 Function literals are <i>closures</i>: they may refer to variables
-defined in a surrounding function. Those variables are then shared between
+declared in a surrounding function. Those variables are then shared between
 the surrounding function and the function literal, and they survive as long
 as they are accessible.
 </p>
@@ -8338,7 +8341,7 @@ func init() { … }
 </pre>
 
 <p>
-Multiple such functions may be defined per package, even within a single
+Multiple such functions may be declared per package, even within a single
 source file. In the package block, the <code>init</code> identifier can
 be used only to declare <code>init</code> functions, yet the identifier
 itself is not <a href="#Declarations_and_scope">declared</a>. Thus
@@ -8420,7 +8423,7 @@ type error interface {
 <p>
 It is the conventional interface for representing an error condition,
 with the nil value representing no error.
-For instance, a function to read data from a file might be defined:
+For instance, a function to read data from a file might be declared:
 </p>
 
 <pre>
