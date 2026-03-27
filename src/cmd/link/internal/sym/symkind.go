@@ -62,7 +62,6 @@ const (
 	SRODATAFIPSEND   // End of FIPS read-only data.
 	SRODATAEND       // End of read-only data.
 	SPCLNTAB         // Pclntab data.
-	STYPELINK        // Type links.
 	SELFROSECT       // ELF read-only data: relocs, dynamic linking info.
 
 	// Read-only, non-executable, dynamically relocatable segment.
@@ -110,6 +109,7 @@ const (
 	// Allocated zero-initialized segment.
 	SBSS                    // Zeroed data that may have heap pointers.
 	SNOPTRBSS               // Zeroed data with no heap pointers.
+	SGCMASK                 // Pointers to generated GC masks.
 	SLIBFUZZER_8BIT_COUNTER // Fuzzer counters.
 	SCOVERAGE_COUNTER       // Coverage counters.
 	SCOVERAGE_AUXVAR        // Compiler generated coverage symbols.

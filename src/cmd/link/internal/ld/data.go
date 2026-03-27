@@ -2044,6 +2044,12 @@ func (state *dodataState) allocateDataSections(ctxt *Link) {
 	ldr.SetSymSect(ldr.LookupOrCreateSym("runtime.noptrbss", 0), sect)
 	ldr.SetSymSect(ldr.LookupOrCreateSym("runtime.enoptrbss", 0), sect)
 
+	// Put gcmask symbols together.
+	gcmaskSym := ldr.LookupOrCreateSym("runtime.gcmask.*", 0)
+	ldr.SetSymValue(gcmaskSym, int64(sect.Length))
+	ldr.SetSymSect(gcmaskSym, sect)
+	state.assignToSection(sect, sym.SGCMASK, sym.SNOPTRBSS)
+
 	// Code coverage counters are assigned to the .noptrbss section.
 	// We assign them in a separate pass so that they stay aggregated
 	// together in a single blob (coverage runtime depends on this).
@@ -2266,16 +2272,6 @@ func (state *dodataState) allocateDataSections(ctxt *Link) {
 
 	state.allocateSingleSymSections(segRelro, sym.SELFRELROSECT, sym.SRODATA, relroPerm)
 	state.allocateSingleSymSections(segRelro, sym.SMACHORELROSECT, sym.SRODATA, relroPerm)
-
-	/* itablink */
-	sect = state.allocateNamedDataSection(segRelro, genrelrosecname(".itablink"), []sym.SymKind{sym.SITABLINK}, relroPerm)
-
-	itablink := ldr.CreateSymForUpdate("runtime.itablink", 0)
-	ldr.SetSymSect(itablink.Sym(), sect)
-	itablink.SetType(sym.SRODATA)
-	state.datsize += itablink.Size()
-	state.checkdatsize(sym.SITABLINK)
-	sect.Length = uint64(state.datsize) - sect.Vaddr
 
 	// 6g uses 4-byte relocation offsets, so the entire segment must fit in 32 bits.
 	if state.datsize != int64(uint32(state.datsize)) {
@@ -2510,7 +2506,8 @@ func (state *dodataState) dodataSect(ctxt *Link, symn sym.SymKind, syms []loader
 		// there will be an increment either way.
 		// TODO: This wastes some space.
 		typeLinkSize := int64(ctxt.Arch.PtrSize)
-		for i := range sl {
+		i := 0
+		for ; i < len(sl); i++ {
 			si := sl[i].sym
 			if si == head || si == typeStar {
 				continue
@@ -2529,6 +2526,27 @@ func (state *dodataState) dodataSect(ctxt *Link, symn sym.SymKind, syms []loader
 		} else {
 			su := ldr.MakeSymbolUpdater(ctxt.Moduledata)
 			su.SetUint(ctxt.Arch, ctxt.moduledataTypeDescOffset, uint64(typeLinkSize))
+		}
+
+		// Find the end of the type descriptors.
+		typeSize := typeLinkSize
+		for ; i < len(sl); i++ {
+			if ldr.IsItab(sl[i].sym) {
+				break
+			}
+			typeSize = Rnd(typeSize, int64(symalign(ldr, sl[i].sym)))
+			typeSize += sl[i].sz
+		}
+
+		if i < len(sl) {
+			typeSize = Rnd(typeSize, int64(symalign(ldr, sl[i].sym)))
+		}
+
+		if ctxt.moduledataItabOffset == 0 {
+			Errorf("internal error: phase error: moduledataItabOffset not set in dodataSect")
+		} else {
+			su := ldr.MakeSymbolUpdater(ctxt.Moduledata)
+			su.SetUint(ctxt.Arch, ctxt.moduledataItabOffset, uint64(typeSize))
 		}
 
 	default:
@@ -3211,6 +3229,8 @@ func (ctxt *Link) address() []*sym.Segment {
 	ctxt.xdefine("runtime.edata", sym.SDATAEND, int64(data.Vaddr+data.Length))
 	ctxt.xdefine("runtime.noptrbss", sym.SNOPTRBSS, int64(noptrbss.Vaddr))
 	ctxt.xdefine("runtime.enoptrbss", sym.SNOPTRBSS, int64(noptrbss.Vaddr+noptrbss.Length))
+	s = ldr.Lookup("runtime.gcmask.*", 0)
+	ctxt.xdefine("runtime.gcmask.*", sym.SGCMASK, int64(noptrbss.Vaddr+uint64(ldr.SymValue(s))))
 	ctxt.xdefine("runtime.covctrs", sym.SCOVERAGE_COUNTER, int64(noptrbss.Vaddr+covCounterDataStartOff))
 	ctxt.xdefine("runtime.ecovctrs", sym.SCOVERAGE_COUNTER, int64(noptrbss.Vaddr+covCounterDataStartOff+covCounterDataLen))
 	ctxt.xdefine("runtime.end", sym.SBSS, int64(Segdata.Vaddr+Segdata.Length))

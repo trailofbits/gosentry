@@ -792,6 +792,10 @@ func (pr *pkgReader) objIdxMayFail(idx index, implicits, explicits []*types.Type
 		fpos := r.pos()
 
 		fn := ir.NewFunc(fpos, npos, sym, typ)
+		if r.hasTypeParams() && r.dict.shaped {
+			typ.SetHasShape(true)
+		}
+
 		name := fn.Nname
 		if !sym.IsBlank() {
 			if sym.Def != nil {
@@ -3827,7 +3831,7 @@ type methodValueWrapper struct {
 // needWrapper records that wrapper methods may be needed at link
 // time.
 func (r *reader) needWrapper(typ *types.Type) {
-	if typ.IsPtr() {
+	if typ.IsPtr() || typ.IsKind(types.TFORW) {
 		return
 	}
 
@@ -4114,6 +4118,8 @@ const dictParamName = typecheck.LocalDictName
 //
 // The parameter types.Fields are all copied too, so their Nname
 // fields can be initialized for use by the shape function.
+//
+// All signatures returned by shapeSig are marked as shaped.
 func shapeSig(fn *ir.Func, dict *readerDict) *types.Type {
 	sig := fn.Nname.Type()
 	oldRecv := sig.Recv()
@@ -4136,5 +4142,7 @@ func shapeSig(fn *ir.Func, dict *readerDict) *types.Type {
 		results[i] = types.NewField(result.Pos, result.Sym, result.Type)
 	}
 
-	return types.NewSignature(recv, params, results)
+	typ := types.NewSignature(recv, params, results)
+	typ.SetHasShape(true)
+	return typ
 }
