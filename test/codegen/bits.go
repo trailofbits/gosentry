@@ -40,8 +40,8 @@ func bitsCheckConstLeftShiftU64(a uint64) (n int) {
 func bitsCheckConstRightShiftU64(a [8]uint64) (n int) {
 	// amd64:"BTQ [$]63,"
 	// arm64:"TBNZ [$]63," -"LSR"
-	// loong64:"SRLV [$]63," "AND [$]1," "BNE"
-	// riscv64:"SRLI [$]63," "ANDI [$]1," "BNEZ"
+	// loong64:"SRLV [$]63," "BNE"
+	// riscv64:"SRLI [$]63," "BNEZ"
 	if (a[0]>>63)&1 != 0 {
 		return 1
 	}
@@ -265,8 +265,8 @@ func bitsCheckConstShiftLeftU32(a uint32) (n int) {
 func bitsCheckConstRightShiftU32(a [8]uint32) (n int) {
 	// amd64:"BTL [$]31,"
 	// arm64:"UBFX [$]31," "CBNZW"
-	// loong64:"SRL [$]31," "AND [$]1," "BNE"
-	// riscv64:"SRLIW [$]31," "ANDI [$]1," "BNEZ"
+	// loong64:"SRL [$]31," "BNE"
+	// riscv64:"SRLIW [$]31," "BNEZ"
 	if (a[0]>>31)&1 != 0 {
 		return 1
 	}
@@ -606,8 +606,8 @@ func bitsRotateAndMask(io64 [8]uint64, io32 [4]uint32, io16 [4]uint16, io8 [4]ui
 	io64[1] = io64[1] & 0x0000FFFFFFFFFFFF
 	// ppc64x: -"SRD", -"AND", "RLDICL [$]60, R[0-9]*, [$]16, R"
 	io64[2] = (io64[2] >> 4) & 0x0000FFFFFFFFFFFF
-	// ppc64x: -"SRD", -"AND", "RLDICL [$]36, R[0-9]*, [$]28, R"
-	io64[3] = (io64[3] >> 28) & 0x0000FFFFFFFFFFFF
+	// ppc64x: -"SRD" -"AND" "RLDICL [$]36, R[0-9]*, [$]29, R"
+	io64[3] = (io64[3] >> 28) & 0x00000007FFFFFFFF
 
 	// ppc64x: "MOVWZ", "RLWNM [$]1, R[0-9]*, [$]28, [$]3, R"
 	io64[4] = uint64(bits.RotateLeft32(io32[0], 1) & 0xF000000F)
