@@ -457,7 +457,8 @@
 //	  	-http
 //			Serve HTML docs over HTTP.
 //		-short
-//			One-line representation for each symbol.
+//			One-line representation for each symbol. Cannot be
+//			combined with -all.
 //		-src
 //			Show the full source code for the symbol. This will
 //			display the full Go source of its declaration and
@@ -747,6 +748,7 @@
 //
 // The -tool flag instructs go to add a matching tool line to go.mod for each
 // listed package. If -tool is used with @none, the line will be removed.
+// See 'go help tool' for more information.
 //
 // The -x flag prints commands as they are executed. This is useful for
 // debugging version control commands when a module is downloaded directly
@@ -1991,7 +1993,14 @@
 // Tool runs the go tool command identified by the arguments.
 //
 // Go ships with a number of builtin tools, and additional tools
-// may be defined in the go.mod of the current module.
+// may be defined in the go.mod of the current module. 'go get -tool'
+// can be used to define additional tools in the current module's
+// go.mod file. See 'go help get' for more information.
+//
+// The command can be specified using the full package path to the tool declared with
+// a tool directive. The default binary name of the tool, which is the last component of
+// the package path, excluding the major version suffix, can also be used if it is unique
+// among declared tools.
 //
 // With no arguments it prints the list of known tools.
 //

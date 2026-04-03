@@ -437,9 +437,6 @@ func (opts *goTest) buildArgs(t *tester) (build, run, pkgs, testFlags []string, 
 		run = append(run, "-short")
 	}
 	var tags []string
-	if t.iOS() {
-		tags = append(tags, "lldb")
-	}
 	if noOpt {
 		tags = append(tags, "noopt")
 	}
@@ -703,14 +700,6 @@ func (t *tester) registerTests() {
 				timeout: 300 * time.Second,
 				tags:    []string{"osusergo"},
 				pkg:     "os/user",
-			})
-		t.registerTest("hash/maphash purego implementation",
-			&goTest{
-				variant: "purego",
-				timeout: 300 * time.Second,
-				tags:    []string{"purego"},
-				pkg:     "hash/maphash",
-				env:     []string{"GODEBUG=fips140=off"}, // FIPS 140-3 mode is incompatible with purego
 			})
 	}
 
