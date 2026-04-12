@@ -56,7 +56,7 @@
   "initial_input_max_len": 32,
 
   // tui_monitor: enable LibAFL's interactive terminal UI (TUI).
-  // default: true
+  // default: true (auto-disabled when not in the terminal foreground process group, to avoid getting stopped by job control)
   "tui_monitor": false,
 
   // debug_output: force-enable/disable LIBAFL_DEBUG_OUTPUT (otherwise auto).

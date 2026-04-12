@@ -1085,6 +1085,28 @@ const LIBAFL_GIT_RECENCY_MAPPING_ENV: &str = "LIBAFL_GIT_RECENCY_MAPPING_PATH";
 const GOSENTRY_VERBOSE_AFL_ENV: &str = "GOSENTRY_VERBOSE_AFL";
 const GOSENTRY_VERBOSE_AFL_ALL_INPUTS_ENV: &str = "GOSENTRY_VERBOSE_AFL_ALL_INPUTS";
 
+fn is_in_foreground_process_group() -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::io::AsRawFd;
+
+        let fd = std::io::stdout().as_raw_fd();
+        // SAFETY: libc call, `fd` is a valid file descriptor.
+        let fg_pgid = unsafe { libc::tcgetpgrp(fd) };
+        if fg_pgid == -1 {
+            return false;
+        }
+        // SAFETY: libc call, no unsafe preconditions.
+        let our_pgid = unsafe { libc::getpgrp() };
+        fg_pgid == our_pgid
+    }
+
+    #[cfg(not(unix))]
+    {
+        true
+    }
+}
+
 fn notify_restarting_mgr_exit() {
     // When running under LibAFL's restarting manager in exec mode, exiting the child process
     // without writing the StateRestorer page causes the parent to panic.
@@ -1954,8 +1976,11 @@ fn run(input: PathBuf) {
 
     // Call LLVMFuzzerInitialize() if present.
     let args: Vec<String> = env::args().collect();
-    if unsafe { libfuzzer_initialize(&args) } == -1 {
-        println!("Warning: LLVMFuzzerInitialize failed with -1");
+    let init_ret = unsafe { libfuzzer_initialize(&args) };
+    if init_ret != 0 {
+        eprintln!("golibafl: LLVMFuzzerInitialize failed with {init_ret}");
+        notify_restarting_mgr_exit();
+        std::process::exit(2);
     }
 
     for f in &files {
@@ -1983,13 +2008,17 @@ fn fuzz(
     let is_launcher_client = env::var_os("AFL_LAUNCHER_CLIENT").is_some();
     let verbose = env::var_os(GOSENTRY_VERBOSE_AFL_ENV).is_some();
     let verbose_all_inputs = env::var_os(GOSENTRY_VERBOSE_AFL_ALL_INPUTS_ENV).is_some();
+    let init_failure_marker_path = output.join("golibafl_init_failure.txt");
+    if !is_launcher_client {
+        let _ = fs::remove_file(&init_failure_marker_path);
+    }
 
     // In launcher mode, `launch_with_hooks` installs signal handlers and starts background
     // threads before running the client closure. When fuzzing Go harnesses linked as a static
     // archive, calling `LLVMFuzzerInitialize` from inside the client closure may deadlock.
     // Call it once early in the launcher client process to make sure Go runtime initialization
     // completes before LibAFL sets up the launcher.
-    if is_launcher_client {
+    let launcher_client_init_ret = if is_launcher_client {
         if verbose {
             eprintln!("golibafl: launcher client early init (calling LLVMFuzzerInitialize)");
         }
@@ -1997,10 +2026,17 @@ fn fuzz(
         if verbose {
             eprintln!("golibafl: LLVMFuzzerInitialize returned {init_ret}");
         }
-        if init_ret == -1 {
-            println!("Warning: LLVMFuzzerInitialize failed with -1");
+        if init_ret != 0 {
+            eprintln!("golibafl: LLVMFuzzerInitialize failed with {init_ret}");
+            let _ = fs::write(
+                &init_failure_marker_path,
+                format!("LLVMFuzzerInitialize failed with {init_ret}\n"),
+            );
         }
-    }
+        Some(init_ret)
+    } else {
+        None
+    };
 
     let rand_seed = env::var("LIBAFL_RAND_SEED")
         .ok()
@@ -2239,6 +2275,15 @@ fn fuzz(
             hang_confirm_runs,
             nautilus_cmplog_i2s,
         );
+    }
+
+    if tui_monitor && !is_in_foreground_process_group() {
+        if !is_launcher_client {
+            eprintln!(
+                "golibafl: stdout is a TTY but this process is not in the foreground; disabling TUI monitor to avoid getting stopped by the terminal (SIGTTOU)"
+            );
+        }
+        tui_monitor = false;
     }
 
     match debug_output_override {
@@ -2563,12 +2608,19 @@ fn fuzz(
                 std::process::id()
             );
         }
-        let init_ret = unsafe { libfuzzer_initialize(&args) };
+        let init_ret = launcher_client_init_ret
+            .unwrap_or_else(|| unsafe { libfuzzer_initialize(&args) });
         if verbose {
             eprintln!("golibafl: LLVMFuzzerInitialize returned {init_ret}");
         }
-        if init_ret == -1 {
-            println!("Warning: LLVMFuzzerInitialize failed with -1");
+        if init_ret != 0 {
+            eprintln!("golibafl: LLVMFuzzerInitialize failed with {init_ret}");
+            let _ = fs::write(
+                &init_failure_marker_path,
+                format!("LLVMFuzzerInitialize failed with {init_ret}\n"),
+            );
+            restarting_mgr.send_exiting()?;
+            return Err(Error::shutting_down());
         }
         let counters_map_len = unsafe { COUNTERS_MAPS.len() };
         if verbose {
@@ -3392,7 +3444,13 @@ fn fuzz(
     };
 
     match &launch_res {
-        Ok(()) | Err(Error::ShuttingDown) => (),
+        Ok(()) => (),
+        Err(Error::ShuttingDown) => {
+            if let Ok(msg) = fs::read_to_string(&init_failure_marker_path) {
+                eprint!("golibafl: libafl init failed: {msg}");
+                std::process::exit(2);
+            }
+        }
         Err(err) => {
             if verbose {
                 let diag = launch_diagnostics(err);

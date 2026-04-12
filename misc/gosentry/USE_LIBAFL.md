@@ -341,7 +341,7 @@ Example `libafl.jsonc` (all fields optional; defaults shown in comments):
   "initial_input_max_len": 32,
 
   // tui_monitor: enable LibAFL's interactive terminal UI (TUI)
-  // default: true
+  // default: true (auto-disabled when not in the terminal foreground process group, to avoid getting stopped by job control)
   "tui_monitor": true,
 
   // debug_output: force-enable/disable LIBAFL_DEBUG_OUTPUT (otherwise auto)
@@ -367,6 +367,8 @@ A ready-to-edit template lives at `misc/gosentry/libafl.config.jsonc`.
 ## Troubleshooting
 
 If `golibafl` fails to launch, set `GOSENTRY_VERBOSE_AFL=1` to print extra diagnostics and write them to `OUTPUT_DIR/golibafl_launcher_failure_<pid>.txt`.
+
+If fuzzing "hangs" right after printing `Running target/release/golibafl fuzz ...` and `ps`/`htop` shows `golibafl` in state `T` (stopped), it's usually the TUI monitor getting stopped by the terminal (job control). This happens because `go test` runs `golibafl` in a separate process group. `golibafl` auto-disables the TUI in this situation and falls back to the simple monitor.
 
 If fuzzing prints repeated timeouts with **0 executions** or appears stuck during startup, make sure you are using a LibAFL fork/build that runs the restarting manager in **non-fork (re-exec) mode**. The embedded Go runtime is not fork-safe once initialized, so forking-based restarts can deadlock and look like “exec/sec: 0.000”.
 
