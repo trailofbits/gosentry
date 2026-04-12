@@ -3444,7 +3444,7 @@ func (b *Builder) swigDoIntSize(objdir string) (intsize string, err error) {
 	}
 	srcs := []string{src}
 
-	p := load.GoFilesPackage(modload.NewState(), context.TODO(), load.PackageOpts{}, srcs)
+	p := load.GoFilesPackage(modload.NewLoader(), context.TODO(), load.PackageOpts{}, srcs)
 
 	if _, _, e := BuildToolchain.gc(b, &Action{Mode: "swigDoIntSize", Package: p, Objdir: objdir}, "", nil, nil, "", false, "", srcs); e != nil {
 		return "32", nil
@@ -3463,6 +3463,10 @@ func (b *Builder) swigIntSize(objdir string) (intsize string, err error) {
 
 // Run SWIG on one SWIG input file.
 func (b *Builder) swigOne(a *Action, file, objdir string, pcCFLAGS []string, cxx bool, intgosize string) error {
+	if strings.HasPrefix(file, "cgo") {
+		return errors.New("SWIG file must not use prefix 'cgo'")
+	}
+
 	p := a.Package
 	sh := b.Shell(a)
 

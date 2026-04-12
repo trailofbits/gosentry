@@ -789,3 +789,47 @@ func Uint64Max(a, b uint64) uint64 {
 	// riscv64/rva22u64,riscv64/rva23u64:"MAXU"
 	return max(a, b)
 }
+
+// PPC64x: Canonicalization of uint8/uint16 logical immediates
+func U16And(v uint16) uint16 {
+	// ppc64x:"ANDCC [$]32768" -"MOVD"
+	return v & (1 << 15)
+}
+
+func U16Or(v uint16) uint16 {
+	// ppc64x:"OR[I]? [$]32768" -"MOVD"
+	return v | (1 << 15)
+}
+
+func U16Xor(v uint16) uint16 {
+	// ppc64x:"XOR[I]? [$]32768" -"MOVD"
+	return v ^ (1 << 15)
+}
+
+func U8And(v uint8) uint8 {
+	// ppc64x:"ANDCC [$]128" -"MOVD"
+	return v & (1 << 7)
+}
+
+func U8Or(v uint8) uint8 {
+	// ppc64x:"OR[I]? [$]128" -"MOVD"
+	return v | (1 << 7)
+}
+
+func U8Xor(v uint8) uint8 {
+	// ppc64x:"XOR[I]? [$]128" -"MOVD"
+	return v ^ (1 << 7)
+}
+
+func mul9223372036854775808(a uint64) uint64 {
+	// amd64: "SHLQ [$]63"
+	// arm64: "LSL [$]63"
+	// ppc64x:"SLD [$]63"
+	return a * 9223372036854775808
+}
+func mulneg17293822569102704640(a uint64) uint64 {
+	// amd64: "SHLQ [$]60" "NEGQ"
+	// arm64: "NEG R[0-9]+<<60" -"LSL"
+	// ppc64x:"SLD [$]60" "NEG"
+	return a * 17293822569102704640
+}

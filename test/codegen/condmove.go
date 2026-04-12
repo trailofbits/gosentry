@@ -475,6 +475,80 @@ func cmovmathaddelse(a uint, b bool) uint {
 	return a
 }
 
+func cmovmathadd2(a uint, b bool) uint {
+	if b {
+		a += 2
+	}
+	// amd64:"LEAQ" -"CMOV" -"MUL"
+	// arm64:"ADD R[0-9]+<<1" -"CSEL" -"MUL"
+	// ppc64x: "ISEL" -"MUL"
+	return a
+}
+func cmovmathadd2else(a uint, b bool) uint {
+	if !b {
+		a += 2
+	}
+	// amd64:"LEAQ" -"CMOV" -"MUL"
+	// arm64:"ADD R[0-9]+<<1" -"CSEL" -"MUL"
+	// ppc64x: "ISEL" -"MUL"
+	return a
+}
+
+func cmovmathadd4(a uint, b bool) uint {
+	if b {
+		a += 4
+	}
+	// amd64:"LEAQ" -"CMOV" -"MUL"
+	// arm64:"ADD R[0-9]+<<2" -"CSEL" -"MUL"
+	// ppc64x: "ISEL" -"MUL"
+	return a
+}
+func cmovmathadd4else(a uint, b bool) uint {
+	if !b {
+		a += 4
+	}
+	// amd64:"LEAQ" -"CMOV" -"MUL"
+	// arm64:"ADD R[0-9]+<<2" -"CSEL" -"MUL"
+	// ppc64x: "ISEL" -"MUL"
+	return a
+}
+
+func cmovmathadd8(a uint, b bool) uint {
+	if b {
+		a += 8
+	}
+	// amd64:"LEAQ" -"CMOV" -"MUL"
+	// arm64:"ADD R[0-9]+<<3" -"CSEL" -"MUL"
+	// ppc64x: "ISEL" -"MUL"
+	return a
+}
+func cmovmathadd8else(a uint, b bool) uint {
+	if !b {
+		a += 8
+	}
+	// amd64:"LEAQ" -"CMOV" -"MUL"
+	// arm64:"ADD R[0-9]+<<3" -"CSEL" -"MUL"
+	// ppc64x: "ISEL" -"MUL"
+	return a
+}
+
+func cmovmathadd9223372036854775808(a uint, b bool) uint {
+	if b {
+		a += 1 << 63
+	}
+	// arm64:"ADD R[0-9]+<<63" -"CSEL" -"MUL"
+	// ppc64x: "ISEL" -"MUL"
+	return a
+}
+func cmovmathadd9223372036854775808else(a uint, b bool) uint {
+	if !b {
+		a += 1 << 63
+	}
+	// arm64:"ADD R[0-9]+<<63" -"CSEL" -"MUL"
+	// ppc64x: "ISEL" -"MUL"
+	return a
+}
+
 func cmovmathsub(a uint, b bool) uint {
 	if b {
 		a--
@@ -493,6 +567,42 @@ func cmovmathsubelse(a uint, b bool) uint {
 	// arm64:"SUB" -"CSEL"
 	// ppc64x:"SUB" -"ISEL"
 	// wasm:"I64Sub" -"Select"
+	return a
+}
+
+func cmovmathsub2(a uint, b bool) uint {
+	if b {
+		a -= 2
+	}
+	// arm64 :"SUB R[0-9]+<<1" -"CSEL" -"MUL"
+	// ppc64x: "ISEL" -"MUL"
+	return a
+}
+func cmovmathsub2else(a uint, b bool) uint {
+	if !b {
+		a -= 2
+	}
+	// arm64 :"SUB R[0-9]+<<1" -"CSEL" -"MUL"
+	// ppc64x: "ISEL" -"MUL"
+	return a
+}
+
+// Theses two are special because in fixed width two's complement -(1<<(size-1)) == 1<<(size-1).
+// It doesn't matter if they are implemented with SUB or ADD.
+func cmovmathsub9223372036854775808(a uint, b bool) uint {
+	if b {
+		a -= 1 << 63
+	}
+	// arm64:"(SUB|ADD) R[0-9]+<<63" -"CSEL" -"MUL"
+	// ppc64x: "ISEL" -"MUL"
+	return a
+}
+func cmovmathsub9223372036854775808else(a uint, b bool) uint {
+	if !b {
+		a -= 1 << 63
+	}
+	// arm64:"(SUB|ADD) R[0-9]+<<63" -"CSEL" -"MUL"
+	// ppc64x: "ISEL" -"MUL"
 	return a
 }
 
@@ -582,6 +692,40 @@ func cmovmathorelse(a uint, b bool) uint {
 	return a
 }
 
+func cmovmathor2(a uint, b bool) uint {
+	if b {
+		a |= 2
+	}
+	// arm64:"ORR R[0-9]+<<1" -"CSEL" -"MUL"
+	// ppc64x:"ISEL" -"MUL"
+	return a
+}
+func cmovmathor2else(a uint, b bool) uint {
+	if !b {
+		a |= 2
+	}
+	// arm64:"ORR R[0-9]+<<1" -"CSEL" -"MUL"
+	// ppc64x:"ISEL" -"MUL"
+	return a
+}
+
+func cmovmathor9223372036854775808(a uint, b bool) uint {
+	if b {
+		a |= 1 << 63
+	}
+	// arm64:"ORR R[0-9]+<<63" -"CSEL" -"MUL"
+	// ppc64x:"ISEL" -"MUL"
+	return a
+}
+func cmovmathor9223372036854775808else(a uint, b bool) uint {
+	if !b {
+		a |= 1 << 63
+	}
+	// arm64:"ORR R[0-9]+<<63" -"CSEL" -"MUL"
+	// ppc64x:"ISEL" -"MUL"
+	return a
+}
+
 func cmovmathxor(a uint, b bool) uint {
 	if b {
 		a ^= 1
@@ -600,6 +744,40 @@ func cmovmathxorelse(a uint, b bool) uint {
 	// arm64:"EOR" -"CSEL"
 	// ppc64x:"XOR" -"ISEL"
 	// wasm:"I64Xor" -"Select"
+	return a
+}
+
+func cmovmathxor2(a uint, b bool) uint {
+	if b {
+		a ^= 2
+	}
+	// arm64:"EOR R[0-9]+<<1" -"CSEL" -"MUL"
+	// ppc64x: "ISEL" -"MUL"
+	return a
+}
+func cmovmathxor2else(a uint, b bool) uint {
+	if !b {
+		a ^= 2
+	}
+	// arm64:"EOR R[0-9]+<<1" -"CSEL" -"MUL"
+	// ppc64x: "ISEL" -"MUL"
+	return a
+}
+
+func cmovmathxor9223372036854775808(a uint, b bool) uint {
+	if b {
+		a ^= 1 << 63
+	}
+	// arm64:"EOR R[0-9]+<<63" -"CSEL" -"MUL"
+	// ppc64x: "ISEL" -"MUL"
+	return a
+}
+func cmovmathxor9223372036854775808else(a uint, b bool) uint {
+	if !b {
+		a ^= 1 << 63
+	}
+	// arm64:"EOR R[0-9]+<<63" -"CSEL" -"MUL"
+	// ppc64x: "ISEL" -"MUL"
 	return a
 }
 

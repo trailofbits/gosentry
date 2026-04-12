@@ -758,9 +758,9 @@ var defaultVetFlags = []string{
 }
 
 func runTest(ctx context.Context, cmd *base.Command, args []string) {
-	moduleLoaderState := modload.NewState()
+	moduleLoader := modload.NewLoader()
 	pkgArgs, testArgs = testFlags(args)
-	moduleLoaderState.InitWorkfile() // The test command does custom flag processing; initialize workspaces after that.
+	moduleLoader.InitWorkfile() // The test command does custom flag processing; initialize workspaces after that.
 
 	// gosentry defaults:
 	// - When fuzzing, default to LibAFL mode.
@@ -799,7 +799,7 @@ func runTest(ctx context.Context, cmd *base.Command, args []string) {
 
 	work.FindExecCmd() // initialize cached result
 
-	work.BuildInit(moduleLoaderState)
+	work.BuildInit(moduleLoader)
 	if testGenerateCoverage {
 		if testFuzz == "" {
 			base.Fatalf("-generate-coverage requires -fuzz")
@@ -864,14 +864,14 @@ func runTest(ctx context.Context, cmd *base.Command, args []string) {
 			if !platform.RaceDetectorSupported(cfg.Goos, cfg.Goarch) {
 				base.Fatalf("-catch-races is not supported on %s/%s", cfg.Goos, cfg.Goarch)
 			}
+			}
 		}
-	}
 	work.VetFlags = testVet.flags
 	work.VetExplicit = testVet.explicit
 	work.VetTool = base.Tool("vet")
 
 	pkgOpts := load.PackageOpts{ModResolveTests: true}
-	pkgs = load.PackagesAndErrors(moduleLoaderState, ctx, pkgOpts, pkgArgs)
+	pkgs = load.PackagesAndErrors(moduleLoader, ctx, pkgOpts, pkgArgs)
 	// We *don't* call load.CheckPackageErrors here because we want to report
 	// loading errors as per-package test setup errors later.
 	if len(pkgs) == 0 {
@@ -898,12 +898,12 @@ func runTest(ctx context.Context, cmd *base.Command, args []string) {
 		// the module cache (or permanently alter the behavior of std tests for all
 		// users) by writing the failing input to the package's testdata directory.
 		// (See https://golang.org/issue/48495 and cmd/internal/fuzztest/test_fuzz_modcache.txt.)
-		mainMods := moduleLoaderState.MainModules
+		mainMods := moduleLoader.MainModules
 		if m := pkgs[0].Module; m != nil && m.Path != "" {
 			if !mainMods.Contains(m.Path) {
 				base.Fatalf("cannot use -fuzz flag on package outside the main module")
 			}
-		} else if pkgs[0].Standard && moduleLoaderState.Enabled() {
+		} else if pkgs[0].Standard && moduleLoader.Enabled() {
 			// Because packages in 'std' and 'cmd' are part of the standard library,
 			// they are only treated as part of a module in 'go mod' subcommands and
 			// 'go get'. However, we still don't want to accidentally corrupt their
@@ -1016,7 +1016,7 @@ func runTest(ctx context.Context, cmd *base.Command, args []string) {
 		}
 	}
 
-	b := work.NewBuilder("", moduleLoaderState.VendorDirOrEmpty)
+	b := work.NewBuilder("", moduleLoader.VendorDirOrEmpty)
 	defer func() {
 		if err := b.Close(); err != nil {
 			base.Fatal(err)
@@ -1027,15 +1027,15 @@ func runTest(ctx context.Context, cmd *base.Command, args []string) {
 	var writeCoverMetaAct *work.Action
 
 	if cfg.BuildCoverPkg != nil {
-		match := make([]func(*modload.State, *load.Package) bool, len(cfg.BuildCoverPkg))
+		match := make([]func(*modload.Loader, *load.Package) bool, len(cfg.BuildCoverPkg))
 		for i := range cfg.BuildCoverPkg {
 			match[i] = load.MatchPackage(cfg.BuildCoverPkg[i], base.Cwd())
 		}
 
 		// Select for coverage all dependencies matching the -coverpkg
 		// patterns.
-		plist := load.TestPackageList(moduleLoaderState, ctx, pkgOpts, pkgs)
-		testCoverPkgs = load.SelectCoverPackages(moduleLoaderState, plist, match, "test")
+		plist := load.TestPackageList(moduleLoader, ctx, pkgOpts, pkgs)
+		testCoverPkgs = load.SelectCoverPackages(moduleLoader, plist, match, "test")
 		if len(testCoverPkgs) > 0 {
 			// create a new singleton action that will collect up the
 			// meta-data files from all of the packages mentioned in
@@ -1118,7 +1118,7 @@ func runTest(ctx context.Context, cmd *base.Command, args []string) {
 			"testing":               true,
 			"time":                  true,
 		}
-		for _, p := range load.TestPackageList(moduleLoaderState, ctx, pkgOpts, pkgs) {
+		for _, p := range load.TestPackageList(moduleLoader, ctx, pkgOpts, pkgs) {
 			if !skipInstrumentation[p.ImportPath] {
 				p.Internal.FuzzInstrument = true
 			}
@@ -1148,7 +1148,7 @@ func runTest(ctx context.Context, cmd *base.Command, args []string) {
 			// happens we'll wind up building the Q compile action
 			// before updating its deps to include sync/atomic).
 			if cfg.BuildCoverMode == "atomic" && p.ImportPath != "sync/atomic" {
-				load.EnsureImport(moduleLoaderState, p, "sync/atomic")
+				load.EnsureImport(moduleLoader, p, "sync/atomic")
 			}
 			// Tag the package for static meta-data generation if no
 			// test files (this works only with the new coverage
@@ -1215,7 +1215,7 @@ func runTest(ctx context.Context, cmd *base.Command, args []string) {
 			reportSetupFailed(firstErrPkg, firstErrPkg.Error)
 			continue
 		}
-		buildTest, runTest, printTest, perr, err := builderTest(moduleLoaderState, b, ctx, pkgOpts, p, allImports[p], writeCoverMetaAct)
+		buildTest, runTest, printTest, perr, err := builderTest(moduleLoader, b, ctx, pkgOpts, p, allImports[p], writeCoverMetaAct)
 		if err != nil {
 			reportErr(perr, err)
 			reportSetupFailed(perr, err)
@@ -1296,7 +1296,7 @@ var windowsBadWords = []string{
 	"update",
 }
 
-func builderTest(loaderstate *modload.State, b *work.Builder, ctx context.Context, pkgOpts load.PackageOpts, p *load.Package, imported bool, writeCoverMetaAct *work.Action) (buildAction, runAction, printAction *work.Action, perr *load.Package, err error) {
+func builderTest(ld *modload.Loader, b *work.Builder, ctx context.Context, pkgOpts load.PackageOpts, p *load.Package, imported bool, writeCoverMetaAct *work.Action) (buildAction, runAction, printAction *work.Action, perr *load.Package, err error) {
 	if len(p.TestGoFiles)+len(p.XTestGoFiles) == 0 {
 		applyPanicOnCallGcflag(p)
 		build := b.CompileAction(work.ModeBuild, work.ModeBuild, p)
@@ -1325,7 +1325,7 @@ func builderTest(loaderstate *modload.State, b *work.Builder, ctx context.Contex
 			run.Deps = append(run.Deps, writeCoverMetaAct)
 			writeCoverMetaAct.Deps = append(writeCoverMetaAct.Deps, build)
 		}
-		addTestVet(loaderstate, b, p, run, nil)
+		addTestVet(ld, b, p, run, nil)
 		print := &work.Action{
 			Mode:       "test print",
 			Actor:      work.ActorFunc(builderPrintTest),
@@ -1349,7 +1349,7 @@ func builderTest(loaderstate *modload.State, b *work.Builder, ctx context.Contex
 			Paths: cfg.BuildCoverPkg,
 		}
 	}
-	pmain, ptest, pxtest, perr := load.TestPackagesFor(loaderstate, ctx, pkgOpts, p, cover)
+	pmain, ptest, pxtest, perr := load.TestPackagesFor(ld, ctx, pkgOpts, p, cover)
 	if perr != nil {
 		return nil, nil, nil, perr, perr.Error
 	}
@@ -1366,24 +1366,24 @@ func builderTest(loaderstate *modload.State, b *work.Builder, ctx context.Contex
 
 	testBinary := testBinaryName(p)
 
-	if testFuzz != "" && testUseLibAFL && !testGenerateCoverage {
-		pmain.CgoFiles = append(pmain.CgoFiles, "_libaflmain.go")
-		pmain.Internal.Ldflags = append(pmain.Internal.Ldflags, "-buildmode=c-archive")
+		if testFuzz != "" && testUseLibAFL && !testGenerateCoverage {
+			pmain.CgoFiles = append(pmain.CgoFiles, "_libaflmain.go")
+			pmain.Internal.Ldflags = append(pmain.Internal.Ldflags, "-buildmode=c-archive")
 
 		// Our generated harness uses cgo exports. Ensure the test main package's
 		// importcfg contains the cgo runtime dependencies needed by the files
 		// generated by cgo (_cgo_gotypes.go, etc), plus any extra packages the
 		// harness imports.
 		var stk load.ImportStack
-		for _, imp := range []string{"regexp", "runtime/cgo", "syscall"} {
-			if slices.Contains(pmain.Imports, imp) {
-				continue
+			for _, imp := range []string{"regexp", "runtime/cgo", "syscall"} {
+				if slices.Contains(pmain.Imports, imp) {
+					continue
+				}
+				pmain.Imports = append(pmain.Imports, imp)
+				p1 := load.LoadPackage(ld, ctx, pkgOpts, imp, pmain.Dir, &stk, nil, 0)
+				pmain.Internal.Imports = append(pmain.Internal.Imports, p1)
 			}
-			pmain.Imports = append(pmain.Imports, imp)
-			p1 := load.LoadPackage(loaderstate, ctx, pkgOpts, imp, pmain.Dir, &stk, nil, 0)
-			pmain.Internal.Imports = append(pmain.Internal.Imports, p1)
 		}
-	}
 
 	if testGenerateCoverage {
 		pmain.GoFiles = append(pmain.GoFiles, "_gosentry_generate_coverage.go")
@@ -1391,15 +1391,15 @@ func builderTest(loaderstate *modload.State, b *work.Builder, ctx context.Contex
 		// Ensure the test main package's importcfg contains the dependencies for
 		// the generated coverage replay helper.
 		var stk load.ImportStack
-		for _, imp := range []string{"fmt", "io/fs", "os", "path/filepath", "regexp", "testing"} {
-			if slices.Contains(pmain.Imports, imp) {
-				continue
+			for _, imp := range []string{"fmt", "io/fs", "os", "path/filepath", "regexp", "testing"} {
+				if slices.Contains(pmain.Imports, imp) {
+					continue
+				}
+				pmain.Imports = append(pmain.Imports, imp)
+				p1 := load.LoadPackage(ld, ctx, pkgOpts, imp, pmain.Dir, &stk, nil, 0)
+				pmain.Internal.Imports = append(pmain.Internal.Imports, p1)
 			}
-			pmain.Imports = append(pmain.Imports, imp)
-			p1 := load.LoadPackage(loaderstate, ctx, pkgOpts, imp, pmain.Dir, &stk, nil, 0)
-			pmain.Internal.Imports = append(pmain.Internal.Imports, p1)
 		}
-	}
 
 	applyPanicOnCallGcflag(pmain, ptest, pxtest, p)
 
@@ -1607,16 +1607,16 @@ func init() {
 		}
 	}
 
-	a := b.LinkAction(loaderstate, work.ModeBuild, work.ModeBuild, pmain)
-	if testFuzz != "" && testUseLibAFL && !testGenerateCoverage {
-		a.Target = testDir + "libharness.a"
-	} else {
-		a.Target = testDir + testBinary + cfg.ExeSuffix
-	}
-	if cfg.Goos == "windows" && !(testFuzz != "" && testUseLibAFL && !testGenerateCoverage) {
-		// There are many reserved words on Windows that,
-		// if used in the name of an executable, cause Windows
-		// to try to ask for extra permissions.
+		a := b.LinkAction(ld, work.ModeBuild, work.ModeBuild, pmain)
+		if testFuzz != "" && testUseLibAFL && !testGenerateCoverage {
+			a.Target = testDir + "libharness.a"
+		} else {
+			a.Target = testDir + testBinary + cfg.ExeSuffix
+		}
+		if cfg.Goos == "windows" && !(testFuzz != "" && testUseLibAFL && !testGenerateCoverage) {
+			// There are many reserved words on Windows that,
+			// if used in the name of an executable, cause Windows
+			// to try to ask for extra permissions.
 		// The word list includes setup, install, update, and patch,
 		// but it does not appear to be defined anywhere.
 		// We have run into this trying to run the
@@ -1687,14 +1687,12 @@ func init() {
 	if testC {
 		printAction = &work.Action{Mode: "test print (nop)", Package: p, Deps: []*work.Action{runAction}} // nop
 		vetRunAction = printAction
-	} else {
-		// run test
-		rta := &runTestActor{
-			loaderstate:       loaderstate,
-			pkgOpts:           pkgOpts,
-			writeCoverMetaAct: writeCoverMetaAct,
-		}
-		runAction = &work.Action{
+		} else {
+			// run test
+			rta := &runTestActor{
+				writeCoverMetaAct: writeCoverMetaAct,
+			}
+			runAction = &work.Action{
 			Mode:       "test run",
 			Actor:      rta,
 			Deps:       []*work.Action{buildAction},
@@ -1739,10 +1737,10 @@ func init() {
 	}
 
 	if len(ptest.GoFiles)+len(ptest.CgoFiles) > 0 {
-		addTestVet(loaderstate, b, ptest, vetRunAction, installAction)
+		addTestVet(ld, b, ptest, vetRunAction, installAction)
 	}
 	if pxtest != nil {
-		addTestVet(loaderstate, b, pxtest, vetRunAction, installAction)
+		addTestVet(ld, b, pxtest, vetRunAction, installAction)
 	}
 
 	if installAction != nil {
@@ -1757,12 +1755,12 @@ func init() {
 	return buildAction, runAction, printAction, nil, nil
 }
 
-func addTestVet(loaderstate *modload.State, b *work.Builder, p *load.Package, runAction, installAction *work.Action) {
+func addTestVet(ld *modload.Loader, b *work.Builder, p *load.Package, runAction, installAction *work.Action) {
 	if testVet.off {
 		return
 	}
 
-	vet := b.VetAction(loaderstate, work.ModeBuild, work.ModeBuild, false, p)
+	vet := b.VetAction(ld, work.ModeBuild, work.ModeBuild, false, p)
 	runAction.Deps = append(runAction.Deps, vet)
 	// Install will clean the build directory.
 	// Make sure vet runs first.
@@ -1777,16 +1775,13 @@ var noTestsToRun = []byte("\ntesting: warning: no tests to run\n")
 var noFuzzTestsToFuzz = []byte("\ntesting: warning: no fuzz tests to fuzz\n")
 var tooManyFuzzTestsToFuzz = []byte("\ntesting: warning: -fuzz matches more than one fuzz test, won't fuzz\n")
 
-// runTestActor is the actor for running a test.
-type runTestActor struct {
-	c runCache
+	// runTestActor is the actor for running a test.
+	type runTestActor struct {
+		c runCache
 
-	loaderstate *modload.State
-	pkgOpts     load.PackageOpts
-
-	// writeCoverMetaAct points to the pseudo-action for collecting
-	// coverage meta-data files for selected -cover test runs. See the
-	// comment in runTest at the definition of writeCoverMetaAct for
+		// writeCoverMetaAct points to the pseudo-action for collecting
+		// coverage meta-data files for selected -cover test runs. See the
+		// comment in runTest at the definition of writeCoverMetaAct for
 	// more details.
 	writeCoverMetaAct *work.Action
 
@@ -1799,9 +1794,10 @@ type runTestActor struct {
 type runCache struct {
 	disableCache bool // cache should be disabled for this run
 
-	buf *bytes.Buffer
-	id1 cache.ActionID
-	id2 cache.ActionID
+	buf     *bytes.Buffer
+	id1     cache.ActionID
+	id2     cache.ActionID
+	covMeta cache.ActionID // Hash of writeCoverMetaAct dependencies, for invalidating coverage profiles
 }
 
 func coverProfTempFile(a *work.Action) string {
@@ -2936,6 +2932,33 @@ func (c *runCache) tryCacheWithID(b *work.Builder, a *work.Action, id string) bo
 		return false
 	}
 
+	// If we are collecting coverage for out-of-band packages (-coverpkg),
+	// find the writeCoverMetaAct among the run action's dependencies and hash
+	// its deps to ensure the cache invalidates when covered packages change.
+	// Note: the run action's original deps may be wrapped inside a "test barrier"
+	// action, so we search both a.Deps and any barrier's deps.
+	if len(testCoverPkgs) != 0 {
+		searchDeps := a.Deps
+		for _, dep := range a.Deps {
+			if dep.Mode == "test barrier" {
+				searchDeps = dep.Deps
+				break
+			}
+		}
+		for _, dep := range searchDeps {
+			if dep.Mode == "write coverage meta-data file" {
+				h := cache.NewHash("covermeta")
+				for _, metaDep := range dep.Deps {
+					if aid := metaDep.BuildActionID(); aid != "" {
+						fmt.Fprintf(h, "dep %s\n", aid)
+					}
+				}
+				c.covMeta = h.Sum()
+				break
+			}
+		}
+	}
+
 	var cacheArgs []string
 	for _, arg := range testArgs {
 		i := strings.Index(arg, "=")
@@ -3042,7 +3065,7 @@ func (c *runCache) tryCacheWithID(b *work.Builder, a *work.Action, id string) bo
 	// Merge cached cover profile data to cover profile.
 	if testCoverProfile != "" {
 		// Specifically ignore entry as it will be the same as above.
-		cpData, _, err := cache.GetFile(cache.Default(), coverProfileAndInputKey(testID, testInputsID))
+		cpData, _, err := cache.GetFile(cache.Default(), coverProfileAndInputKey(testID, testInputsID, c.covMeta))
 		if err != nil {
 			if cache.DebugTest {
 				fmt.Fprintf(os.Stderr, "testcache: %s: cached cover profile missing: %v\n", a.Package.ImportPath, err)
@@ -3050,6 +3073,18 @@ func (c *runCache) tryCacheWithID(b *work.Builder, a *work.Action, id string) bo
 			return false
 		}
 		mergeCoverProfile(cpData)
+	} else if c.covMeta != (cache.ActionID{}) {
+		// If we have a coverage metadata hash but no testCoverProfile, we're collecting
+		// coverage for out-of-band packages. Check if the coverage profile cache is still
+		// valid. If c.covMeta changed (meaning a covered package changed), the coverage
+		// profile cache will miss and we need to re-run the test.
+		_, _, err := cache.GetFile(cache.Default(), coverProfileAndInputKey(testID, testInputsID, c.covMeta))
+		if err != nil {
+			if cache.DebugTest {
+				fmt.Fprintf(os.Stderr, "testcache: %s: coverage metadata changed, re-running test: %v\n", a.Package.ImportPath, err)
+			}
+			return false
+		}
 	}
 
 	if len(data) == 0 || data[len(data)-1] != '\n' {
@@ -3240,9 +3275,15 @@ func testAndInputKey(testID, testInputsID cache.ActionID) cache.ActionID {
 	return cache.Subkey(testID, fmt.Sprintf("inputs:%x", testInputsID))
 }
 
-// coverProfileAndInputKey returns the "coverprofile" cache key for the pair (testID, testInputsID).
-func coverProfileAndInputKey(testID, testInputsID cache.ActionID) cache.ActionID {
-	return cache.Subkey(testAndInputKey(testID, testInputsID), "coverprofile")
+// coverProfileAndInputKey returns the "coverprofile" cache key.
+// If covMetaID is non-zero, it is included in the hash to ensure coverage profiles are invalidated
+// when the coverage metadata changes (e.g., when source files in covered packages are modified).
+func coverProfileAndInputKey(testID, testInputsID, covMetaID cache.ActionID) cache.ActionID {
+	key := testAndInputKey(testID, testInputsID)
+	if covMetaID != (cache.ActionID{}) {
+		key = cache.Subkey(key, fmt.Sprintf("coverdeps:%x", covMetaID))
+	}
+	return cache.Subkey(key, "coverprofile")
 }
 
 func (c *runCache) saveOutput(a *work.Action) {
@@ -3283,7 +3324,11 @@ func (c *runCache) saveOutput(a *work.Action) {
 		cache.PutNoVerify(cache.Default(), c.id1, bytes.NewReader(testlog))
 		cache.PutNoVerify(cache.Default(), testAndInputKey(c.id1, testInputsID), bytes.NewReader(a.TestOutput.Bytes()))
 		if coverProfile != nil {
-			cache.PutNoVerify(cache.Default(), coverProfileAndInputKey(c.id1, testInputsID), bytes.NewReader(coverProfile))
+			cache.PutNoVerify(cache.Default(), coverProfileAndInputKey(c.id1, testInputsID, c.covMeta), bytes.NewReader(coverProfile))
+		} else if c.covMeta != (cache.ActionID{}) {
+			// Write a sentinel so the else-if branch in tryCacheWithID can verify
+			// that the covMeta hash has not changed since the last run.
+			cache.PutNoVerify(cache.Default(), coverProfileAndInputKey(c.id1, testInputsID, c.covMeta), bytes.NewReader(nil))
 		}
 	}
 	if c.id2 != (cache.ActionID{}) {
@@ -3293,7 +3338,10 @@ func (c *runCache) saveOutput(a *work.Action) {
 		cache.PutNoVerify(cache.Default(), c.id2, bytes.NewReader(testlog))
 		cache.PutNoVerify(cache.Default(), testAndInputKey(c.id2, testInputsID), bytes.NewReader(a.TestOutput.Bytes()))
 		if coverProfile != nil {
-			cache.PutNoVerify(cache.Default(), coverProfileAndInputKey(c.id2, testInputsID), bytes.NewReader(coverProfile))
+			cache.PutNoVerify(cache.Default(), coverProfileAndInputKey(c.id2, testInputsID, c.covMeta), bytes.NewReader(coverProfile))
+		} else if c.covMeta != (cache.ActionID{}) {
+			// Sentinel for covMeta validity; see comment in id1 block above.
+			cache.PutNoVerify(cache.Default(), coverProfileAndInputKey(c.id2, testInputsID, c.covMeta), bytes.NewReader(nil))
 		}
 	}
 }
