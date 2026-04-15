@@ -91,10 +91,13 @@ func opsInProg(p *obj.Prog) iter.Seq[*obj.Addr] {
 // aclass returns the AClass of an Addr.
 func aclass(a *obj.Addr) AClass {
 	if a.Type == obj.TYPE_REG {
+		if a.Offset&(int64(1)<<62) != 0 {
+			return AC_PREGSEL
+		}
 		if a.Reg >= REG_Z0 && a.Reg <= REG_Z31 {
 			return AC_ZREG
 		}
-		if a.Reg >= REG_P0 && a.Reg <= REG_P15 {
+		if a.Reg >= REG_P0 && a.Reg <= REG_PN15 {
 			return AC_PREG
 		}
 		if a.Reg >= REG_ARNG && a.Reg < REG_ELEM {
@@ -132,6 +135,9 @@ func aclass(a *obj.Addr) AClass {
 		return AC_IMM
 	}
 	if a.Type == obj.TYPE_REGLIST {
+		if a.Scale > 0 {
+			return AC_REGLIST_RANGE
+		}
 		switch (a.Offset >> 12) & 0xf {
 		case 0x7:
 			return AC_REGLIST1
@@ -155,7 +161,7 @@ func aclass(a *obj.Addr) AClass {
 	if a.Type == obj.TYPE_SPECIAL {
 		return AC_SPECIAL
 	}
-	panic("unknown AClass")
+	panic(fmt.Errorf("unknown AClass, addr = %v\n", a))
 }
 
 // addrComponent returns the binary (component) of the stored element in a at index, for operand
@@ -172,6 +178,31 @@ func aclass(a *obj.Addr) AClass {
 // More details are in the comments in the switch cases of this function.
 func addrComponent(a *obj.Addr, acl AClass, index int) uint32 {
 	switch acl {
+	//	AClass: AC_PREGSEL
+	//	GNU mnemonic: <preg>.<T>[<selreg>, <imm>]
+	//	Go mnemonic:
+	//		[selreg, $idximm](preg.T)
+	//	Encoding:
+	//		Type = TYPE_REG
+	// 		Offset = packed bits: preg (5 bits) | T (4 bits) | selreg (5 bits) | idximm (6 bits) | sentinel (bit 62)
+	case AC_PREGSEL:
+		switch index {
+		case 0:
+			return uint32(a.Offset & 31)
+		case 1:
+			return uint32((a.Offset >> 5) & 15)
+		case 2:
+			return uint32((a.Offset>>9)&31 + REG_R0) // encoding functions assume a ARM64 register
+		case 3:
+			// This is to check the width of selreg, which is guaranteed to be W in AC_PREGSEL.
+			// W check always returns true as it's resolved in the generator already.
+			// So we just return a default value 0 here.
+			return 0
+		case 4:
+			return uint32((a.Offset >> 14) & 63)
+		default:
+			panic(fmt.Errorf("unknown elm index at %d in AClass %d", index, acl))
+		}
 	//	AClass: AC_ARNG, AC_PREG, AC_PREGZ, AC_PREGM, AC_ZREG
 	//	GNU mnemonic: <reg>.<T> Or <reg>/<T> (T is M or Z)
 	//	Go mnemonic:
@@ -248,14 +279,15 @@ func addrComponent(a *obj.Addr, acl AClass, index int) uint32 {
 		default:
 			panic(fmt.Errorf("unknown elm index at %d in AClass %d", index, acl))
 		}
-	//	AClass: AC_REGLIST1, AC_REGLIST2, AC_REGLIST3, AC_REGLIST4
+	//	AClass: AC_REGLIST1, AC_REGLIST2, AC_REGLIST3, AC_REGLIST4, AC_REGLIST_RANGE
 	//	GNU mnemonic: {reg1.T, reg2.T, ...}
 	//	Go mnemonic:
 	//		[reg1.T, reg2.T, ...]
 	//	Encoding:
 	//		Type = TYPE_REGLIST
 	// 		Offset = register prefix | register count | arrangement (opcode) | first register
-	case AC_REGLIST1, AC_REGLIST2, AC_REGLIST3, AC_REGLIST4:
+	//		Scale = range size - 1 (if REGLIST_RANGE)
+	case AC_REGLIST1, AC_REGLIST2, AC_REGLIST3, AC_REGLIST4, AC_REGLIST_RANGE:
 		firstReg := int(a.Offset & 31)
 		prefix := a.Offset >> 32 & 0b11
 		sum := 32
@@ -279,10 +311,19 @@ func addrComponent(a *obj.Addr, acl AClass, index int) uint32 {
 			if index > 8 {
 				panic(fmt.Errorf("unknown elm index at %d in AClass %d", index, acl))
 			}
+		case AC_REGLIST_RANGE:
+			// It behaves just like a AC_REGLIST2
+			if index > 4 {
+				panic(fmt.Errorf("unknown elm index at %d in AClass %d", index, acl))
+			}
 		}
 		switch index % 2 {
 		case 0:
 			// register
+			if a.Scale > 0 {
+				// For register ranges in SVE we allow discontiguous registers.
+				return uint32((firstReg + (index/2)*int(a.Scale)) % sum)
+			}
 			return uint32((firstReg + index/2) % sum)
 		case 1:
 			// arrangement
@@ -418,7 +459,9 @@ var codeShift161919212223 uint32 = 0xfffffffd
 var codeShift161919212224 uint32 = 0xfffffffc
 var codeShift588102224 uint32 = 0xfffffffb
 var codeLogicalImmArrEncoding uint32 = 0xfffffffa
-var codeNoOp uint32 = 0xfffffff9
+var codeImm3Tsize1621 uint32 = 0xfffffff9
+var codeShiftI1TszhTszl uint32 = 0xfffffff8
+var codeNoOp uint32 = 0xfffffff7
 
 // encodeI1Tsz is the implementation of the following encoding logic:
 // Is the immediate index, in the range 0 to one less than the number of elements in 128 bits, encoded in "i1:tsz".
@@ -608,7 +651,7 @@ func encodeShiftTriple(v uint32, r [6]int, prevAddr *obj.Addr, op obj.As) (uint3
 // The lower bits of imms dictate exactly how many contiguous 1s exist inside that block.
 // The immr value tells the processor how many bits to rotate that block to the right.
 // Finally, the resulting block is duplicated to fill a standard 64-bit lane.
-func encodeLogicalImmArrEncoding(v uint32, adjacentAddr *obj.Addr) (uint32, bool) {
+func encodeLogicalImmArrEncoding(v uint64, adjacentAddr *obj.Addr) (uint32, bool) {
 	acl := aclass(adjacentAddr)
 	if acl != AC_ARNG {
 		return 0, false
@@ -629,7 +672,7 @@ func encodeLogicalImmArrEncoding(v uint32, adjacentAddr *obj.Addr) (uint32, bool
 		v32 := uint64(v)
 		val = v32 | (v32 << 32)
 	case ARNG_D: // 64-bit lane
-		val = uint64(v) // Top 32 bits are implicitly 0
+		val = uint64(v)
 	default:
 		return 0, false
 	}
@@ -704,6 +747,65 @@ func encodeLogicalImmArrEncoding(v uint32, adjacentAddr *obj.Addr) (uint32, bool
 	return imm13 << 5, true
 }
 
+// encodeImm3Tsize1621 is the implementation of the following encoding logic:
+// Is the immediate shift amount, in the range 1 to number of bits per element, encoded in "tsize:imm3".
+// bit range mappings:
+// imm3: [16:19)
+// tsize: [19:21)
+//
+// srcArr is the <Tb> in the source reglist (ranged).
+func encodeImm3Tsize1621(v uint32, srcArr uint32) (uint32, bool) {
+	// From ARM ASL: let shift : integer = (2 * esize) - UInt(tsize::imm3);
+	// Then tsize::imm3 = (2 * esize) - shift.
+	var size uint32
+	switch srcArr {
+	case ARNG_H:
+		// It's the destination size, which is half the source.
+		size = 8
+	case ARNG_S:
+		size = 16
+	default:
+		return 0, false
+	}
+	if v < 1 || v > size {
+		return 0, false
+	}
+	return (((2*size - v) & 0x1f) << 16), true
+}
+
+// encodeShiftI1TszhTszl is the implementation of the following encoding logic:
+// Is the element index, in the range 0 to one less than the number of vector elements in a 128-bit vector register, encoded in "i1:tszh:tszl".
+// bit range mappings:
+// i1: [23:24)
+// tszh: [22:23)
+// tszl: [18:21)
+//
+// arr is the arrangement
+func encodeShiftI1TszhTszl(v uint32, arr uint32) (uint32, bool) {
+	var shift, max uint32
+	switch arr {
+	case ARNG_B:
+		shift = 1
+		max = 16
+	case ARNG_H:
+		shift = 2
+		max = 8
+	case ARNG_S:
+		shift = 3
+		max = 4
+	case ARNG_D:
+		shift = 4
+		max = 2
+	default:
+		return 0, false
+	}
+	if v >= max {
+		return 0, false
+	}
+	v <<= shift
+	return ((v & 0x7) << 18) | ((v >> 3) << 22), true
+}
+
 // tryEncode tries to encode p with i, it returns the encoded binary and ok signal.
 func (i *instEncoder) tryEncode(p *obj.Prog) (uint32, bool) {
 	bin := i.fixedBits
@@ -756,7 +858,14 @@ func (i *instEncoder) tryEncode(p *obj.Prog) (uint32, bool) {
 					case codeShift588102224:
 						b, ok = encodeShiftTriple(val, [6]int{5, 8, 8, 10, 22, 24}, addrs[opIdx+1], p.As)
 					case codeLogicalImmArrEncoding:
-						b, ok = encodeLogicalImmArrEncoding(val, addrs[opIdx+1])
+						// Now that we know this is an immediate.
+						// ARM64 allows imm13 to encode up to 64 bits of immediates.
+						// addrComponent is not the right fit here, we need to extract [Offset] fields manually.
+						b, ok = encodeLogicalImmArrEncoding(uint64(addr.Offset), addrs[opIdx+1])
+					case codeImm3Tsize1621:
+						b, ok = encodeImm3Tsize1621(val, addrComponent(addrs[opIdx+1], aclass(addrs[opIdx+1]), 1))
+					case codeShiftI1TszhTszl:
+						b, ok = encodeShiftI1TszhTszl(val, addrComponent(addr, AC_PREGSEL, 1))
 					case codeNoOp:
 						b, ok = 0, true
 					default:
@@ -783,6 +892,5 @@ func (i *instEncoder) tryEncode(p *obj.Prog) (uint32, bool) {
 			}
 		}
 	}
-
 	return bin, true
 }

@@ -922,9 +922,12 @@ func (w *writer) doObj(wext *writer, obj types2.Object) pkgbits.CodeObj {
 		for _, m := range methods {
 			w.method(wext, m)
 		}
-		// encode generic methods elsewhere
-		for _, m := range gmethods {
-			w.p.objIdx(m)
+		// encode a pointer to each generic method
+		if w.Version().Has(pkgbits.GenericMethods) {
+			w.Len(len(gmethods))
+			for _, m := range gmethods {
+				w.Reloc(pkgbits.SectionObj, w.p.objIdx(m))
+			}
 		}
 
 		return pkgbits.ObjType
@@ -1071,8 +1074,12 @@ func (w *writer) qualifiedIdent(obj types2.Object) {
 	// Generic methods are promoted to objects and thus need qualified identifiers.
 	// They must be contextualized by their defining type.
 	if isGenericMethod(obj.Type()) {
-		recv := types2.Unalias(deref2(obj.Type().(*types2.Signature).Recv().Type()))
-		name = fmt.Sprintf("%s.%s", recv.(*types2.Named).Obj().Name(), name)
+		recv := obj.Type().(*types2.Signature).Recv().Type()
+		fstr := "%s.%s"
+		if _, ok := recv.(*types2.Pointer); ok {
+			fstr = "(*%s).%s"
+		}
+		name = fmt.Sprintf(fstr, types2.Unalias(deref2(recv)).(*types2.Named).Obj().Name(), name)
 	}
 
 	w.pkg(obj.Pkg())
