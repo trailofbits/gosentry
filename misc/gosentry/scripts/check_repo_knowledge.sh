@@ -69,11 +69,15 @@ fi
 
 changed_files="$(git diff --name-only "${base}...HEAD")"
 
-if echo "${changed_files}" | grep -qx "src/cmd/go/internal/test/testflag.go"; then
+libafl_testflag_pattern='^[+-][^+-].*(testUseLibAFL|"use-libafl"|testFocusOnNewCode|"focus-on-new-code"|testCatchRaces|"catch-races"|testCatchLeaks|"catch-leaks"|testGenerateCoverage|"generate-coverage"|testUseGrammar|"use-grammar"|grammarFilesFlag|testGrammar|"grammar"|testLibAFLConfig|"libafl-config")'
+
+# testflag.go also carries upstream Go flags like -vet. Only require a LibAFL
+# doc update when the diff touches gosentry's LibAFL-specific flags or parsing.
+if git --no-pager diff --no-ext-diff --no-color --unified=0 "${base}...HEAD" -- src/cmd/go/internal/test/testflag.go | grep -Eq "${libafl_testflag_pattern}"; then
   if ! echo "${changed_files}" | grep -qx "misc/gosentry/USE_LIBAFL.md"; then
     cat >&2 <<'EOF'
 docs sync check failed:
-- src/cmd/go/internal/test/testflag.go changed
+- LibAFL-related lines in src/cmd/go/internal/test/testflag.go changed
 - but misc/gosentry/USE_LIBAFL.md was not updated
 
 Rule: if LibAFL `go test` flags change, update the canonical LibAFL doc.
@@ -82,7 +86,7 @@ EOF
   fi
 fi
 
-if git diff "${base}...HEAD" -- src/cmd/compile/internal/base/flag.go | grep -Eq "(OverflowDetect|TruncationDetect|panic-on-call|PanicOnCall)"; then
+if git --no-pager diff --no-ext-diff --no-color "${base}...HEAD" -- src/cmd/compile/internal/base/flag.go | grep -Eq "(OverflowDetect|TruncationDetect|panic-on-call|PanicOnCall)"; then
   if ! echo "${changed_files}" | grep -qx "README.md"; then
     cat >&2 <<'EOF'
 docs sync check failed:
