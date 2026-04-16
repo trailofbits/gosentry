@@ -1096,7 +1096,7 @@ const OP_NOOP = 0xd503201f
 func (o *Optab) size(ctxt *obj.Link, p *obj.Prog) int {
 	// Optimize adrp+add+ld/st to adrp+ld/st(offset).
 	sz := movesize(p.As)
-	if sz != -1 {
+	if 0 <= sz && sz <= 3 {
 		// Relocations R_AARCH64_LDST{64,32,16,8}_ABS_LO12_NC can only generate 8-byte, 4-byte,
 		// 2-byte and 1-byte aligned addresses, so the address of load/store must be aligned.
 		// Also symbols with prefix of "go:string." are Go strings, which will go into
@@ -1106,8 +1106,22 @@ func (o *Optab) size(ctxt *obj.Link, p *obj.Prog) int {
 		// to decide whether to use the unaligned/aligned forms, so o.size's result is always
 		// in sync with the code generation decisions, because it *is* the code generation decision.
 		align := int64(1 << sz)
-		if o.a1 == C_ADDR && p.From.Offset%align == 0 && int64(p.From.Sym.Align) >= align ||
-			o.a4 == C_ADDR && p.To.Offset%align == 0 && int64(p.To.Sym.Align) >= align {
+		ok := func(a *obj.Addr) bool {
+			if a.Offset%align != 0 {
+				return false
+			}
+			s := a.Sym
+			if s.Align != 0 {
+				return int64(s.Align) >= align
+			}
+			// When Align==0, the linker chooses a big enough alignment that this will
+			// always be ok. (It chooses the biggest alignment that fits in the object
+			// size. See cmd/link/internal/ld/data.go:symalign. That alignment will
+			// always be at least as big as this operation is, because this operation
+			// must fit in the object.) See issue 78585.
+			return true
+		}
+		if o.a1 == C_ADDR && ok(&p.From) || o.a4 == C_ADDR && ok(&p.To) {
 			return 8
 		}
 	}
@@ -3315,6 +3329,18 @@ func buildop(ctxt *obj.Link) {
 
 		case AVPMULL:
 			oprangeset(AVPMULL2, t)
+			oprangeset(AVSMLAL, t)
+			oprangeset(AVSMLAL2, t)
+			oprangeset(AVSMLSL, t)
+			oprangeset(AVSMLSL2, t)
+			oprangeset(AVSMULL, t)
+			oprangeset(AVSMULL2, t)
+			oprangeset(AVUMLAL, t)
+			oprangeset(AVUMLAL2, t)
+			oprangeset(AVUMLSL, t)
+			oprangeset(AVUMLSL2, t)
+			oprangeset(AVUMULL, t)
+			oprangeset(AVUMULL2, t)
 
 		case AVUSHR:
 			oprangeset(AVSHL, t)
@@ -5467,7 +5493,7 @@ func (c *ctxt7) asmout(p *obj.Prog, out []uint32) (count int) {
 		}
 		o1 |= (uint32(imm5&0x1f) << 16) | (uint32(imm4&0xf) << 11) | (uint32(rf&31) << 5) | uint32(rt&31)
 
-	case 93: /* vpmull{2} Vm.<Tb>, Vn.<Tb>, Vd.<Ta> */
+	case 93: /* vpmull{2}/v(s|u)(mla|mls|mul)l{2} Vm.<Tb>, Vn.<Tb>, Vd.<Ta> */
 		af := uint8((p.From.Reg >> 5) & 15)
 		at := uint8((p.To.Reg >> 5) & 15)
 		a := uint8((p.Reg >> 5) & 15)
@@ -5476,16 +5502,29 @@ func (c *ctxt7) asmout(p *obj.Prog, out []uint32) (count int) {
 		}
 
 		var Q, size uint32
-		if p.As == AVPMULL2 {
+		switch p.As {
+		case AVPMULL2, AVSMLAL2, AVSMLSL2, AVSMULL2, AVUMLAL2, AVUMLSL2, AVUMULL2:
 			Q = 1
 		}
 		switch pack(Q, at, af) {
 		case pack(0, ARNG_8H, ARNG_8B), pack(1, ARNG_8H, ARNG_16B):
 			size = 0
+		case pack(0, ARNG_4S, ARNG_4H), pack(1, ARNG_4S, ARNG_8H):
+			size = 1
+		case pack(0, ARNG_2D, ARNG_2S), pack(1, ARNG_2D, ARNG_4S):
+			size = 2
 		case pack(0, ARNG_1Q, ARNG_1D), pack(1, ARNG_1Q, ARNG_2D):
 			size = 3
 		default:
 			c.ctxt.Diag("operand mismatch: %v\n", p)
+		}
+
+		if p.As == AVPMULL || p.As == AVPMULL2 {
+			if size != 0 && size != 3 {
+				c.ctxt.Diag("invalid arrangement: %v", p)
+			}
+		} else if size == 3 {
+			c.ctxt.Diag("invalid arrangement: %v", p)
 		}
 
 		o1 = c.oprrr(p, p.As, p.To.Reg, p.Reg, p.From.Reg)
@@ -6890,6 +6929,24 @@ func (c *ctxt7) oprrr(p *obj.Prog, a obj.As, rd, rn, rm int16) uint32 {
 
 	case AVPMULL, AVPMULL2:
 		op = ASIMDDIFF(0, 0xE)
+
+	case AVSMLAL, AVSMLAL2:
+		op = ASIMDDIFF(0, 0x8)
+
+	case AVSMLSL, AVSMLSL2:
+		op = ASIMDDIFF(0, 0xA)
+
+	case AVSMULL, AVSMULL2:
+		op = ASIMDDIFF(0, 0xC)
+
+	case AVUMLAL, AVUMLAL2:
+		op = ASIMDDIFF(1, 0x8)
+
+	case AVUMLSL, AVUMLSL2:
+		op = ASIMDDIFF(1, 0xA)
+
+	case AVUMULL, AVUMULL2:
+		op = ASIMDDIFF(1, 0xC)
 
 	case AVRBIT:
 		op = ASIMDMISC(1, 1, 0x05)
