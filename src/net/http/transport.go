@@ -287,10 +287,12 @@ type Transport struct {
 	ReadBufferSize int
 
 	// nextProtoOnce guards initialization of TLSNextProto and
-	// h2transport (via onceSetNextProtoDefaults)
+	// h2Transport (via onceSetNextProtoDefaults)
 	nextProtoOnce      sync.Once
-	h2transport        h2Transport      // non-nil if http2 wired up
-	h3transport        dialClientConner // non-nil if http3 wired up
+	closeIdleFunc      closeIdleConnectionser // non-nil if http2 wired up
+	h2Transport        *http2Transport
+	h2Config           http2ExternalTransportConfig
+	h3Transport        dialClientConner // non-nil if http3 wired up
 	tlsNextProtoWasNil bool             // whether TLSNextProto was nil when the Once fired
 
 	// ForceAttemptHTTP2 controls whether HTTP/2 is enabled when a non-zero
@@ -414,20 +416,12 @@ type dialClientConner interface {
 type closeIdleConnectionser interface {
 	// CloseIdleConnections is called by Transport.CloseIdleConnections.
 	//
+	// We expect to use this on transports supplied by x/net/http2 or x/net/http3.
+	//
 	// The transport will close idle connections created with DialClientConn
 	// before calling this method. The HTTP/3 transport should not attempt to
 	// close idle connections, but may clean up shared resources such as UDP
 	// sockets if no connections remain.
-	CloseIdleConnections()
-}
-
-// h2Transport is the interface we expect to be able to call from
-// net/http against an *http2.Transport that's either bundled into
-// h2_bundle.go or supplied by the user via x/net/http2.
-//
-// We name it with the "h2" prefix to stay out of the "http2" prefix
-// namespace used by x/tools/cmd/bundle for h2_bundle.go.
-type h2Transport interface {
 	CloseIdleConnections()
 }
 
@@ -454,8 +448,8 @@ func (t *Transport) onceSetNextProtoDefaults() {
 	altProto, _ := t.altProto.Load().(map[string]RoundTripper)
 	if rv := reflect.ValueOf(altProto["https"]); rv.IsValid() && rv.Type().Kind() == reflect.Struct && rv.Type().NumField() == 1 {
 		if v := rv.Field(0); v.CanInterface() {
-			if h2i, ok := v.Interface().(h2Transport); ok {
-				t.h2transport = h2i
+			if h2i, ok := v.Interface().(closeIdleConnectionser); ok {
+				t.closeIdleFunc = h2i
 				return
 			}
 		}
@@ -580,6 +574,15 @@ func (t *Transport) useRegisteredProtocol(req *Request) bool {
 func (t *Transport) alternateRoundTripper(req *Request) RoundTripper {
 	if !t.useRegisteredProtocol(req) {
 		return nil
+	}
+	if req.URL.Scheme == "https" && t.h2Config != nil && t.h2Config.ExternalRoundTrip() {
+		// This Transport has been configured to use an x/net/http2 Transport
+		// with a user-provided ClientConnPool. We're going to pass off the
+		// RoundTrip to x/net/http2 so it can use that pool.
+		//
+		// The ClientConnPool API is deprecated, but we're doing our best here
+		// to continue supporting any users who are using it.
+		return t.h2Config
 	}
 	altProto, _ := t.altProto.Load().(map[string]RoundTripper)
 	return altProto[req.URL.Scheme]
@@ -905,9 +908,20 @@ func (t *Transport) registerProtocol(scheme string, rt RoundTripper) error {
 	t.altMu.Lock()
 	defer t.altMu.Unlock()
 
+	if scheme == "http/2" {
+		if t.h2Config != nil {
+			panic("http: HTTP/2 Transport already registered")
+		}
+		var ok bool
+		if t.h2Config, ok = rt.(http2ExternalTransportConfig); !ok {
+			panic("http: HTTP/2 configuration does not implement ExternalTransportConfig")
+		}
+		t.h2Config.Registered(t)
+	}
+
 	if scheme == "http/3" {
 		var ok bool
-		if t.h3transport, ok = rt.(dialClientConner); !ok {
+		if t.h3Transport, ok = rt.(dialClientConner); !ok {
 			panic("http: HTTP/3 RoundTripper does not implement DialClientConn")
 		}
 	}
@@ -949,10 +963,22 @@ func (t *Transport) CloseIdleConnections() {
 		}
 	})
 	t.connsPerHostMu.Unlock()
-	if t2 := t.h2transport; t2 != nil {
+
+	// Tell various associated transports to close their connections.
+
+	// net/http/internal/http2 transport. This is the common case for HTTP/2 users.
+	if tr2 := t.h2Transport; tr2 != nil {
+		tr2.CloseIdleConnections()
+	}
+	// Probably an older x/net/http2 transport registered via Transport.RegisterProtocol.
+	// This is a legacy path; modern users just use internal/http2.
+	// (Note that we don't use this path when x/net/http2 wraps the net/http transport;
+	// this is supporting pre-wrapping x/net/http2.)
+	if t2 := t.closeIdleFunc; t2 != nil {
 		t2.CloseIdleConnections()
 	}
-	if cc, ok := t.h3transport.(closeIdleConnectionser); ok {
+	// HTTP/3 transport, probably from x/net/http3.
+	if cc, ok := t.h3Transport.(closeIdleConnectionser); ok {
 		cc.CloseIdleConnections()
 	}
 }
@@ -1813,10 +1839,10 @@ func (t *Transport) dialConn(ctx context.Context, cm connectMethod, isClientConn
 		if p.HTTP1() || p.HTTP2() || p.UnencryptedHTTP2() {
 			return nil, errors.New("http: when using HTTP3, Transport.Protocols must contain only HTTP3")
 		}
-		if t.h3transport == nil {
+		if t.h3Transport == nil {
 			return nil, errors.New("http: Transport.Protocols contains HTTP3, but Transport does not support HTTP/3")
 		}
-		rt, err := t.h3transport.DialClientConn(ctx, cm.addr(), cm.proxyURL, internalStateHook)
+		rt, err := t.h3Transport.DialClientConn(ctx, cm.addr(), cm.proxyURL, internalStateHook)
 		if err != nil {
 			return nil, err
 		}
@@ -1846,6 +1872,14 @@ func (t *Transport) dialConn(ctx context.Context, cm connectMethod, isClientConn
 		}
 		return err
 	}
+
+	if rt, err := t.http2ExternalDial(ctx, cm); err != errors.ErrUnsupported {
+		if err != nil {
+			return nil, err
+		}
+		return &persistConn{t: t, cacheKey: pconn.cacheKey, alt: rt}, nil
+	}
+
 	if cm.scheme() == "https" && t.hasCustomTLSDialer() {
 		var err error
 		pconn.conn, err = t.customDialTLS(ctx, "tcp", cm.addr())
@@ -2009,6 +2043,29 @@ func (t *Transport) dialConn(ctx context.Context, cm connectMethod, isClientConn
 		t.Protocols != nil &&
 		t.Protocols.UnencryptedHTTP2() &&
 		!t.Protocols.HTTP1()
+
+	http2 := unencryptedHTTP2 ||
+		(pconn.tlsState != nil && pconn.tlsState.NegotiatedProtocol == "h2")
+
+	if http2 && t.h2Transport != nil {
+		if isClientConn {
+			cc, err := t.http2NewClientConn(pconn.conn, internalStateHook)
+			if err == nil {
+				return &persistConn{t: t, cacheKey: pconn.cacheKey, alt: cc, isClientConn: true}, nil
+			}
+			if err != errors.ErrUnsupported {
+				return nil, err
+			}
+		} else {
+			rt, err := t.http2AddConn(cm.targetScheme, cm.targetAddr, pconn.conn)
+			if err == nil {
+				return &persistConn{t: t, cacheKey: pconn.cacheKey, alt: rt}, nil
+			}
+			if err != errors.ErrUnsupported {
+				return nil, err
+			}
+		}
+	}
 
 	if isClientConn && (unencryptedHTTP2 || (pconn.tlsState != nil && pconn.tlsState.NegotiatedProtocol == "h2")) {
 		altProto, _ := t.altProto.Load().(map[string]RoundTripper)

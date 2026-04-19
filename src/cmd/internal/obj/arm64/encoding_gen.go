@@ -34,7 +34,6 @@ func checkIsR(v uint32) bool {
 const (
 	enc_NIL component = iota
 	enc_i1_tsz
-	enc_i1_tszh_tszl
 	enc_i2h_i2l
 	enc_i3h_i3l
 	enc_i4h_i4l
@@ -60,7 +59,6 @@ const (
 	enc_Rdn
 	enc_Rm
 	enc_Rn
-	enc_Rv
 	enc_Vd
 	enc_Vdn
 	enc_Vm
@@ -991,17 +989,6 @@ func encodeWdn05(v uint32) (uint32, bool) {
 	return v & 31, true
 }
 
-// encodeRv1618 is the implementation of the following encoding logic:
-// Is the 32-bit name of the vector select register W12-W15, encoded in the "Rv" field.
-// bit range mappings:
-// Rv: [16:18)
-func encodeRv1618(v uint32) (uint32, bool) {
-	if v < uint32(REG_R12) || v > uint32(REG_R15) {
-		return 0, false
-	}
-	return (v & 3) << 16, true
-}
-
 // encodeVd0564 is the implementation of the following encoding logic:
 // Is the 64-bit name of the destination SIMD&FP register, encoded in the "Vd" field.
 // bit range mappings:
@@ -1209,16 +1196,6 @@ func encodeRot0_90_180_270_1315(v uint32) (uint32, bool) {
 		return 3 << 13, true
 	}
 	return 0, false
-}
-
-// encodeI1TszhTszl1824 is the implementation of the following encoding logic:
-// Is the element index, in the range 0 to one less than the number of vector elements in a 128-bit vector register, encoded in "i1:tszh:tszl".
-// bit range mappings:
-// i1: [23:24)
-// tszh: [22:23)
-// tszl: [18:21)
-func encodeI1TszhTszl1824(v uint32) (uint32, bool) {
-	return codeShiftI1TszhTszl, false
 }
 
 // encodeImm5Signed_510 is the implementation of the following encoding logic:
@@ -1621,6 +1598,17 @@ func encodeZda15V1(v uint32) (uint32, bool) {
 	return (v / 2) << 1, true
 }
 
+// encodeGenZn510V1 is the implementation of the following encoding logic:
+// Is the name of the first scalable vector register of the first source multi-vector group, encoded in the "Zn" field.
+// bit range mappings:
+// Zn: [5:10)
+func encodeGenZn510V1(v uint32) (uint32, bool) {
+	if !stripRawZ(&v) {
+		return 0, false
+	}
+	return v << 5, true
+}
+
 // encodeZn610V1 is the implementation of the following encoding logic:
 // Is the name of the first scalable vector register of the source multi-vector group, encoded as "Zn" times 2.
 // bit range mappings:
@@ -1684,17 +1672,6 @@ func encodePnN_58(v uint32) (uint32, bool) {
 	if v >= 24 && v <= 31 {
 		// PN registers starts from 16.
 		return (v - 24) << 5, true
-	}
-	return 0, false
-}
-
-// encodePn1014 is the implementation of the following encoding logic:
-// Is the name of the first source scalable predicate register, encoded in the "Pn" field.
-// bit range mappings:
-// Pn: [10:14)
-func encodePn1014(v uint32) (uint32, bool) {
-	if v < 16 {
-		return v << 10, true
 	}
 	return 0, false
 }
@@ -1906,6 +1883,17 @@ func encodeZda15V2(v uint32) (uint32, bool) {
 	return ((v - 1) / 2) << 1, true
 }
 
+// encodeGenZn510V2 is the implementation of the following encoding logic:
+// Is the name of the second scalable vector register of the first source multi-vector group, encoded in the "Zn" field.
+// bit range mappings:
+// Zn: [5:10)
+func encodeGenZn510V2(v uint32) (uint32, bool) {
+	if !stripRawZ(&v) {
+		return 0, false
+	}
+	return (v - 1) << 5, true
+}
+
 // encodeZn610V2 is the implementation of the following encoding logic:
 // Is the name of the second scalable vector register of the source multi-vector group, encoded as "Zn" times 2 plus 1.
 // bit range mappings:
@@ -1981,17 +1969,6 @@ func encodeZdaDest(v uint32) (uint32, bool) {
 // Pm: [16:20)
 func encodePm1620(v uint32) (uint32, bool) {
 	return v << 16, true
-}
-
-// encodePm59V2 is the implementation of the following encoding logic:
-// Is the name of the second source scalable predicate register, encoded in the "Pm" field.
-// bit range mappings:
-// Pm: [5:9)
-func encodePm59V2(v uint32) (uint32, bool) {
-	if v > 16 {
-		return 0, false
-	}
-	return (v & 15) << 5, true
 }
 
 // encodeZm_1619_Range0_7V2 is the implementation of the following encoding logic:
@@ -3089,6 +3066,23 @@ func encodeSzSD1718(v uint32) (uint32, bool) {
 	return 0, false
 }
 
+// encodeSz2122 is the implementation of the following encoding logic:
+// Is the size specifier,
+// sz	<T>
+// 0	S
+// 1	D
+// bit range mappings:
+// sz: [21:22)
+func encodeSz2122(v uint32) (uint32, bool) {
+	switch v {
+	case ARNG_S:
+		return 0, true
+	case ARNG_D:
+		return 1 << 21, true
+	}
+	return 0, false
+}
+
 // encodeSzSD2223 is the implementation of the following encoding logic:
 // Is the size specifier,
 // sz	<T>
@@ -3257,31 +3251,6 @@ func encodeSizeHsdTsz1921(v uint32) (uint32, bool) {
 	case ARNG_S:
 		return 2 << 19, true
 	case ARNG_D:
-		return 1 << 22, true
-	}
-	return 0, false
-}
-
-// encodeTszhTszl1823 is the implementation of the following encoding logic:
-// Is the size specifier,
-// tszh	tszl	<T>
-// 0	000	RESERVED
-// x	xx1	B
-// x	x10	H
-// x	100	S
-// 1	000	D
-// bit range mappings:
-// tszh: [22:23)
-// tszl: [18:21)
-func encodeTszhTszl1823(v uint32) (uint32, bool) {
-	switch v {
-	case 9: // B
-		return 1 << 18, true
-	case 10: // H
-		return 1 << 19, true
-	case 11: // S
-		return 1 << 20, true
-	case 12: // D
 		return 1 << 22, true
 	}
 	return 0, false
