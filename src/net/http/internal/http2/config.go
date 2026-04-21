@@ -33,27 +33,10 @@ func configFromServer(h1 ServerConfig) Config {
 }
 
 func configFromTransport(h2 *Transport) Config {
-	conf := Config{
-		MaxEncoderHeaderTableSize: int(h2.MaxEncoderHeaderTableSize),
-		MaxDecoderHeaderTableSize: int(h2.MaxDecoderHeaderTableSize),
-		MaxReadFrameSize:          int(h2.MaxReadFrameSize),
-		SendPingTimeout:           h2.ReadIdleTimeout,
-		PingTimeout:               h2.PingTimeout,
-		WriteByteTimeout:          h2.WriteByteTimeout,
-	}
-
-	// Unlike most config fields, where out-of-range values revert to the default,
-	// Transport.MaxReadFrameSize clips.
-	if conf.MaxReadFrameSize < minMaxFrameSize {
-		conf.MaxReadFrameSize = minMaxFrameSize
-	} else if conf.MaxReadFrameSize > maxFrameSize {
-		conf.MaxReadFrameSize = maxFrameSize
-	}
-
+	conf := Config{}
 	if h2.t1 != nil {
 		fillNetHTTPConfig(&conf, h2.t1.HTTP2Config())
 	}
-
 	setConfigDefaults(&conf, false)
 	return conf
 }

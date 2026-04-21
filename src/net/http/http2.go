@@ -285,7 +285,6 @@ func (t *Transport) configureHTTP2(protocols Protocols) {
 		t.HTTP2 = &HTTP2Config{}
 	}
 	t2 := http2.NewTransport(transportConfig{t})
-	t2.AllowHTTP = true
 	t.h2Transport = t2
 
 	t.registerProtocol("https", http2RoundTripper{t2, true})
@@ -297,18 +296,6 @@ func (t *Transport) configureHTTP2(protocols Protocols) {
 	t.TLSNextProto["h2"] = func(authority string, c *tls.Conn) RoundTripper {
 		return http2ErringRoundTripper{
 			errors.New("unexpected use of stub RoundTripper"),
-		}
-	}
-
-	// Auto-configure the http2.Transport's MaxHeaderListSize from
-	// the http.Transport's MaxResponseHeaderBytes. They don't
-	// exactly mean the same thing, but they're close.
-	if limit1 := t.MaxResponseHeaderBytes; limit1 != 0 && t2.MaxHeaderListSize == 0 {
-		const h2max = 1<<32 - 1
-		if limit1 >= h2max {
-			t2.MaxHeaderListSize = h2max
-		} else {
-			t2.MaxHeaderListSize = uint32(limit1)
 		}
 	}
 

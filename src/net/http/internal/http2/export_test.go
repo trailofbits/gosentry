@@ -222,10 +222,6 @@ func InvalidHTTP1LookingFrameHeader() FrameHeader {
 	return invalidHTTP1LookingFrameHeader()
 }
 
-func NewNoDialClientConnPool() ClientConnPool {
-	return noDialClientConnPool{new(clientConnPool)}
-}
-
 func EncodeRequestHeaders(req *ClientRequest, addGzipHeader bool, peerMaxHeaderListSize uint64, headerf func(name, value string)) (httpcommon.EncodeHeadersResult, error) {
 	return encodeRequestHeaders(req, addGzipHeader, peerMaxHeaderListSize, headerf)
 }
