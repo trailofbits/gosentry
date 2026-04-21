@@ -67,7 +67,7 @@ func (s *Server) TestServeConn(c net.Conn, opts *ServeConnOpts, newf func(*serve
 }
 
 func (sc *serverConn) TestFlowControlConsumed() (consumed int32) {
-	conf := configFromServer(sc.hs, sc.srv)
+	conf := configFromServer(sc.hs)
 	donec := make(chan struct{})
 	sc.sendServeMsg(func(sc *serverConn) {
 		defer close(donec)

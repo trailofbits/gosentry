@@ -172,12 +172,6 @@ type Transport struct {
 	// available to write, and is extended whenever any bytes are written.
 	WriteByteTimeout time.Duration
 
-	// CountError, if non-nil, is called on HTTP/2 transport errors.
-	// It's intended to increment a metric for monitoring, such
-	// as an expvar or Prometheus metric.
-	// The errType consists of only ASCII word characters.
-	CountError func(errType string)
-
 	t1 TransportConfig
 
 	connPoolOnce  sync.Once
@@ -811,8 +805,8 @@ func (t *Transport) newClientConn(c net.Conn, singleUse bool, internalStateHook 
 	cc.br = bufio.NewReader(c)
 	cc.fr = NewFramer(cc.bw, cc.br)
 	cc.fr.SetMaxReadFrameSize(uint32(conf.MaxReadFrameSize))
-	if t.CountError != nil {
-		cc.fr.countError = t.CountError
+	if conf.CountError != nil {
+		cc.fr.countError = conf.CountError
 	}
 	maxHeaderTableSize := uint32(conf.MaxDecoderHeaderTableSize)
 	cc.fr.ReadMetaHeaders = hpack.NewDecoder(maxHeaderTableSize, nil)
@@ -1240,7 +1234,7 @@ func (cc *ClientConn) Close() error {
 // closes the client connection immediately. In-flight requests are interrupted.
 func (cc *ClientConn) closeForLostPing() {
 	err := errors.New("http2: client connection lost")
-	if f := cc.t.CountError; f != nil {
+	if f := cc.fr.countError; f != nil {
 		f("conn_close_lost_ping")
 	}
 	cc.closeForError(err)
@@ -2195,10 +2189,10 @@ func (rl *clientConnReadLoop) cleanup() {
 	}
 }
 
-// countReadFrameError calls Transport.CountError with a string
+// countReadFrameError calls ClientConn.fr.countError with a string
 // representing err.
 func (cc *ClientConn) countReadFrameError(err error) {
-	f := cc.t.CountError
+	f := cc.fr.countError
 	if f == nil || err == nil {
 		return
 	}
@@ -2798,7 +2792,7 @@ func (rl *clientConnReadLoop) processGoAway(f *GoAwayFrame) error {
 	if f.ErrCode != 0 {
 		// TODO: deal with GOAWAY more. particularly the error code
 		cc.vlogf("transport got GOAWAY with error code = %v", f.ErrCode)
-		if fn := cc.t.CountError; fn != nil {
+		if fn := cc.fr.countError; fn != nil {
 			fn("recv_goaway_" + f.ErrCode.stringToken())
 		}
 	}
@@ -2949,7 +2943,7 @@ func (rl *clientConnReadLoop) processResetStream(f *RSTStreamFrame) error {
 	if f.ErrCode == ErrCodeProtocol {
 		rl.cc.SetDoNotReuse()
 	}
-	if fn := cs.cc.t.CountError; fn != nil {
+	if fn := cs.cc.fr.countError; fn != nil {
 		fn("recv_rststream_" + f.ErrCode.stringToken())
 	}
 	cs.abortStream(serr)
