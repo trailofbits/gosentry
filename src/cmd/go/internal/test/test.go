@@ -1867,6 +1867,35 @@ func isASCIIIdent(s string) bool {
 	return true
 }
 
+func ensureGODEBUGSetting(env []string, setting string) []string {
+	key, _, ok := strings.Cut(setting, "=")
+	if !ok || key == "" {
+		return env
+	}
+
+	for i, kv := range env {
+		if !strings.HasPrefix(kv, "GODEBUG=") {
+			continue
+		}
+
+		v := strings.TrimPrefix(kv, "GODEBUG=")
+		for _, part := range strings.Split(v, ",") {
+			partKey, _, ok := strings.Cut(part, "=")
+			if ok && partKey == key {
+				return env
+			}
+		}
+
+		if v == "" {
+			env[i] = "GODEBUG=" + setting
+		} else {
+			env[i] = "GODEBUG=" + v + "," + setting
+		}
+		return env
+	}
+	return append(env, "GODEBUG="+setting)
+}
+
 // stdoutMu and lockedStdout provide a locked standard output
 // that guarantees never to interlace writes from multiple
 // goroutines, so that we can have multiple JSON streams writing
@@ -2715,6 +2744,14 @@ func (r *runTestActor) Act(b *work.Builder, ctx context.Context, a *work.Action)
 		}
 		if len(addEnv) > 0 {
 			cmd.Env = append(cmd.Env, addEnv...)
+		}
+		if libaflOutDir != "" {
+			// The upstream runtime can auto-update GOMAXPROCS in sysmon based on
+			// cgroup CPU quota / cpuset. That can trigger an intermittent crash
+			// in LibAFL mode on Linux CI ("sync: inconsistent mutex state").
+			// Disable auto-updates for the LibAFL fuzz subprocess unless the
+			// user explicitly set updatemaxprocs in GODEBUG.
+			cmd.Env = ensureGODEBUGSetting(cmd.Env, "updatemaxprocs=0")
 		}
 
 		cmd.Stdout = stdout

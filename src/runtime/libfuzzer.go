@@ -71,6 +71,16 @@ var pcTables []byte
 
 func init() {
 	libfuzzerCallWithTwoByteBuffers(&__sanitizer_cov_8bit_counters_init, &__start___sancov_cntrs, &__stop___sancov_cntrs)
+	start := unsafe.Pointer(&__start___sancov_cntrs)
+	end := unsafe.Pointer(&__stop___sancov_cntrs)
+
+	// PC tables are arrays of ptr-sized integers representing pairs [PC,PCFlags] for every instrumented block.
+	// The number of PCs and PCFlags is the same as the number of 8-bit counters. Each PC table entry has
+	// the size of two ptr-sized integers. We allocate one more byte than what we actually need so that we can
+	// get a pointer representing the end of the PC table array.
+	size := (uintptr(end)-uintptr(start))*unsafe.Sizeof(uintptr(0))*2 + 1
+	pcTables = make([]byte, size)
+	libfuzzerCallWithTwoByteBuffers(&__sanitizer_cov_pcs_init, &pcTables[0], &pcTables[size-1])
 }
 
 // We call libFuzzer's __sanitizer_weak_hook_strcmp function which takes the

@@ -13,9 +13,9 @@ By default, when `-fuzz` is set, gosentry uses the LibAFL runner.
 go test -fuzz=FuzzXxx --focus-on-new-code=false --catch-races=false --catch-leaks=false
 ```
 
-Stability note: in LibAFL mode, gosentry only uses sanitizer coverage 8-bit counters.
-The sanitizer PC table hook is disabled because it can trigger an intermittent crash on Linux
-("sync: inconsistent mutex state") after upstream Go merges. Coverage report generation still works.
+Stability note: gosentry sets `GODEBUG=updatemaxprocs=0` automatically for LibAFL fuzzing.
+This disables the runtime's automatic GOMAXPROCS updates, which can trigger an intermittent
+`fatal error: sync: inconsistent mutex state` on Linux CI.
 
 Stop the fuzz campaign with Ctrl+C.
 

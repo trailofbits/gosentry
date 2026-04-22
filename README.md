@@ -174,10 +174,10 @@ In practice, this makes any matched call site behave like a crash/panic for fuzz
 </details>
 
 ## Feature 4: LibAFL state-of-the-art fuzzing
-
+ 
 LibAFL performs *way* better than the traditional Go fuzzer. When fuzzing (`go test -fuzz=...`), gosentry uses [LibAFL](https://github.com/AFLplusplus/LibAFL) **by default** (runner in `golibafl/`).
-
-Stability note: gosentry uses sanitizer coverage 8-bit counters with LibAFL. The sanitizer PC table hook is disabled because it can trigger an intermittent crash on Linux CI ("sync: inconsistent mutex state"). Details are in `misc/gosentry/USE_LIBAFL.md`.
+ 
+Stability note: in LibAFL mode, gosentry forces `GODEBUG=updatemaxprocs=0` (disable runtime auto GOMAXPROCS updates) to avoid an intermittent Linux CI crash ("sync: inconsistent mutex state"). Details are in `misc/gosentry/USE_LIBAFL.md`.
  
 When using LibAFL (default), you must explicitly choose whether to enable git-aware scheduling: `--focus-on-new-code=true|false`. More documentation in [this Markdown file.](misc/gosentry/USE_LIBAFL.md)
 You can also pass an optional JSONC config file for LibAFL (including grammar fuzzing options), see [here.](misc/gosentry/libafl.config.jsonc)
