@@ -1114,8 +1114,8 @@ havem:
 	MOVQ	fn+0(FP), AX
 	MOVQ	frame+8(FP), BX
 	MOVQ	ctxt+16(FP), CX
-	// Compute the size of the frame, including return PC and, if
-	// GOEXPERIMENT=framepointer, the saved base pointer
+	// Compute the size of the frame, including the return PC and
+	// saved frame pointer
 	LEAQ	fn+0(FP), R8
 	SUBQ	SP, R8   // R8 is our actual frame size
 	SUBQ	R8, DI   // Allocate the same frame size on the g stack
