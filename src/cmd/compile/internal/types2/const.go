@@ -49,9 +49,10 @@ func (check *Checker) overflow(x *operand, opPos syntax.Pos) {
 		return
 	}
 
-	const maxLen = 1 * 1024 * 1024 * 1024
+	const maxLen = int(2e9) // cmd/internal/obj.MaxSymSize
 	if x.val.Kind() == constant.String && len(constant.StringVal(x.val)) > maxLen {
-		check.error(atPos(opPos), InvalidConstVal, "constant string too long")
+		check.errorf(atPos(opPos), InvalidConstVal, "constant string too long (%d bytes > %d bytes)",
+			len(constant.StringVal(x.val)), maxLen)
 		x.val = constant.MakeUnknown()
 		return
 	}

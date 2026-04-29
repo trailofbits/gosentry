@@ -703,7 +703,8 @@ func endsInFallthrough(stmts []ir.Node) (bool, src.XPos) {
 // type switch.
 func walkSwitchType(sw *ir.SwitchStmt) {
 	var s typeSwitch
-	s.srcName = sw.Tag.(*ir.TypeSwitchGuard).X
+	origSrc := sw.Tag.(*ir.TypeSwitchGuard).X
+	s.srcName = origSrc
 	s.srcName = walkExpr(s.srcName, sw.PtrInit())
 	s.srcName = copyExpr(s.srcName, s.srcName.Type(), &sw.Compiled)
 	s.okName = typecheck.TempAt(base.Pos, ir.CurFunc, types.Types[types.TBOOL])
@@ -931,6 +932,10 @@ caseLoop:
 			//    be satisfied by an infinite set of concrete types.
 			// The correctness of this step also depends on handling
 			// the dynamic type cases separately, as we do above.
+		}
+
+		if shapeTypeAssertImpossible(origSrc, c.typ.Type()) {
+			continue
 		}
 
 		if c.typ.Type().IsInterface() {

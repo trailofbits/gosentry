@@ -940,11 +940,11 @@ func (dict *readerDict) mangle(sym *types.Sym) *types.Sym {
 	return sym.Pkg.Lookup(buf.String())
 }
 
-// shapify returns the shape type for targ.
+// Shapify returns the shape type for targ.
 //
 // If basic is true, then the type argument is used to instantiate a
 // type parameter whose constraint is a basic interface.
-func shapify(targ *types.Type, basic bool) *types.Type {
+func Shapify(targ *types.Type, basic bool) *types.Type {
 	if targ.Kind() == types.TFORW {
 		if targ.IsFullyInstantiated() {
 			// For recursive instantiated type argument, it may  still be a TFORW
@@ -1076,7 +1076,7 @@ func (pr *pkgReader) objDictIdx(sym *types.Sym, idx index, implicits, explicits 
 	for i, targ := range dict.targs {
 		basic := r.Bool()
 		if dict.shaped {
-			dict.targs[i] = shapify(targ, basic)
+			dict.targs[i] = Shapify(targ, basic)
 		}
 	}
 

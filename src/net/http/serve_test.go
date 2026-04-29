@@ -7117,7 +7117,6 @@ func testQuerySemicolon(t *testing.T, mode testMode, query string, wantX string,
 	}
 }
 
-// HTTP/3 trips off race detector.
 func TestMaxBytesHandler(t *testing.T) {
 	// Not parallel: modifies the global rstAvoidanceDelay.
 	defer afterTest(t)
@@ -7128,7 +7127,7 @@ func TestMaxBytesHandler(t *testing.T) {
 				func(t *testing.T) {
 					run(t, func(t *testing.T, mode testMode) {
 						testMaxBytesHandler(t, mode, maxSize, requestSize)
-					}, testNotParallel, http3SkippedMode)
+					}, testNotParallel)
 				})
 		}
 	}
@@ -7149,10 +7148,13 @@ func testMaxBytesHandler(t *testing.T, mode testMode, maxSize, requestSize int64
 		t.Logf("set RST avoidance delay to %v", timeout)
 
 		var (
+			mu         sync.Mutex // guards below
 			handlerN   int64
 			handlerErr error
 		)
 		echo := HandlerFunc(func(w ResponseWriter, r *Request) {
+			mu.Lock()
+			defer mu.Unlock()
 			var buf bytes.Buffer
 			handlerN, handlerErr = io.Copy(&buf, r.Body)
 			io.Copy(w, &buf)
@@ -7201,6 +7203,8 @@ func testMaxBytesHandler(t *testing.T, mode testMode, maxSize, requestSize int64
 		// to rstAvoidanceDelay being too short, so we use t.Errorf for those
 		// instead of returning a (retriable) error.
 
+		mu.Lock()
+		defer mu.Unlock()
 		if handlerN > maxSize {
 			t.Errorf("expected max request body %d; got %d", maxSize, handlerN)
 		}
