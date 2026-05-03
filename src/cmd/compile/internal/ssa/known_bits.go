@@ -4,6 +4,8 @@
 
 package ssa
 
+import "slices"
+
 func (kb *knownBitsState) fold(v *Value) (value, known int64) {
 	if kb.seenValues.Test(uint32(v.ID)) {
 		return kb.entries[v.ID].value, kb.entries[v.ID].known
@@ -167,7 +169,7 @@ func knownBits(f *Func) {
 		kb.reachableBlocks.Set(uint32(b.ID))
 	}
 
-	for _, b := range blocks {
+	for _, b := range slices.Backward(blocks) {
 		for _, v := range b.Values {
 			if v.Uses == 0 || !(v.Type.IsInteger() || v.Type.IsBoolean()) {
 				continue

@@ -695,7 +695,7 @@ func alreadyInChain(candidate *Certificate, chain []*Certificate) bool {
 			continue
 		}
 		// We enforce the canonical encoding of SPKI (by only allowing the
-		// correct AI paremeter encodings in parseCertificate), so it's safe to
+		// correct AI parameter encodings in parseCertificate), so it's safe to
 		// directly compare the raw bytes.
 		if !bytes.Equal(candidate.RawSubjectPublicKeyInfo, cert.RawSubjectPublicKeyInfo) {
 			continue

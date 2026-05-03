@@ -2535,7 +2535,7 @@ func (p *Package) setBuildInfo(ctx context.Context, f *modfetch.Fetcher, autoVCS
 		}
 		if cfg.BuildBuildvcs == "auto" && vcsCmd != nil && vcsCmd.Cmd != "" {
 			if _, err := pathcache.LookPath(vcsCmd.Cmd); err != nil {
-				// We fould a repository, but the required VCS tool is not present.
+				// We found a repository, but the required VCS tool is not present.
 				// "-buildvcs=auto" means that we should silently drop the VCS metadata.
 				goto omitVCS
 			}

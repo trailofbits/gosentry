@@ -5201,6 +5201,9 @@ func (s *state) call(n *ir.CallExpr, k callKind, returnResultAddr bool, deferExt
 		} else {
 			result = s.newValue1I(ssa.OpSelectN, fp.Type, 0, call)
 		}
+		if n.Reshape {
+			result = s.newValue1(ssa.OpCopy, n.Type(), result)
+		}
 	}
 
 	// Finish block for defers

@@ -108,6 +108,9 @@ func TestCgoCallbackX15(t *testing.T) {
 	if runtime.GOARCH != "amd64" {
 		t.Skipf("X15 test only relevant on amd64")
 	}
+	if runtime.GOOS == "freebsd" && race.Enabled {
+		t.Skipf("race + cgo freebsd not supported. See https://go.dev/issue/73788.")
+	}
 
 	got := runTestProg(t, "testprogcgo", "CgoCallbackX15")
 	if want := "OK\n"; got != want {

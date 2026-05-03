@@ -75,10 +75,10 @@ func init() {
 		num[name] = i
 	}
 	buildReg := func(s string) regMask {
-		m := regMask(0)
+		m := regMask{}
 		for _, r := range strings.Split(s, " ") {
 			if n, ok := num[r]; ok {
-				m |= regMask(1) << uint(n)
+				m = m.addReg(uint(n))
 				continue
 			}
 			panic("register " + r + " not found")
@@ -90,11 +90,11 @@ func init() {
 		gp     = buildReg("R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15")
 		fp32   = buildReg("F0 F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 F11 F12 F13 F14 F15")
 		fp64   = buildReg("F16 F17 F18 F19 F20 F21 F22 F23 F24 F25 F26 F27 F28 F29 F30 F31")
-		gpsp   = gp | buildReg("SP")
-		gpspsb = gpsp | buildReg("SB")
+		gpsp   = gp.union(buildReg("SP"))
+		gpspsb = gpsp.union(buildReg("SB"))
 		// The "registers", which are actually local variables, can get clobbered
 		// if we're switching goroutines, because it unwinds the WebAssembly stack.
-		callerSave = gp | fp32 | fp64 | buildReg("g")
+		callerSave = gp.union(fp32).union(fp64).union(buildReg("g"))
 	)
 
 	// Common regInfo
@@ -111,19 +111,19 @@ func init() {
 		fp64_11   = regInfo{inputs: []regMask{fp64}, outputs: []regMask{fp64}}
 		fp64_21   = regInfo{inputs: []regMask{fp64, fp64}, outputs: []regMask{fp64}}
 		fp64_21gp = regInfo{inputs: []regMask{fp64, fp64}, outputs: []regMask{gp}}
-		gpload    = regInfo{inputs: []regMask{gpspsb, 0}, outputs: []regMask{gp}}
-		gpstore   = regInfo{inputs: []regMask{gpspsb, gpsp, 0}}
-		fp32load  = regInfo{inputs: []regMask{gpspsb, 0}, outputs: []regMask{fp32}}
-		fp32store = regInfo{inputs: []regMask{gpspsb, fp32, 0}}
-		fp64load  = regInfo{inputs: []regMask{gpspsb, 0}, outputs: []regMask{fp64}}
-		fp64store = regInfo{inputs: []regMask{gpspsb, fp64, 0}}
+		gpload    = regInfo{inputs: []regMask{gpspsb, regMask{}}, outputs: []regMask{gp}}
+		gpstore   = regInfo{inputs: []regMask{gpspsb, gpsp, regMask{}}}
+		fp32load  = regInfo{inputs: []regMask{gpspsb, regMask{}}, outputs: []regMask{fp32}}
+		fp32store = regInfo{inputs: []regMask{gpspsb, fp32, regMask{}}}
+		fp64load  = regInfo{inputs: []regMask{gpspsb, regMask{}}, outputs: []regMask{fp64}}
+		fp64store = regInfo{inputs: []regMask{gpspsb, fp64, regMask{}}}
 	)
 
 	var WasmOps = []opData{
 		{name: "LoweredStaticCall", argLength: 1, reg: regInfo{clobbers: callerSave}, aux: "CallOff", call: true},                                           // call static function aux.(*obj.LSym). arg0=mem, auxint=argsize, returns mem
 		{name: "LoweredTailCall", argLength: 1, reg: regInfo{clobbers: callerSave}, aux: "CallOff", call: true, tailCall: true},                             // tail call static function aux.(*obj.LSym). arg0=mem, auxint=argsize, returns mem
 		{name: "LoweredTailCallInter", argLength: 2, reg: regInfo{inputs: []regMask{gp}, clobbers: callerSave}, aux: "CallOff", call: true, tailCall: true}, // tail call fn by pointer. arg0=codeptr, arg1=mem, auxint=argsize, returns mem
-		{name: "LoweredClosureCall", argLength: 3, reg: regInfo{inputs: []regMask{gp, gp, 0}, clobbers: callerSave}, aux: "CallOff", call: true},            // call function via closure. arg0=codeptr, arg1=closure, arg2=mem, auxint=argsize, returns mem
+		{name: "LoweredClosureCall", argLength: 3, reg: regInfo{inputs: []regMask{gp, gp, regMask{}}, clobbers: callerSave}, aux: "CallOff", call: true},    // call function via closure. arg0=codeptr, arg1=closure, arg2=mem, auxint=argsize, returns mem
 		{name: "LoweredInterCall", argLength: 2, reg: regInfo{inputs: []regMask{gp}, clobbers: callerSave}, aux: "CallOff", call: true},                     // call fn by pointer. arg0=codeptr, arg1=mem, auxint=argsize, returns mem
 
 		{name: "LoweredAddr", argLength: 1, reg: gp11, aux: "SymOff", rematerializeable: true, symEffect: "Addr"}, // returns base+aux+auxint, arg0=base
@@ -269,7 +269,7 @@ func init() {
 		blocks:          nil,
 		regnames:        regNamesWasm,
 		gpregmask:       gp,
-		fpregmask:       fp32 | fp64,
+		fpregmask:       fp32.union(fp64),
 		fp32regmask:     fp32,
 		fp64regmask:     fp64,
 		framepointerreg: -1, // not used
