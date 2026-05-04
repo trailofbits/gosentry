@@ -1,3 +1,4 @@
+.serena/
 .idea/
 temp/*
 fuzz_test/testdata/

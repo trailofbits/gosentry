@@ -1,0 +1,10 @@
+version: "1"
+rules:
+  - base: master
+    upstream: golang:master
+    mergeMethod: merge
+    mergeUnstable: false
+    conflictReviewers:
+      - kevin-valerio
+label: ":arrow_heading_down: pull"
+conflictLabel: "merge-conflict"
