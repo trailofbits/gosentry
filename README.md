@@ -39,10 +39,7 @@ cd src && ./make.bash # Produces `../bin/go`. See `GOFLAGS` below.
  
 > [!TIP]
 > Contributor docs:  read `docs/gosentry/index.md` for a code map, recommended dev loop, CI entrypoints and benchmark scripts.
-
-## Upstream sync
-
-This fork uses the Pull GitHub App config in `.github/pull.yml` to open and auto-merge clean PRs from `golang/go:master` into `master`.
+> This fork uses the Pull GitHub App to open and auto-merge PRs from `golang/go:master` into `master`, ensuring we never stay behind Go toolchain latest updates.
 
 ## Feature 1: Struct-aware fuzzing (fuzz structs as inputs)
 
