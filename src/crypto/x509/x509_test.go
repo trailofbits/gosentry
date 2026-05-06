@@ -2189,7 +2189,7 @@ func TestPKIXNameString(t *testing.T) {
 		dn   pkix.Name
 		want string
 	}{
-		{nn, "L=Gophertown,1.2.3.4.5=#130a676f6c616e672e6f7267"},
+		{nn, "L=Gophertown,1.2.3.4.5=golang.org"},
 		{extraNotNil, "L=Gophertown"},
 		{pkix.Name{
 			CommonName:         "Steve Kille",
@@ -2218,13 +2218,13 @@ func TestPKIXNameString(t *testing.T) {
 			Locality: []string{"Gophertown"},
 			ExtraNames: []pkix.AttributeTypeAndValue{
 				{Type: asn1.ObjectIdentifier([]int{1, 2, 3, 4, 5}), Value: "golang.org"}},
-		}, "1.2.3.4.5=#130a676f6c616e672e6f7267,L=Gophertown"},
+		}, "1.2.3.4.5=golang.org,L=Gophertown"},
 		// If there are no ExtraNames, the Names are printed instead.
 		{pkix.Name{
 			Locality: []string{"Gophertown"},
 			Names: []pkix.AttributeTypeAndValue{
 				{Type: asn1.ObjectIdentifier([]int{1, 2, 3, 4, 5}), Value: "golang.org"}},
-		}, "L=Gophertown,1.2.3.4.5=#130a676f6c616e672e6f7267"},
+		}, "L=Gophertown,1.2.3.4.5=golang.org"},
 		// If there are both, print only the ExtraNames.
 		{pkix.Name{
 			Locality: []string{"Gophertown"},
@@ -2232,7 +2232,38 @@ func TestPKIXNameString(t *testing.T) {
 				{Type: asn1.ObjectIdentifier([]int{1, 2, 3, 4, 5}), Value: "golang.org"}},
 			Names: []pkix.AttributeTypeAndValue{
 				{Type: asn1.ObjectIdentifier([]int{1, 2, 3, 4, 6}), Value: "example.com"}},
-		}, "1.2.3.4.5=#130a676f6c616e672e6f7267,L=Gophertown"},
+		}, "1.2.3.4.5=golang.org,L=Gophertown"},
+		// Non-string value falls back to hex-encoded DER (issue 33093).
+		{pkix.Name{
+			CommonName: "foobar",
+			ExtraNames: []pkix.AttributeTypeAndValue{
+				{Type: asn1.ObjectIdentifier([]int{1, 2, 3, 4}), Value: 42}},
+		}, "1.2.3.4=#02012a,CN=foobar"},
+		// String containing non-PrintableString chars (here, UTF-8) is still
+		// rendered as a string per RFC 2253 §2.4, not hex-encoded.
+		{pkix.Name{
+			CommonName: "foobar",
+			ExtraNames: []pkix.AttributeTypeAndValue{
+				{Type: asn1.ObjectIdentifier([]int{2, 3, 4, 5}), Value: "Lučić"}},
+		}, "2.3.4.5=Lučić,CN=foobar"},
+		// String beginning with '#' has the '#' escaped (RFC 2253 §2.4).
+		{pkix.Name{
+			CommonName: "foobar",
+			ExtraNames: []pkix.AttributeTypeAndValue{
+				{Type: asn1.ObjectIdentifier([]int{2, 3, 4, 5}), Value: "#abcdef"}},
+		}, "2.3.4.5=\\#abcdef,CN=foobar"},
+		// Printable string with an embedded RFC 2253 escapable character.
+		{pkix.Name{
+			CommonName: "foobar",
+			ExtraNames: []pkix.AttributeTypeAndValue{
+				{Type: asn1.ObjectIdentifier([]int{2, 3, 4, 5}), Value: "abcdef,GHI"}},
+		}, "2.3.4.5=abcdef\\,GHI,CN=foobar"},
+		// Printable string with leading and trailing space gets escaped.
+		{pkix.Name{
+			CommonName: "foobar",
+			ExtraNames: []pkix.AttributeTypeAndValue{
+				{Type: asn1.ObjectIdentifier([]int{2, 3, 4, 5}), Value: "   abcdef "}},
+		}, "2.3.4.5=\\   abcdef\\ ,CN=foobar"},
 	}
 
 	for i, test := range tests {

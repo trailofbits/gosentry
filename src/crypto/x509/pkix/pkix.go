@@ -53,12 +53,17 @@ func (r RDNSequence) String() string {
 			oidString := tv.Type.String()
 			typeName, ok := attributeTypeNames[oidString]
 			if !ok {
-				derBytes, err := asn1.Marshal(tv.Value)
-				if err == nil {
-					buf.WriteString(oidString)
-					buf.WriteString("=#")
-					buf.WriteString(hex.EncodeToString(derBytes))
-					continue // No value escaping necessary.
+				// RFC 2253 §2.4: if the value's ASN.1 type has a string
+				// representation, render it as a string; otherwise hex-encode
+				// the DER.
+				if _, ok := tv.Value.(string); !ok {
+					derBytes, err := asn1.Marshal(tv.Value)
+					if err == nil {
+						buf.WriteString(oidString)
+						buf.WriteString("=#")
+						buf.WriteString(hex.EncodeToString(derBytes))
+						continue // No value escaping necessary.
+					}
 				}
 
 				typeName = oidString

@@ -480,7 +480,7 @@ func testPkg(t *testing.T, filenames []string, manual bool) {
 	if len(fs) == 0 {
 		t.Skip("all files skipped by build tags")
 	}
-	testFiles(t, filenames, srcs, manual)
+	testFiles(t, fs, srcs, manual)
 }
 
 // shouldTest checks build tags in src and returns whether the file
