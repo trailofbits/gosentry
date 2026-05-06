@@ -249,7 +249,7 @@ func equal(x, y *Index) bool {
 }
 
 // returns the serialized index size
-func testSaveRestore(t *testing.T, tc *testCase, x *Index) int {
+func testSaveRestore(t testing.TB, tc *testCase, x *Index) int {
 	var buf bytes.Buffer
 	if err := x.Write(&buf); err != nil {
 		t.Errorf("failed writing index %s (%s)", tc.name, err)
@@ -590,13 +590,14 @@ func BenchmarkSaveRestore(b *testing.B) {
 		if ^uint(0) == 0xffffffff && bits == 64 {
 			continue
 		}
+		tc := &testCase{name: "BenchmarkSaveRestore"}
 		b.Run(fmt.Sprintf("bits=%d", bits), func(b *testing.B) {
 			cleanup := setBits(bits)
 			defer cleanup()
 
 			b.StopTimer()
 			x := New(data)
-			size := testSaveRestore(nil, nil, x)       // verify correctness
+			size := testSaveRestore(b, tc, x)          // verify correctness
 			buf := bytes.NewBuffer(make([]byte, size)) // avoid growing
 			b.SetBytes(int64(size))
 			b.StartTimer()
