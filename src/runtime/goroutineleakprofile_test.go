@@ -509,7 +509,6 @@ func TestGoroutineLeakProfile(t *testing.T) {
 
 				cmdEnv := []string{
 					"GODEBUG=asyncpreemptoff=1",
-					"GOEXPERIMENT=goroutineleakprofile",
 				}
 
 				if tcase.simple {
