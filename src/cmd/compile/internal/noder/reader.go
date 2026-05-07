@@ -905,6 +905,9 @@ func (dict *readerDict) mangle(sym *types.Sym) *types.Sym {
 		j = len(dict.targs) // consume all type arguments
 	}
 
+	// put type arguments inside parenthesis; (*T)[int] -> (*T[int])
+	n, ok := strings.CutSuffix(n, ")")
+
 	// type arguments, if any
 	buf.WriteString(n)
 	if j > 0 {
@@ -920,6 +923,10 @@ func (dict *readerDict) mangle(sym *types.Sym) *types.Sym {
 			buf.WriteString(dict.targs[i].LinkString())
 		}
 		buf.WriteByte(']')
+	}
+
+	if ok {
+		buf.WriteString(")")
 	}
 
 	buf.WriteString(vsuff)
