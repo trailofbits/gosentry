@@ -212,7 +212,8 @@ func (m *Map) putSlotSmallFastStr(typ *abi.MapType, hash uintptr, key string) un
 	// more efficient than matchEmpty.
 	match = g.ctrls().matchEmptyOrDeleted()
 	if match == 0 {
-		fatal("small map with no empty slot (concurrent map writes?)")
+		// No empty slot found. Need to grow the map.
+		return nil
 	}
 
 	i := match.first()
@@ -226,6 +227,36 @@ func (m *Map) putSlotSmallFastStr(typ *abi.MapType, hash uintptr, key string) un
 	m.used++
 
 	return slotElem
+}
+
+func (t *table) uncheckedPutSlotForAssignFastStr(typ *abi.MapType, hash uintptr, key string) unsafe.Pointer {
+	if t.growthLeft == 0 {
+		panic("invariant failed: growthLeft is unexpectedly 0")
+	}
+
+	// Given key and its hash hash(key), to insert it, we construct a
+	// probeSeq, and use it to find the first group with an unoccupied (empty
+	// or deleted) slot. We place the key/value into the first such slot in
+	// the group and mark it as full with key's H2.
+	seq := makeProbeSeq(h1(hash), t.groups.lengthMask)
+	for ; ; seq = seq.next() {
+		g := t.groups.group(typ, seq.offset)
+
+		match := g.ctrls().matchEmptyOrDeleted()
+		if match != 0 {
+			i := match.first()
+
+			slotKey := g.key(typ, i)
+			*(*string)(slotKey) = key
+
+			slotElem := g.elem(typ, i)
+
+			t.growthLeft--
+			t.used++
+			g.ctrls().set(i, ctrl(h2(hash)))
+			return slotElem
+		}
+	}
 }
 
 //go:linkname runtime_mapassign_faststr runtime.mapassign_faststr
@@ -256,19 +287,23 @@ func runtime_mapassign_faststr(typ *abi.MapType, m *Map, key string) unsafe.Poin
 	}
 
 	if m.dirLen == 0 {
-		if m.used < abi.MapGroupSlots {
-			elem := m.putSlotSmallFastStr(typ, hash, key)
+		elem := m.putSlotSmallFastStr(typ, hash, key)
+		if elem == nil {
+			// Can't fit another entry, grow to full size map.
+			tab := m.growToTable(typ)
 
-			if m.writing == 0 {
-				fatal("concurrent map writes")
-			}
-			m.writing ^= 1
+			elem = tab.uncheckedPutSlotForAssignFastStr(typ, hash, key)
+			m.used++
 
-			return elem
+			tab.checkInvariants(typ, m)
 		}
 
-		// Can't fit another entry, grow to full size map.
-		m.growToTable(typ)
+		if m.writing == 0 {
+			fatal("concurrent map writes")
+		}
+		m.writing ^= 1
+
+		return elem
 	}
 
 	var slotElem unsafe.Pointer

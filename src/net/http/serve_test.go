@@ -1551,7 +1551,7 @@ func testServerAllowsBlockingRemoteAddr(t *testing.T, mode testMode) {
 
 // TestHeadResponses verifies that all MIME type sniffing and Content-Length
 // counting of GET requests also happens on HEAD requests.
-func TestHeadResponses(t *testing.T) { run(t, testHeadResponses, http3SkippedMode) }
+func TestHeadResponses(t *testing.T) { run(t, testHeadResponses) }
 func testHeadResponses(t *testing.T, mode testMode) {
 	cst := newClientServerTest(t, mode, HandlerFunc(func(w ResponseWriter, r *Request) {
 		_, err := w.Write([]byte("<html>"))
@@ -1575,7 +1575,8 @@ func testHeadResponses(t *testing.T, mode testMode) {
 	if ct := res.Header.Get("Content-Type"); ct != "text/html; charset=utf-8" {
 		t.Errorf("Content-Type: %q; want text/html; charset=utf-8", ct)
 	}
-	if v := res.ContentLength; v != 10 {
+	// HTTP/3 does not automatically set ContentLength. This is intentional.
+	if v := res.ContentLength; v != 10 && mode != http3Mode {
 		t.Errorf("Content-Length: %d; want 10", v)
 	}
 	body, err := io.ReadAll(res.Body)
@@ -7385,7 +7386,7 @@ func testHeadBody(t *testing.T, mode testMode, chunked bool, method string) {
 
 // TestDisableContentLength verifies that the Content-Length is set by default
 // or disabled when the header is set to nil.
-func TestDisableContentLength(t *testing.T) { run(t, testDisableContentLength, http3SkippedMode) }
+func TestDisableContentLength(t *testing.T) { run(t, testDisableContentLength) }
 func testDisableContentLength(t *testing.T, mode testMode) {
 	noCL := newClientServerTest(t, mode, HandlerFunc(func(w ResponseWriter, r *Request) {
 		w.Header()["Content-Length"] = nil // disable the default Content-Length response
@@ -7411,7 +7412,8 @@ func testDisableContentLength(t *testing.T, mode testMode) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := res.Header.Get("Content-Length"); got != "2" {
+	// HTTP/3 does not automatically set ContentLength. This is intentional.
+	if got := res.Header.Get("Content-Length"); got != "2" && mode != http3Mode {
 		t.Errorf("Content-Length: %q; want 2", got)
 	}
 	if err := res.Body.Close(); err != nil {

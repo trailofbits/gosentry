@@ -1013,7 +1013,7 @@ func (s *Stream) appendOutFramesLocked(w *packetWriter, pnum packetNumber, pto b
 	if s.outreset.isSet() {
 		// RESET_STREAM
 		if s.outreset.shouldSendPTO(pto) {
-			if !w.appendResetStreamFrame(s.id, s.outresetcode, min(s.outwin, s.out.end)) {
+			if !w.appendResetStreamFrame(s.id, s.outresetcode, s.outmaxsent) {
 				return false
 			}
 			s.outreset.setSent(pnum)

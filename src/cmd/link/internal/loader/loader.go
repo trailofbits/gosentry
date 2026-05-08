@@ -816,6 +816,16 @@ func (l *Loader) SymVersion(i Sym) int {
 	return abiToVer(r.Sym(li).ABI(), r.version)
 }
 
+func (l *Loader) IsContentHashed(i Sym) bool {
+	if l.IsExternal(i) {
+		return false
+	}
+	r, li := l.toLocal(i)
+	start := uint32(r.ndef + r.nhashed64def)
+	end := start + uint32(r.nhasheddef)
+	return start <= li && li < end
+}
+
 func (l *Loader) IsFileLocal(i Sym) bool {
 	return l.SymVersion(i) >= sym.SymVerStatic
 }
