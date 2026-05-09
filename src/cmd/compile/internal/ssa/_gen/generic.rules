@@ -407,6 +407,11 @@
 (Sub(64|32|16|8) <t> (Mul(64|32|16|8) x y) (Mul(64|32|16|8) x z))
 	=> (Mul(64|32|16|8) x (Sub(64|32|16|8) <t> y z))
 
+// Canonicalize x+x to x << 1.
+// This is often slower since most CPUs have more adders than shifters, but it can enable other optimizations.
+// Arches who care about this like AMD64 convert x << 1 back to x+x in their arch-specific rules which is useful anyhow.
+(Add(64|32|16|8) x x) => (Lsh(64|32|16|8)x64 x (Const64 <types.Types[types.TUINT64]> [1]))
+
 // rewrite shifts of 8/16/32 bit consts into 64 bit consts to reduce
 // the number of the other rewrite rules for const shifts
 (Lsh64x32  <t> x (Const32 [c])) => (Lsh64x64  x (Const64 <t> [int64(uint32(c))]))

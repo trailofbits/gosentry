@@ -553,6 +553,19 @@ func rewriteValuegeneric_OpAdd16(v *Value) bool {
 		}
 		break
 	}
+	// match: (Add16 x x)
+	// result: (Lsh16x64 x (Const64 <types.Types[types.TUINT64]> [1]))
+	for {
+		x := v_0
+		if x != v_1 {
+			break
+		}
+		v.reset(OpLsh16x64)
+		v0 := b.NewValue0(v.Pos, OpConst64, types.Types[types.TUINT64])
+		v0.AuxInt = int64ToAuxInt(1)
+		v.AddArg2(x, v0)
+		return true
+	}
 	// match: (Add16 (Const16 [0]) x)
 	// result: x
 	for {
@@ -1165,6 +1178,19 @@ func rewriteValuegeneric_OpAdd32(v *Value) bool {
 			}
 		}
 		break
+	}
+	// match: (Add32 x x)
+	// result: (Lsh32x64 x (Const64 <types.Types[types.TUINT64]> [1]))
+	for {
+		x := v_0
+		if x != v_1 {
+			break
+		}
+		v.reset(OpLsh32x64)
+		v0 := b.NewValue0(v.Pos, OpConst64, types.Types[types.TUINT64])
+		v0.AuxInt = int64ToAuxInt(1)
+		v.AddArg2(x, v0)
+		return true
 	}
 	// match: (Add32 (Const32 [0]) x)
 	// result: x
@@ -1805,6 +1831,19 @@ func rewriteValuegeneric_OpAdd64(v *Value) bool {
 			}
 		}
 		break
+	}
+	// match: (Add64 x x)
+	// result: (Lsh64x64 x (Const64 <types.Types[types.TUINT64]> [1]))
+	for {
+		x := v_0
+		if x != v_1 {
+			break
+		}
+		v.reset(OpLsh64x64)
+		v0 := b.NewValue0(v.Pos, OpConst64, types.Types[types.TUINT64])
+		v0.AuxInt = int64ToAuxInt(1)
+		v.AddArg2(x, v0)
+		return true
 	}
 	// match: (Add64 (Const64 [0]) x)
 	// result: x
@@ -2483,6 +2522,19 @@ func rewriteValuegeneric_OpAdd8(v *Value) bool {
 			}
 		}
 		break
+	}
+	// match: (Add8 x x)
+	// result: (Lsh8x64 x (Const64 <types.Types[types.TUINT64]> [1]))
+	for {
+		x := v_0
+		if x != v_1 {
+			break
+		}
+		v.reset(OpLsh8x64)
+		v0 := b.NewValue0(v.Pos, OpConst64, types.Types[types.TUINT64])
+		v0.AuxInt = int64ToAuxInt(1)
+		v.AddArg2(x, v0)
+		return true
 	}
 	// match: (Add8 (Const8 [0]) x)
 	// result: x

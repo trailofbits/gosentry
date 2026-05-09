@@ -2042,6 +2042,10 @@ func branchTableN(s *state, idx *ssa.Value, intrinsicCall *ir.CallExpr, genOp fu
 		s.startBlock(bPanic)
 		s.rtcall(ir.Syms.PanicSimdImm, false, nil)
 	}
+	if s.curBlock != nil {
+		bb := s.endBlock()
+		bb.AddEdgeTo(jt)
+	}
 
 	s.startBlock(jt)
 	jt.Kind = ssa.BlockPlain
