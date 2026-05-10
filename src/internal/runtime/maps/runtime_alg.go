@@ -25,6 +25,13 @@ var aeskeysched [hashRandomBytes]byte
 var hashkey [4]uintptr
 
 func AlgInit() {
+	// Always intialize hashkey.
+	//
+	// See #78073
+	for i := range hashkey {
+		hashkey[i] = uintptr(bootstrapRand())
+	}
+
 	// Install AES hash algorithms if the instructions needed are present.
 	if (goarch.GOARCH == "386" || goarch.GOARCH == "amd64") &&
 		cpu.X86.HasAES && // AESENC
@@ -39,14 +46,19 @@ func AlgInit() {
 			fatal("maps: global variables for AES hashing are not properly aligned!")
 		}
 		initAlgAES()
+
+		if memHashUsesVAES {
+			// We are using intrinsics hash implementation.
+			// Override the UseAeshash in this case, since it uses VAES (AVX) instructions.
+			// While assembly implementation used AES-NI instructions,
+			// simd intrinsics only provide access to AVX ones.
+			UseAeshash = cpu.X86.HasAVX
+		}
 		return
 	}
 	if goarch.GOARCH == "arm64" && cpu.ARM64.HasAES {
 		initAlgAES()
 		return
-	}
-	for i := range hashkey {
-		hashkey[i] = uintptr(bootstrapRand())
 	}
 }
 

@@ -11,6 +11,21 @@ import (
 )
 
 // AES hashing not implemented for these architectures
+const memHashAESImplemented = false
+const memHashUsesVAES = false
+
+func memHash32AES(p unsafe.Pointer, h uintptr) uintptr {
+	panic("memHash32AES not implemented")
+}
+
+func memHash64AES(p unsafe.Pointer, h uintptr) uintptr {
+	panic("memHash64AES not implemented")
+}
+
+func strHashAES(p unsafe.Pointer, h uintptr) uintptr {
+	panic("strHashAES not implemented")
+}
+
 func MemHash(p unsafe.Pointer, h, s uintptr) uintptr {
 	return memHashFallback(p, h, s)
 }

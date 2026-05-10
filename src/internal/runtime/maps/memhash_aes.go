@@ -10,14 +10,32 @@ import (
 	"unsafe"
 )
 
-//go:noescape
-func MemHash(p unsafe.Pointer, h, s uintptr) uintptr
+const memHashAESImplemented = true
 
-//go:noescape
-func MemHash32(p unsafe.Pointer, h uintptr) uintptr
+func MemHash(p unsafe.Pointer, h, s uintptr) uintptr {
+	if UseAeshash {
+		return memHashAES(p, h, s)
+	}
+	return memHashFallback(p, h, s)
+}
 
-//go:noescape
-func MemHash64(p unsafe.Pointer, h uintptr) uintptr
+func MemHash32(p unsafe.Pointer, h uintptr) uintptr {
+	if UseAeshash {
+		return memHash32AES(p, h)
+	}
+	return memHash32Fallback(p, h)
+}
 
-//go:noescape
-func StrHash(p unsafe.Pointer, h uintptr) uintptr
+func MemHash64(p unsafe.Pointer, h uintptr) uintptr {
+	if UseAeshash {
+		return memHash64AES(p, h)
+	}
+	return memHash64Fallback(p, h)
+}
+
+func StrHash(p unsafe.Pointer, h uintptr) uintptr {
+	if UseAeshash {
+		return strHashAES(p, h)
+	}
+	return strHashFallback(p, h)
+}

@@ -88,7 +88,8 @@ var depsRules = `
 	internal/strconv,
 	internal/trace/tracev2,
 	math/bits,
-	structs
+	structs,
+	simd/archsimd
 	< internal/bytealg
 	< internal/stringslite
 	< internal/unsafeheader

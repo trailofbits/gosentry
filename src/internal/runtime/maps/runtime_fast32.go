@@ -75,7 +75,19 @@ func runtime_mapaccess2_fast32(typ *abi.MapType, m *Map, key uint32) (unsafe.Poi
 	// However, from compiler's perspective, key is no longer address-taken and
 	// filled back in register before the loop.
 	k := key
-	hash := MemHash32(unsafe.Pointer(&k), m.seed)
+	var hash uintptr
+	// Explicitly inline MemHash32.
+	// MemHash32 cost is higher than the threshold for inlining.
+	// But when we are using intrinsic implementation we want it to be inlined,
+	// since it improves performance.
+	//
+	// Note: memHashAESImplemented is compile time constant. We use it to remove runtime UseAeshash check
+	// for architectures where we don't have AES hashing implementations.
+	if memHashAESImplemented && UseAeshash {
+		hash = memHash32AES(unsafe.Pointer(&k), m.seed)
+	} else {
+		hash = memHash32Fallback(unsafe.Pointer(&k), m.seed)
+	}
 
 	// Select table.
 	idx := m.directoryIndex(hash)
@@ -200,7 +212,13 @@ func runtime_mapassign_fast32(typ *abi.MapType, m *Map, key uint32) unsafe.Point
 	// See the related comment in runtime_mapaccess2_fast32
 	// for why we pass local copy of key.
 	k := key
-	hash := MemHash32(unsafe.Pointer(&k), m.seed)
+	var hash uintptr
+	// See the related comment in runtime_mapaccess2_fast32
+	if memHashAESImplemented && UseAeshash {
+		hash = memHash32AES(unsafe.Pointer(&k), m.seed)
+	} else {
+		hash = memHash32Fallback(unsafe.Pointer(&k), m.seed)
+	}
 
 	// Set writing after calling Hasher, since Hasher may panic, in which
 	// case we have not actually done a write.
@@ -346,7 +364,13 @@ func runtime_mapassign_fast32ptr(typ *abi.MapType, m *Map, key unsafe.Pointer) u
 	// See the related comment in runtime_mapaccess2_fast32
 	// for why we pass local copy of key.
 	k := key
-	hash := MemHash32(unsafe.Pointer(&k), m.seed)
+	var hash uintptr
+	// See the related comment in runtime_mapaccess2_fast32
+	if memHashAESImplemented && UseAeshash {
+		hash = memHash32AES(unsafe.Pointer(&k), m.seed)
+	} else {
+		hash = memHash32Fallback(unsafe.Pointer(&k), m.seed)
+	}
 
 	// Set writing after calling Hasher, since Hasher may panic, in which
 	// case we have not actually done a write.

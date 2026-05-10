@@ -4,63 +4,21 @@
 
 #include "textflag.h"
 
-// func MemHash32(p unsafe.Pointer, h uintptr) uintptr
-// ABIInternal for performance.
-TEXT ·MemHash32<ABIInternal>(SB),NOSPLIT,$0-24
-	// AX = ptr to data
-	// BX = seed
-	CMPB	·UseAeshash(SB), $0
-	JEQ	noaes
-	MOVQ	BX, X0	// X0 = seed
-	PINSRD	$2, (AX), X0	// data
-	AESENC	·aeskeysched+0(SB), X0
-	AESENC	·aeskeysched+16(SB), X0
-	AESENC	·aeskeysched+32(SB), X0
-	MOVQ	X0, AX	// return X0
-	RET
-noaes:
-	JMP	·memHash32Fallback<ABIInternal>(SB)
-
-// func MemHash64(p unsafe.Pointer, h uintptr) uintptr
-// ABIInternal for performance.
-TEXT ·MemHash64<ABIInternal>(SB),NOSPLIT,$0-24
-	// AX = ptr to data
-	// BX = seed
-	CMPB	·UseAeshash(SB), $0
-	JEQ	noaes
-	MOVQ	BX, X0	// X0 = seed
-	PINSRQ	$1, (AX), X0	// data
-	AESENC	·aeskeysched+0(SB), X0
-	AESENC	·aeskeysched+16(SB), X0
-	AESENC	·aeskeysched+32(SB), X0
-	MOVQ	X0, AX	// return X0
-	RET
-noaes:
-	JMP	·memHash64Fallback<ABIInternal>(SB)
-
-// func MemHash(p unsafe.Pointer, h, s uintptr) uintptr
+// func memHashAES(p unsafe.Pointer, h, s uintptr) uintptr
 // hash function using AES hardware instructions
-TEXT ·MemHash<ABIInternal>(SB),NOSPLIT,$0-32
+TEXT ·memHashAES<ABIInternal>(SB),NOSPLIT,$0-32
 	// AX = ptr to data
 	// BX = seed
 	// CX = size
-	CMPB	·UseAeshash(SB), $0
-	JEQ	noaes
 	JMP	·aeshashbody<>(SB)
-noaes:
-	JMP	·memHashFallback<ABIInternal>(SB)
 
-// func strhash(p unsafe.Pointer, h uintptr) uintptr
-TEXT ·StrHash<ABIInternal>(SB),NOSPLIT,$0-24
+// func strhashAES(p unsafe.Pointer, h uintptr) uintptr
+TEXT ·strHashAES<ABIInternal>(SB),NOSPLIT,$0-24
 	// AX = ptr to string struct
 	// BX = seed
-	CMPB	·UseAeshash(SB), $0
-	JEQ	noaes
 	MOVQ	8(AX), CX	// length of string
 	MOVQ	(AX), AX	// string data
 	JMP	·aeshashbody<>(SB)
-noaes:
-	JMP	·strHashFallback<ABIInternal>(SB)
 
 // AX: data
 // BX: hash seed

@@ -5,9 +5,7 @@
 #include "textflag.h"
 
 // hash function using AES hardware instructions
-TEXT ·MemHash32(SB),NOSPLIT,$0-12
-	CMPB	·UseAeshash(SB), $0
-	JEQ	noaes
+TEXT ·memHash32AES(SB),NOSPLIT,$0-12
 	MOVL	p+0(FP), AX	// ptr to data
 	MOVL	h+4(FP), X0	// seed
 	PINSRD	$1, (AX), X0	// data
@@ -16,12 +14,8 @@ TEXT ·MemHash32(SB),NOSPLIT,$0-12
 	AESENC	·aeskeysched+32(SB), X0
 	MOVL	X0, ret+8(FP)
 	RET
-noaes:
-	JMP	·memHash32Fallback(SB)
 
-TEXT ·MemHash64(SB),NOSPLIT,$0-12
-	CMPB	·UseAeshash(SB), $0
-	JEQ	noaes
+TEXT ·memHash64AES(SB),NOSPLIT,$0-12
 	MOVL	p+0(FP), AX	// ptr to data
 	MOVQ	(AX), X0	// data
 	PINSRD	$2, h+4(FP), X0	// seed
@@ -30,29 +24,19 @@ TEXT ·MemHash64(SB),NOSPLIT,$0-12
 	AESENC	·aeskeysched+32(SB), X0
 	MOVL	X0, ret+8(FP)
 	RET
-noaes:
-	JMP	·memHash64Fallback(SB)
 
-TEXT ·MemHash(SB),NOSPLIT,$0-16
-	CMPB	·UseAeshash(SB), $0
-	JEQ	noaes
+TEXT ·memHashAES(SB),NOSPLIT,$0-16
 	MOVL	p+0(FP), AX	// ptr to data
 	MOVL	s+8(FP), BX	// size
 	LEAL	ret+12(FP), DX
 	JMP	·aeshashbody<>(SB)
-noaes:
-	JMP	·memHashFallback(SB)
 
-TEXT ·StrHash(SB),NOSPLIT,$0-12
-	CMPB	·UseAeshash(SB), $0
-	JEQ	noaes
+TEXT ·strHashAES(SB),NOSPLIT,$0-12
 	MOVL	p+0(FP), AX	// ptr to string object
 	MOVL	4(AX), BX	// length of string
 	MOVL	(AX), AX	// string data
 	LEAL	ret+8(FP), DX
 	JMP	·aeshashbody<>(SB)
-noaes:
-	JMP	·strHashFallback(SB)
 
 // AX: data
 // BX: length
