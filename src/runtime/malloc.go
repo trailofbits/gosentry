@@ -1076,7 +1076,7 @@ func mallocgc(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 		return unsafe.Pointer(&zerobase)
 	}
 
-	if sizeSpecializedMallocEnabled && heapBitsInSpan(size) {
+	if sizeSpecializedMallocEnabled && size < uintptr(len(mallocNoScanTable)) {
 		if typ == nil || !typ.Pointers() {
 			if size >= maxTinySize {
 				return mallocNoScanTable[size](size, typ, needzero)
@@ -1120,7 +1120,6 @@ func mallocgc(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 	var x unsafe.Pointer
 	var elemsize uintptr
 	if sizeSpecializedMallocEnabled {
-		// we know that heapBitsInSpan is false.
 		if size <= maxSmallSize-gc.MallocHeaderSize {
 			if typ == nil || !typ.Pointers() {
 				x, elemsize = mallocgcSmallNoscan(size, typ, needzero)
@@ -1128,7 +1127,11 @@ func mallocgc(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 				if !needzero {
 					throw("objects with pointers must be zeroed")
 				}
-				x, elemsize = mallocgcSmallScanHeader(size, typ)
+				if heapBitsInSpan(size) {
+					x, elemsize = mallocgcSmallScanNoHeader(size, typ)
+				} else {
+					x, elemsize = mallocgcSmallScanHeader(size, typ)
+				}
 			}
 		} else {
 			x, elemsize = mallocgcLarge(size, typ, needzero)

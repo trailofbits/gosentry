@@ -811,11 +811,8 @@ func (s *state) specializedMallocSym(size int64, hasPointers bool) *obj.LSym {
 	if !s.sizeSpecializedMallocEnabled() {
 		return nil
 	}
-	ptrSize := s.config.PtrSize
-	ptrBits := ptrSize * 8
-	minSizeForMallocHeader := ptrSize * ptrBits
-	heapBitsInSpan := size <= minSizeForMallocHeader
-	if !heapBitsInSpan {
+	const specializedMallocMax = 128 // This must match the constant in mkmalloc.
+	if size > specializedMallocMax {
 		return nil
 	}
 	divRoundUp := func(n, a uintptr) uintptr { return (n + a - 1) / a }
