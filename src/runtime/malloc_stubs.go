@@ -126,6 +126,23 @@ func mallocStub(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 	return x
 }
 
+// deductAssistCredit reduces the current G's GC assist credit
+// by size bytes, and assists the GC if necessary.
+//
+// Caller must be preemptible.
+//
+// Defined here so it can be inlined by mkmalloc.
+func deductAssistCredit(size uintptr) {
+	assistG := getg()
+	if assistG.m.curg != nil {
+		assistG = assistG.m.curg
+	}
+	assistG.gcAssistBytes -= int64(size)
+	if assistG.gcAssistBytes < 0 {
+		gcAssistAlloc(assistG)
+	}
+}
+
 // inlinedMalloc will never be called. It is defined just so that the compiler can compile
 // the mallocStub function, which will also never be called, but instead used as a template
 // to generate a size-specialized malloc function. The call to inlinedMalloc in mallocStub
@@ -357,13 +374,12 @@ func doubleCheckTiny(size uintptr, typ *_type, mp *m) {
 }
 
 func tinyStub(size uintptr, typ *_type, needzero bool) (unsafe.Pointer, uintptr) {
-	const constsize = size_
 	const elemsize = elemsize_
 
 	// Set mp.mallocing to keep from being preempted by GC.
 	mp := acquirem()
 	if doubleCheckMalloc {
-		doubleCheckTiny(constsize, typ, mp)
+		doubleCheckTiny(size, typ, mp)
 	}
 	mp.mallocing = 1
 
@@ -399,9 +415,9 @@ func tinyStub(size uintptr, typ *_type, needzero bool) (unsafe.Pointer, uintptr)
 	c := getMCache(mp)
 	off := c.tinyoffset
 	// Align tiny pointer for required (conservative) alignment.
-	if constsize&7 == 0 {
+	if size&7 == 0 {
 		off = alignUp(off, 8)
-	} else if goarch.PtrSize == 4 && constsize == 12 {
+	} else if goarch.PtrSize == 4 && size == 12 {
 		// Conservatively align 12-byte objects to 8 bytes on 32-bit
 		// systems so that objects whose first field is a 64-bit
 		// value is aligned to 8 bytes and does not cause a fault on
@@ -409,15 +425,15 @@ func tinyStub(size uintptr, typ *_type, needzero bool) (unsafe.Pointer, uintptr)
 		// TODO(mknyszek): Remove this workaround if/when issue 36606
 		// is resolved.
 		off = alignUp(off, 8)
-	} else if constsize&3 == 0 {
+	} else if size&3 == 0 {
 		off = alignUp(off, 4)
-	} else if constsize&1 == 0 {
+	} else if size&1 == 0 {
 		off = alignUp(off, 2)
 	}
-	if off+constsize <= maxTinySize && c.tiny != 0 {
+	if off+size <= maxTinySize && c.tiny != 0 {
 		// The object fits into existing tiny block.
 		x := unsafe.Pointer(c.tiny + off)
-		c.tinyoffset = off + constsize
+		c.tinyoffset = off + size
 		c.tinyAllocs++
 		mp.mallocing = 0
 		releasem(mp)
@@ -435,10 +451,10 @@ func tinyStub(size uintptr, typ *_type, needzero bool) (unsafe.Pointer, uintptr)
 	(*[2]uint64)(x)[1] = 0
 	// See if we need to replace the existing tiny block with the new one
 	// based on amount of remaining free space.
-	if !raceenabled && (constsize < c.tinyoffset || c.tiny == 0) {
+	if !raceenabled && (size < c.tinyoffset || c.tiny == 0) {
 		// Note: disabled when race detector is on, see comment near end of this function.
 		c.tiny = uintptr(x)
-		c.tinyoffset = constsize
+		c.tinyoffset = size
 	}
 
 	// Ensure that the stores above that initialize x to
@@ -502,7 +518,7 @@ func tinyStub(size uintptr, typ *_type, needzero bool) (unsafe.Pointer, uintptr)
 		// TODO: enable this padding for all allocations, not just
 		// tinyalloc ones. It's tricky because of pointer maps.
 		// Maybe just all noscan objects?
-		x = add(x, elemsize-constsize)
+		x = add(x, elemsize-size)
 	}
 	return x, elemsize
 }

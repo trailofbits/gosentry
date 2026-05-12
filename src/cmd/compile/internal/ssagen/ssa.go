@@ -140,9 +140,7 @@ func InitConfig() {
 	for i := 1; i < len(ir.Syms.MallocGCSmallScanNoHeader); i++ {
 		ir.Syms.MallocGCSmallScanNoHeader[i] = typecheck.LookupRuntimeFunc(fmt.Sprintf("mallocgcSmallScanNoHeaderSC%d", i))
 	}
-	for i := 1; i < len(ir.Syms.MallocGCTiny); i++ {
-		ir.Syms.MallocGCTiny[i] = typecheck.LookupRuntimeFunc(fmt.Sprintf("mallocgcTinySize%d", i))
-	}
+	ir.Syms.MallocGCTiny = typecheck.LookupRuntimeFunc("mallocgcTinySC2")
 	ir.Syms.MallocGC = typecheck.LookupRuntimeFunc("mallocgc")
 	ir.Syms.Memmove = typecheck.LookupRuntimeFunc("memmove")
 	ir.Syms.Memequal = typecheck.LookupRuntimeFunc("memequal")
@@ -826,7 +824,7 @@ func (s *state) specializedMallocSym(size int64, hasPointers bool) *obj.LSym {
 		return ir.Syms.MallocGCSmallScanNoHeader[sizeClass]
 	}
 	if size < gc.TinySize {
-		return ir.Syms.MallocGCTiny[size]
+		return ir.Syms.MallocGCTiny
 	}
 	return ir.Syms.MallocGCSmallNoScan[sizeClass]
 }

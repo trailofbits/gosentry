@@ -126,12 +126,7 @@ func smallScanNoHeaderSCFuncName(sc, scMax uint8) string {
 	return fmt.Sprintf("mallocgcSmallScanNoHeaderSC%d", sc)
 }
 
-func tinyFuncName(size uintptr) string {
-	if size == 0 || size > smallScanNoHeaderMax {
-		return "mallocPanic"
-	}
-	return fmt.Sprintf("mallocgcTinySize%d", size)
-}
+const tinyFuncName = "mallocgcTinySC2"
 
 func smallNoScanSCFuncName(sc, scMax uint8) string {
 	if sc < 2 || sc > scMax {
@@ -184,11 +179,8 @@ func specializedMallocConfig(classes []class, sizeToSizeClass []uint8) generator
 
 		// tiny
 		tinySizeClass := sizeToSizeClass[tinySize]
-		for s := range uintptr(16) {
-			if s == 0 {
-				continue
-			}
-			name := tinyFuncName(s)
+		{
+			name := tinyFuncName
 			elemsize := classes[tinySizeClass].size
 			config.specs = append(config.specs, spec{
 				templateFunc: "mallocStub",
@@ -196,9 +188,9 @@ func specializedMallocConfig(classes []class, sizeToSizeClass []uint8) generator
 				ops: []op{
 					{inlineFunc, "inlinedMalloc", "tinyStub"},
 					{inlineFunc, "nextFreeFastTiny", "nextFreeFastTiny"},
+					{inlineFunc, "deductAssistCredit", "deductAssistCredit"},
 					{subBasicLit, "elemsize_", str(elemsize)},
 					{subBasicLit, "sizeclass_", str(tinySizeClass)},
-					{subBasicLit, "size_", str(s)},
 					{subBasicLit, "noscanint_", str(noscan)},
 					{foldCondition, "isTiny_", str(true)},
 				},
@@ -356,7 +348,8 @@ func foldIfCondition(node ast.Node, from, to string) ast.Node {
 }
 
 // inlineFunction recursively replaces calls to the function 'from' with the body of the function
-// 'toDecl'. All calls to 'from' must appear in assignment statements.
+// 'toDecl'. All calls to 'from' must either have no return values and appear in standalone expression statements
+// or otherwise must appear in assignment statements.
 // The replacement is very simple: it doesn't substitute the arguments for the parameters, so the
 // arguments to the function call must be the same identifier as the parameters to the function
 // declared by 'toDecl'. If there are any calls to from where that's not the case there will be a fatal error.
@@ -374,13 +367,17 @@ func inlineFunction(node ast.Node, from string, toDecl *ast.FuncDecl) ast.Node {
 				replaceAssignment(cursor, node, toDecl)
 			}
 			return false
-		case *ast.CallExpr:
-			// double check that all calls to from appear within an assignment
-			if isCallTo(node, from) {
-				if _, ok := cursor.Parent().(*ast.AssignStmt); !ok {
-					log.Fatalf("applying op: all calls to function %q being replaced must appear in an assignment statement, appears in %T", from, cursor.Parent())
+		case *ast.ExprStmt:
+			if callExpr, ok := node.X.(*ast.CallExpr); ok && isCallTo(callExpr, from) {
+				if !argsMatchParameters(callExpr.Args, toDecl.Type.Params) {
+					log.Fatalf("applying op: arguments to %v don't match parameter names of %v: %v", from, toDecl.Name, debugPrint(callExpr.Args...))
 				}
+				if toDecl.Type.Results != nil {
+					log.Fatalf("applying op: call to %v, which does not appear in an assignment, is replaced with %v which has return values: %v", from, toDecl.Name, debugPrint(callExpr.Args...))
+				}
+				replaceCallExprStmt(cursor, toDecl)
 			}
+			return false
 		}
 		return true
 	}, nil)
@@ -423,6 +420,16 @@ func isCallTo(expr ast.Expr, name string) bool {
 		return false
 	}
 	return isIdentWithName(callexpr.Fun, name)
+}
+
+// replaceCallExprStmt replaces a standalone expression statement calling a function with no
+// return values with the body of the function.
+func replaceCallExprStmt(cursor *astutil.Cursor, funcdecl *ast.FuncDecl) {
+	body := internalastutil.CloneNode(funcdecl.Body)
+	for _, stmt := range body.List {
+		cursor.InsertBefore(stmt)
+	}
+	cursor.Delete()
 }
 
 // replaceAssignment replaces an assignment statement where the right hand side is a function call
@@ -641,7 +648,7 @@ var mallocScanTable = [513]func(size uintptr, typ *_type, needzero bool) unsafe.
 var mallocNoScanTable = [513]func(size uintptr, typ *_type, needzero bool) unsafe.Pointer{`)
 	for i := range uintptr(smallScanNoHeaderMax + 1) {
 		if i < 16 {
-			fmt.Fprintf(&b, "%s,\n", tinyFuncName(i))
+			fmt.Fprintf(&b, "%s,\n", "mallocPanic")
 		} else {
 			fmt.Fprintf(&b, "%s,\n", smallNoScanSCFuncName(sizeToSizeClass[i], scMax))
 		}
