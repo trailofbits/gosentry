@@ -703,6 +703,14 @@ func (t *tester) registerTests() {
 			})
 	}
 
+	// Tests that the nethttpomithttp2 build tag doesn't rot too much,
+	// even if there's not a regular builder on it.
+	t.registerTest("net/http with tag nethttpomithttp2", &goTest{
+		variant: "nethttpomithttp2",
+		tags:    []string{"nethttpomithttp2"},
+		pkg:     "net/http",
+	})
+
 	// Check that all crypto packages compile with the purego build tag.
 	t.registerTest("crypto with tag purego (build and vet only)", &goTest{
 		variant:  "purego",

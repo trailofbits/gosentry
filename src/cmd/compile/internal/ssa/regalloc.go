@@ -3244,24 +3244,34 @@ func (s *regAllocState) computeDesired() {
 
 	// TODO: Can we speed this up using the liveness information we have already
 	// from computeLive?
-	// TODO: Since we don't propagate information through phi nodes, can we do
-	// this as a single dominator tree walk instead of the iterative solution?
 	var desired desiredState
 	f := s.f
 	po := f.postorder()
+	maxPreds := 0
+	for _, b := range f.Blocks {
+		maxPreds = max(maxPreds, len(b.Preds))
+	}
+	// phiPrefs[i] collects desired registers for phi inputs coming from b.Preds[i].
+	phiPrefs := make([]desiredState, maxPreds)
 	for {
 		changed := false
 		for _, b := range po {
 			desired.copy(&s.desired[b.ID])
-			for i := len(b.Values) - 1; i >= 0; i-- {
+			for i := range b.Preds {
+				phiPrefs[i].reset()
+			}
+			var headerLoop *loop // loop whose header is b, if any
+			if l := s.loopnest.b2l[b.ID]; l != nil && l.header == b {
+				headerLoop = l
+			}
+			// Process non-phis, then phis.
+			i := len(b.Values) - 1
+			for ; i >= 0; i-- {
 				v := b.Values[i]
-				prefs := desired.remove(v.ID)
 				if v.Op == OpPhi {
-					// TODO: if v is a phi, save desired register for phi inputs.
-					// For now, we just drop it and don't propagate
-					// desired registers back though phi nodes.
-					continue
+					break
 				}
+				prefs := desired.remove(v.ID)
 				regspec := s.regspec(v)
 				// Cancel desired registers if they get clobbered.
 				desired.clobber(regspec.clobbers)
@@ -3286,9 +3296,33 @@ func (s *regAllocState) computeDesired() {
 					desired.addList(v.Args[0].ID, prefs)
 				}
 			}
-			for _, e := range b.Preds {
+			for ; i >= 0; i-- {
+				v := b.Values[i]
+				prefs := desired.remove(v.ID)
+				if prefs[0] == noRegister {
+					continue
+				}
+				// Phi desires go to phiPrefs (per-pred), so drop them from desired.avoid.
+				// The merge below re-adds any bits other entries still need.
+				for _, r := range prefs {
+					if r != noRegister {
+						desired.avoid = desired.avoid.minus(regMaskAt(r))
+					}
+				}
+				// Propagate v's desired registers back to its args.
+				for pidx, a := range v.Args {
+					if headerLoop != nil && s.loopnest.b2l[b.Preds[pidx].b.ID] == headerLoop {
+						// Skip direct back-edges to avoid pessimizing the loop body to skip a single reg-reg move.
+						// We check only the immediate loop; it is simple and empirically sufficient.
+						continue
+					}
+					phiPrefs[pidx].addList(a.ID, prefs)
+				}
+			}
+			for pidx, e := range b.Preds {
 				p := e.b
 				changed = s.desired[p.ID].merge(&desired) || changed
+				changed = s.desired[p.ID].merge(&phiPrefs[pidx]) || changed
 			}
 		}
 		if !changed || (!s.loopnest.hasIrreducible && len(s.loopnest.loops) == 0) {
@@ -3459,6 +3493,12 @@ func (d *desiredState) clobber(m regMask) {
 		i++
 	}
 	d.avoid = d.avoid.minus(m)
+}
+
+// reset prepares d for re-use.
+func (d *desiredState) reset() {
+	d.entries = d.entries[:0]
+	d.avoid = regMask{}
 }
 
 // copy copies a desired state from another desiredState x.
