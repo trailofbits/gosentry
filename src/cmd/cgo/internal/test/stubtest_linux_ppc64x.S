@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+//go:build (ppc64 || ppc64le) && linux && cgo
+
 // When linking C ELFv2 objects, the Go linker may need to insert calling stubs.
 // A call stub is usually needed when the ELFv2 st_other attribute is different
 // between caller and callee.

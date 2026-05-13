@@ -919,10 +919,16 @@ func TestTrampoline(t *testing.T) {
 	// calls will use trampolines.
 	buildmodes := []string{"default"}
 	switch runtime.GOARCH {
-	case "arm", "arm64", "ppc64", "loong64":
-	case "ppc64le":
-		// Trampolines are generated differently when internal linking PIE, test them too.
-		buildmodes = append(buildmodes, "pie")
+	case "arm", "arm64", "loong64":
+	case "ppc64le", "ppc64":
+		switch runtime.GOOS {
+		case "aix":
+		case "linux":
+			// Trampolines are generated differently when internal linking PIE, test them too.
+			buildmodes = append(buildmodes, "pie")
+		default:
+			t.Skipf("trampoline insertion is not implemented on %s-%s", runtime.GOARCH, runtime.GOOS)
+		}
 	default:
 		t.Skipf("trampoline insertion is not implemented on %s", runtime.GOARCH)
 	}
@@ -984,8 +990,8 @@ func TestTrampolineCgo(t *testing.T) {
 	// calls will use trampolines.
 	buildmodes := []string{"default"}
 	switch runtime.GOARCH {
-	case "arm", "arm64", "ppc64", "loong64":
-	case "ppc64le":
+	case "arm", "arm64", "loong64":
+	case "ppc64le", "ppc64":
 		// Trampolines are generated differently when internal linking PIE, test them too.
 		buildmodes = append(buildmodes, "pie")
 	default:
