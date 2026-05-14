@@ -1250,7 +1250,7 @@ func (p *AddrPort) UnmarshalText(text []byte) error {
 	return err
 }
 
-// AppendBinary implements the [encoding.BinaryAppendler] interface.
+// AppendBinary implements the [encoding.BinaryAppender] interface.
 // It returns [Addr.AppendBinary] with an additional two bytes appended
 // containing the port in little-endian.
 func (p AddrPort) AppendBinary(b []byte) ([]byte, error) {
