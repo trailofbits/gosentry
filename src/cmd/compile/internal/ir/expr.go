@@ -1020,6 +1020,105 @@ func Reassigned(name *Name) bool {
 	return Any(name.Curfn, do)
 }
 
+// FuncSingleAssignment returns the sole OAS *AssignStmt that assigns a
+// non-zero value to name, if name is a func-typed local variable (PAUTO)
+// with exactly one such assignment. Zero-value assignments (nil, bare
+// declarations) are ignored since nil panics on call. Returns nil if the
+// variable is not PAUTO, not func-typed, address-taken, has multiple
+// non-zero assignments, or has any complex assignments (OAS2, ORANGE).
+// Assignments inside nested closures are accepted because this is only
+// used for escape analysis callee resolution: the only alternative value
+// is nil, which panics on call.
+//
+// TODO: fold this into [ReassignOracle] so it can share the single
+// walk with StaticValue and Reassigned.
+func FuncSingleAssignment(name *Name) *AssignStmt {
+	if name.Class != PAUTO {
+		return nil
+	}
+	base.AssertfAt(name.Curfn != nil, name.Pos(), "PAUTO %v has nil Curfn", name)
+	if name.Addrtaken() {
+		return nil
+	}
+	if name.Type().Kind() != types.TFUNC {
+		return nil
+	}
+	// Reject variables with non-zero defining assignments we can't
+	// analyze (e.g., type switch case variables whose Defn is a
+	// TypeSwitchGuard, not an AssignStmt).
+	if name.Defn != nil {
+		as, ok := name.Defn.(*AssignStmt)
+		if !ok || !isNilAssign(as) {
+			return nil
+		}
+	}
+
+	isName := func(x Node) bool {
+		if x == nil {
+			return false
+		}
+		n, ok := OuterValue(x).(*Name)
+		return ok && n.Canonical() == name
+	}
+
+	var found *AssignStmt
+
+	var do func(n Node) bool
+	do = func(n Node) bool {
+		switch n.Op() {
+		case OAS:
+			as := n.(*AssignStmt)
+			if isName(as.X) {
+				if isNilAssign(as) {
+					break
+				}
+				if found != nil {
+					found = nil
+					return true
+				}
+				found = as
+			}
+		case OAS2, OAS2FUNC, OAS2MAPR, OAS2DOTTYPE, OAS2RECV, OSELRECV2:
+			as := n.(*AssignListStmt)
+			for _, p := range as.Lhs {
+				if isName(p) {
+					found = nil
+					return true
+				}
+			}
+		case ORANGE:
+			rs := n.(*RangeStmt)
+			if isName(rs.Key) || isName(rs.Value) {
+				found = nil
+				return true
+			}
+		case OCLOSURE:
+			n := n.(*ClosureExpr)
+			if Any(n.Func, do) {
+				return true
+			}
+		}
+		return false
+	}
+
+	if Any(name.Curfn, do) {
+		return nil
+	}
+	return found
+}
+
+// isNilAssign reports whether as has a nil or absent RHS.
+func isNilAssign(as *AssignStmt) bool {
+	if as.Y == nil {
+		return true
+	}
+	y := as.Y
+	for y.Op() == OCONVNOP {
+		y = y.(*ConvExpr).X
+	}
+	return IsNil(y)
+}
+
 // StaticCalleeName returns the ONAME/PFUNC for n, if known.
 func StaticCalleeName(n Node) *Name {
 	switch n.Op() {
