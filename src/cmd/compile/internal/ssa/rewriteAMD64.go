@@ -9485,6 +9485,1246 @@ func rewriteValueAMD64_OpAMD64CMOVLEQ(v *Value) bool {
 		}
 		break
 	}
+	// match: (CMOVLEQ yes no t:(TESTQ x:(MOVBQZX s:(SETEQ flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLNE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLNE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTQ x:(MOVBQZX s:(SETNE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLEQ yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLEQ)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTQ x:(MOVBQZX s:(SETL flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLGE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLGE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTQ x:(MOVBQZX s:(SETG flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLLE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLLE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTQ x:(MOVBQZX s:(SETLE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLGT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLGT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTQ x:(MOVBQZX s:(SETGE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLLT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLLT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTQ x:(MOVBQZX s:(SETA flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLLS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLLS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTQ x:(MOVBQZX s:(SETB flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLCC yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLCC)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTQ x:(MOVBQZX s:(SETAE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLCS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLCS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTQ x:(MOVBQZX s:(SETBE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLHI yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLHI)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTL x:(MOVBQZX s:(SETEQ flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLNE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLNE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTL x:(MOVBQZX s:(SETNE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLEQ yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLEQ)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTL x:(MOVBQZX s:(SETL flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLGE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLGE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTL x:(MOVBQZX s:(SETG flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLLE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLLE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTL x:(MOVBQZX s:(SETLE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLGT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLGT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTL x:(MOVBQZX s:(SETGE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLLT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLLT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTL x:(MOVBQZX s:(SETA flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLLS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLLS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTL x:(MOVBQZX s:(SETB flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLCC yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLCC)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTL x:(MOVBQZX s:(SETAE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLCS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLCS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTL x:(MOVBQZX s:(SETBE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLHI yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLHI)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTW x:(MOVBQZX s:(SETEQ flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLNE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLNE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTW x:(MOVBQZX s:(SETNE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLEQ yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLEQ)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTW x:(MOVBQZX s:(SETL flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLGE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLGE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTW x:(MOVBQZX s:(SETG flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLLE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLLE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTW x:(MOVBQZX s:(SETLE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLGT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLGT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTW x:(MOVBQZX s:(SETGE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLLT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLLT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTW x:(MOVBQZX s:(SETA flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLLS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLLS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTW x:(MOVBQZX s:(SETB flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLCC yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLCC)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTW x:(MOVBQZX s:(SETAE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLCS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLCS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTW x:(MOVBQZX s:(SETBE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLHI yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLHI)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTB s:(SETEQ flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVLNE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLNE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTB s:(SETNE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVLEQ yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLEQ)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTB s:(SETL flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVLGE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLGE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTB s:(SETG flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVLLE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLLE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTB s:(SETLE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVLGT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLGT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTB s:(SETGE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVLLT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLLT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTB s:(SETA flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVLLS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLLS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTB s:(SETB flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVLCC yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLCC)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTB s:(SETAE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVLCS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLCS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLEQ yes no t:(TESTB s:(SETBE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVLHI yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLHI)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
 	return false
 }
 func rewriteValueAMD64_OpAMD64CMOVLGE(v *Value) bool {
@@ -10111,6 +11351,1742 @@ func rewriteValueAMD64_OpAMD64CMOVLNE(v *Value) bool {
 		}
 		break
 	}
+	// match: (CMOVLNE yes no t:(TESTQ x:(MOVBQZX s:(SETEQ flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLEQ yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLEQ)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTQ x:(MOVBQZX s:(SETNE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLNE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLNE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTQ x:(MOVBQZX s:(SETL flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLLT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLLT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTQ x:(MOVBQZX s:(SETG flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLGT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLGT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTQ x:(MOVBQZX s:(SETLE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLLE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLLE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTQ x:(MOVBQZX s:(SETGE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLGE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLGE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTQ x:(MOVBQZX s:(SETA flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLHI yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLHI)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTQ x:(MOVBQZX s:(SETB flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLCS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLCS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTQ x:(MOVBQZX s:(SETAE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLCC yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLCC)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTQ x:(MOVBQZX s:(SETBE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLLS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLLS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTQ x:(MOVBQZX s:(SETEQF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLEQF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLEQF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTQ x:(MOVBQZX s:(SETNEF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLNEF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNEF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLNEF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTQ x:(MOVBQZX s:(SETGF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLGTF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLGTF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTQ x:(MOVBQZX s:(SETGEF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLGEF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGEF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLGEF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTL x:(MOVBQZX s:(SETEQ flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLEQ yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLEQ)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTL x:(MOVBQZX s:(SETNE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLNE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLNE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTL x:(MOVBQZX s:(SETL flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLLT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLLT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTL x:(MOVBQZX s:(SETG flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLGT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLGT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTL x:(MOVBQZX s:(SETLE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLLE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLLE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTL x:(MOVBQZX s:(SETGE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLGE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLGE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTL x:(MOVBQZX s:(SETA flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLHI yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLHI)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTL x:(MOVBQZX s:(SETB flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLCS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLCS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTL x:(MOVBQZX s:(SETAE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLCC yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLCC)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTL x:(MOVBQZX s:(SETBE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLLS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLLS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTL x:(MOVBQZX s:(SETEQF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLEQF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLEQF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTL x:(MOVBQZX s:(SETNEF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLNEF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNEF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLNEF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTL x:(MOVBQZX s:(SETGF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLGTF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLGTF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTL x:(MOVBQZX s:(SETGEF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLGEF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGEF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLGEF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTW x:(MOVBQZX s:(SETEQ flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLEQ yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLEQ)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTW x:(MOVBQZX s:(SETNE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLNE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLNE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTW x:(MOVBQZX s:(SETL flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLLT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLLT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTW x:(MOVBQZX s:(SETG flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLGT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLGT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTW x:(MOVBQZX s:(SETLE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLLE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLLE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTW x:(MOVBQZX s:(SETGE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLGE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLGE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTW x:(MOVBQZX s:(SETA flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLHI yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLHI)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTW x:(MOVBQZX s:(SETB flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLCS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLCS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTW x:(MOVBQZX s:(SETAE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLCC yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLCC)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTW x:(MOVBQZX s:(SETBE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLLS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLLS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTW x:(MOVBQZX s:(SETEQF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLEQF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLEQF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTW x:(MOVBQZX s:(SETNEF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLNEF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNEF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLNEF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTW x:(MOVBQZX s:(SETGF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLGTF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLGTF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTW x:(MOVBQZX s:(SETGEF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVLGEF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGEF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLGEF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTB s:(SETEQ flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVLEQ yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLEQ)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTB s:(SETNE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVLNE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLNE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTB s:(SETL flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVLLT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLLT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTB s:(SETG flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVLGT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLGT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTB s:(SETLE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVLLE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLLE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTB s:(SETGE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVLGE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLGE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTB s:(SETA flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVLHI yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLHI)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTB s:(SETB flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVLCS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLCS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTB s:(SETAE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVLCC yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLCC)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTB s:(SETBE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVLLS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLLS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTB s:(SETEQF flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVLEQF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETEQF {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLEQF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTB s:(SETNEF flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVLNEF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETNEF {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLNEF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTB s:(SETGF flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVLGTF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETGF {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLGTF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVLNE yes no t:(TESTB s:(SETGEF flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVLGEF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETGEF {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVLGEF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
 	return false
 }
 func rewriteValueAMD64_OpAMD64CMOVQCC(v *Value) bool {
@@ -10417,6 +13393,1246 @@ func rewriteValueAMD64_OpAMD64CMOVQEQ(v *Value) bool {
 			v0 := b.NewValue0(v.Pos, OpSelect1, types.TypeFlags)
 			v0.AddArg(blsr)
 			v.AddArg3(x, y, v0)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTQ x:(MOVBQZX s:(SETEQ flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQNE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQNE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTQ x:(MOVBQZX s:(SETNE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQEQ yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQEQ)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTQ x:(MOVBQZX s:(SETL flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQGE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQGE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTQ x:(MOVBQZX s:(SETG flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQLE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQLE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTQ x:(MOVBQZX s:(SETLE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQGT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQGT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTQ x:(MOVBQZX s:(SETGE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQLT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQLT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTQ x:(MOVBQZX s:(SETA flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQLS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQLS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTQ x:(MOVBQZX s:(SETB flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQCC yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQCC)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTQ x:(MOVBQZX s:(SETAE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQCS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQCS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTQ x:(MOVBQZX s:(SETBE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQHI yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQHI)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTL x:(MOVBQZX s:(SETEQ flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQNE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQNE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTL x:(MOVBQZX s:(SETNE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQEQ yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQEQ)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTL x:(MOVBQZX s:(SETL flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQGE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQGE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTL x:(MOVBQZX s:(SETG flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQLE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQLE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTL x:(MOVBQZX s:(SETLE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQGT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQGT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTL x:(MOVBQZX s:(SETGE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQLT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQLT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTL x:(MOVBQZX s:(SETA flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQLS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQLS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTL x:(MOVBQZX s:(SETB flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQCC yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQCC)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTL x:(MOVBQZX s:(SETAE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQCS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQCS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTL x:(MOVBQZX s:(SETBE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQHI yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQHI)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTW x:(MOVBQZX s:(SETEQ flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQNE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQNE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTW x:(MOVBQZX s:(SETNE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQEQ yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQEQ)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTW x:(MOVBQZX s:(SETL flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQGE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQGE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTW x:(MOVBQZX s:(SETG flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQLE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQLE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTW x:(MOVBQZX s:(SETLE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQGT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQGT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTW x:(MOVBQZX s:(SETGE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQLT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQLT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTW x:(MOVBQZX s:(SETA flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQLS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQLS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTW x:(MOVBQZX s:(SETB flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQCC yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQCC)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTW x:(MOVBQZX s:(SETAE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQCS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQCS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTW x:(MOVBQZX s:(SETBE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQHI yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQHI)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTB s:(SETEQ flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVQNE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQNE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTB s:(SETNE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVQEQ yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQEQ)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTB s:(SETL flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVQGE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQGE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTB s:(SETG flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVQLE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQLE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTB s:(SETLE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVQGT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQGT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTB s:(SETGE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVQLT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQLT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTB s:(SETA flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVQLS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQLS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTB s:(SETB flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVQCC yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQCC)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTB s:(SETAE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVQCS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQCS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQEQ yes no t:(TESTB s:(SETBE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVQHI yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQHI)
+			v.AddArg3(yes, no, flags)
 			return true
 		}
 		break
@@ -11047,6 +15263,1742 @@ func rewriteValueAMD64_OpAMD64CMOVQNE(v *Value) bool {
 		}
 		break
 	}
+	// match: (CMOVQNE yes no t:(TESTQ x:(MOVBQZX s:(SETEQ flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQEQ yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQEQ)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTQ x:(MOVBQZX s:(SETNE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQNE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQNE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTQ x:(MOVBQZX s:(SETL flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQLT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQLT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTQ x:(MOVBQZX s:(SETG flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQGT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQGT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTQ x:(MOVBQZX s:(SETLE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQLE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQLE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTQ x:(MOVBQZX s:(SETGE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQGE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQGE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTQ x:(MOVBQZX s:(SETA flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQHI yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQHI)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTQ x:(MOVBQZX s:(SETB flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQCS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQCS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTQ x:(MOVBQZX s:(SETAE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQCC yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQCC)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTQ x:(MOVBQZX s:(SETBE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQLS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQLS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTQ x:(MOVBQZX s:(SETEQF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQEQF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQEQF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTQ x:(MOVBQZX s:(SETNEF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQNEF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNEF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQNEF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTQ x:(MOVBQZX s:(SETGF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQGTF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQGTF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTQ x:(MOVBQZX s:(SETGEF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQGEF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGEF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQGEF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTL x:(MOVBQZX s:(SETEQ flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQEQ yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQEQ)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTL x:(MOVBQZX s:(SETNE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQNE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQNE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTL x:(MOVBQZX s:(SETL flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQLT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQLT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTL x:(MOVBQZX s:(SETG flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQGT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQGT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTL x:(MOVBQZX s:(SETLE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQLE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQLE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTL x:(MOVBQZX s:(SETGE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQGE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQGE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTL x:(MOVBQZX s:(SETA flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQHI yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQHI)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTL x:(MOVBQZX s:(SETB flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQCS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQCS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTL x:(MOVBQZX s:(SETAE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQCC yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQCC)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTL x:(MOVBQZX s:(SETBE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQLS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQLS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTL x:(MOVBQZX s:(SETEQF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQEQF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQEQF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTL x:(MOVBQZX s:(SETNEF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQNEF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNEF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQNEF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTL x:(MOVBQZX s:(SETGF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQGTF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQGTF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTL x:(MOVBQZX s:(SETGEF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQGEF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGEF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQGEF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTW x:(MOVBQZX s:(SETEQ flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQEQ yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQEQ)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTW x:(MOVBQZX s:(SETNE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQNE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQNE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTW x:(MOVBQZX s:(SETL flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQLT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQLT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTW x:(MOVBQZX s:(SETG flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQGT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQGT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTW x:(MOVBQZX s:(SETLE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQLE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQLE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTW x:(MOVBQZX s:(SETGE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQGE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQGE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTW x:(MOVBQZX s:(SETA flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQHI yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQHI)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTW x:(MOVBQZX s:(SETB flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQCS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQCS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTW x:(MOVBQZX s:(SETAE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQCC yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQCC)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTW x:(MOVBQZX s:(SETBE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQLS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQLS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTW x:(MOVBQZX s:(SETEQF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQEQF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQEQF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTW x:(MOVBQZX s:(SETNEF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQNEF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNEF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQNEF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTW x:(MOVBQZX s:(SETGF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQGTF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQGTF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTW x:(MOVBQZX s:(SETGEF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVQGEF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGEF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQGEF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTB s:(SETEQ flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVQEQ yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQEQ)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTB s:(SETNE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVQNE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQNE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTB s:(SETL flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVQLT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQLT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTB s:(SETG flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVQGT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQGT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTB s:(SETLE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVQLE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQLE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTB s:(SETGE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVQGE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQGE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTB s:(SETA flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVQHI yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQHI)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTB s:(SETB flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVQCS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQCS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTB s:(SETAE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVQCC yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQCC)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTB s:(SETBE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVQLS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQLS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTB s:(SETEQF flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVQEQF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETEQF {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQEQF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTB s:(SETNEF flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVQNEF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETNEF {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQNEF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTB s:(SETGF flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVQGTF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETGF {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQGTF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVQNE yes no t:(TESTB s:(SETGEF flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVQGEF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETGEF {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVQGEF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
 	return false
 }
 func rewriteValueAMD64_OpAMD64CMOVWCC(v *Value) bool {
@@ -11253,6 +17205,1246 @@ func rewriteValueAMD64_OpAMD64CMOVWEQ(v *Value) bool {
 		}
 		v.copyOf(y)
 		return true
+	}
+	// match: (CMOVWEQ yes no t:(TESTQ x:(MOVBQZX s:(SETEQ flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWNE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWNE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTQ x:(MOVBQZX s:(SETNE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWEQ yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWEQ)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTQ x:(MOVBQZX s:(SETL flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWGE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWGE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTQ x:(MOVBQZX s:(SETG flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWLE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWLE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTQ x:(MOVBQZX s:(SETLE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWGT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWGT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTQ x:(MOVBQZX s:(SETGE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWLT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWLT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTQ x:(MOVBQZX s:(SETA flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWLS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWLS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTQ x:(MOVBQZX s:(SETB flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWCC yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWCC)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTQ x:(MOVBQZX s:(SETAE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWCS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWCS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTQ x:(MOVBQZX s:(SETBE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWHI yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWHI)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTL x:(MOVBQZX s:(SETEQ flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWNE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWNE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTL x:(MOVBQZX s:(SETNE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWEQ yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWEQ)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTL x:(MOVBQZX s:(SETL flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWGE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWGE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTL x:(MOVBQZX s:(SETG flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWLE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWLE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTL x:(MOVBQZX s:(SETLE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWGT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWGT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTL x:(MOVBQZX s:(SETGE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWLT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWLT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTL x:(MOVBQZX s:(SETA flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWLS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWLS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTL x:(MOVBQZX s:(SETB flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWCC yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWCC)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTL x:(MOVBQZX s:(SETAE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWCS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWCS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTL x:(MOVBQZX s:(SETBE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWHI yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWHI)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTW x:(MOVBQZX s:(SETEQ flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWNE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWNE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTW x:(MOVBQZX s:(SETNE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWEQ yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWEQ)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTW x:(MOVBQZX s:(SETL flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWGE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWGE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTW x:(MOVBQZX s:(SETG flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWLE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWLE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTW x:(MOVBQZX s:(SETLE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWGT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWGT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTW x:(MOVBQZX s:(SETGE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWLT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWLT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTW x:(MOVBQZX s:(SETA flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWLS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWLS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTW x:(MOVBQZX s:(SETB flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWCC yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWCC)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTW x:(MOVBQZX s:(SETAE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWCS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWCS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTW x:(MOVBQZX s:(SETBE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWHI yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWHI)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTB s:(SETEQ flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVWNE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWNE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTB s:(SETNE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVWEQ yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWEQ)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTB s:(SETL flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVWGE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWGE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTB s:(SETG flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVWLE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWLE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTB s:(SETLE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVWGT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWGT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTB s:(SETGE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVWLT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWLT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTB s:(SETA flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVWLS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWLS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTB s:(SETB flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVWCC yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWCC)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTB s:(SETAE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVWCS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWCS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWEQ yes no t:(TESTB s:(SETBE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVWHI yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWHI)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
 	}
 	return false
 }
@@ -11736,6 +18928,1742 @@ func rewriteValueAMD64_OpAMD64CMOVWNE(v *Value) bool {
 		}
 		v.copyOf(x)
 		return true
+	}
+	// match: (CMOVWNE yes no t:(TESTQ x:(MOVBQZX s:(SETEQ flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWEQ yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWEQ)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTQ x:(MOVBQZX s:(SETNE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWNE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWNE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTQ x:(MOVBQZX s:(SETL flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWLT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWLT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTQ x:(MOVBQZX s:(SETG flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWGT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWGT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTQ x:(MOVBQZX s:(SETLE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWLE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWLE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTQ x:(MOVBQZX s:(SETGE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWGE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWGE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTQ x:(MOVBQZX s:(SETA flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWHI yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWHI)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTQ x:(MOVBQZX s:(SETB flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWCS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWCS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTQ x:(MOVBQZX s:(SETAE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWCC yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWCC)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTQ x:(MOVBQZX s:(SETBE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWLS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWLS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTQ x:(MOVBQZX s:(SETEQF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWEQF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWEQF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTQ x:(MOVBQZX s:(SETNEF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWNEF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNEF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWNEF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTQ x:(MOVBQZX s:(SETGF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWGTF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWGTF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTQ x:(MOVBQZX s:(SETGEF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWGEF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGEF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWGEF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTL x:(MOVBQZX s:(SETEQ flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWEQ yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWEQ)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTL x:(MOVBQZX s:(SETNE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWNE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWNE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTL x:(MOVBQZX s:(SETL flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWLT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWLT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTL x:(MOVBQZX s:(SETG flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWGT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWGT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTL x:(MOVBQZX s:(SETLE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWLE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWLE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTL x:(MOVBQZX s:(SETGE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWGE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWGE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTL x:(MOVBQZX s:(SETA flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWHI yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWHI)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTL x:(MOVBQZX s:(SETB flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWCS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWCS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTL x:(MOVBQZX s:(SETAE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWCC yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWCC)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTL x:(MOVBQZX s:(SETBE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWLS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWLS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTL x:(MOVBQZX s:(SETEQF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWEQF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWEQF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTL x:(MOVBQZX s:(SETNEF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWNEF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNEF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWNEF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTL x:(MOVBQZX s:(SETGF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWGTF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWGTF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTL x:(MOVBQZX s:(SETGEF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWGEF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGEF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWGEF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTW x:(MOVBQZX s:(SETEQ flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWEQ yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWEQ)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTW x:(MOVBQZX s:(SETNE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWNE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWNE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTW x:(MOVBQZX s:(SETL flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWLT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWLT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTW x:(MOVBQZX s:(SETG flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWGT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWGT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTW x:(MOVBQZX s:(SETLE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWLE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWLE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTW x:(MOVBQZX s:(SETGE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWGE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWGE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTW x:(MOVBQZX s:(SETA flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWHI yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWHI)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTW x:(MOVBQZX s:(SETB flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWCS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWCS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTW x:(MOVBQZX s:(SETAE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWCC yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWCC)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTW x:(MOVBQZX s:(SETBE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWLS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWLS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTW x:(MOVBQZX s:(SETEQF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWEQF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWEQF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTW x:(MOVBQZX s:(SETNEF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWNEF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNEF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWNEF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTW x:(MOVBQZX s:(SETGF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWGTF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWGTF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTW x:(MOVBQZX s:(SETGEF flags)) x))
+	// cond: t.Block == s.Block
+	// result: (CMOVWGEF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGEF {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWGEF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTB s:(SETEQ flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVWEQ yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWEQ)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTB s:(SETNE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVWNE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWNE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTB s:(SETL flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVWLT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWLT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTB s:(SETG flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVWGT yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWGT)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTB s:(SETLE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVWLE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWLE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTB s:(SETGE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVWGE yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWGE)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTB s:(SETA flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVWHI yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWHI)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTB s:(SETB flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVWCS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWCS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTB s:(SETAE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVWCC yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWCC)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTB s:(SETBE flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVWLS yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWLS)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTB s:(SETEQF flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVWEQF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETEQF {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWEQF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTB s:(SETNEF flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVWNEF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETNEF {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWNEF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTB s:(SETGF flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVWGTF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETGF {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWGTF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
+	}
+	// match: (CMOVWNE yes no t:(TESTB s:(SETGEF flags) s))
+	// cond: t.Block == s.Block
+	// result: (CMOVWGEF yes no flags)
+	for {
+		yes := v_0
+		no := v_1
+		t := v_2
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETGEF {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64CMOVWGEF)
+			v.AddArg3(yes, no, flags)
+			return true
+		}
+		break
 	}
 	return false
 }
@@ -23422,6 +32350,1166 @@ func rewriteValueAMD64_OpAMD64SETEQ(v *Value) bool {
 		v.AddArg(v0)
 		return true
 	}
+	// match: (SETEQ t:(TESTQ x:(MOVBQZX s:(SETEQ flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETNE flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETNE)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTQ x:(MOVBQZX s:(SETNE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETEQ flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETEQ)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTQ x:(MOVBQZX s:(SETL flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETGE flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETGE)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTQ x:(MOVBQZX s:(SETG flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETLE flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETLE)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTQ x:(MOVBQZX s:(SETLE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETG flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETG)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTQ x:(MOVBQZX s:(SETGE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETL flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETL)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTQ x:(MOVBQZX s:(SETA flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETBE flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETBE)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTQ x:(MOVBQZX s:(SETB flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETAE flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETAE)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTQ x:(MOVBQZX s:(SETAE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETB flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETB)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTQ x:(MOVBQZX s:(SETBE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETA flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETA)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTL x:(MOVBQZX s:(SETEQ flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETNE flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETNE)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTL x:(MOVBQZX s:(SETNE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETEQ flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETEQ)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTL x:(MOVBQZX s:(SETL flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETGE flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETGE)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTL x:(MOVBQZX s:(SETG flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETLE flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETLE)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTL x:(MOVBQZX s:(SETLE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETG flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETG)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTL x:(MOVBQZX s:(SETGE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETL flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETL)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTL x:(MOVBQZX s:(SETA flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETBE flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETBE)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTL x:(MOVBQZX s:(SETB flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETAE flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETAE)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTL x:(MOVBQZX s:(SETAE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETB flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETB)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTL x:(MOVBQZX s:(SETBE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETA flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETA)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTW x:(MOVBQZX s:(SETEQ flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETNE flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETNE)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTW x:(MOVBQZX s:(SETNE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETEQ flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETEQ)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTW x:(MOVBQZX s:(SETL flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETGE flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETGE)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTW x:(MOVBQZX s:(SETG flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETLE flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETLE)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTW x:(MOVBQZX s:(SETLE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETG flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETG)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTW x:(MOVBQZX s:(SETGE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETL flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETL)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTW x:(MOVBQZX s:(SETA flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETBE flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETBE)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTW x:(MOVBQZX s:(SETB flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETAE flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETAE)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTW x:(MOVBQZX s:(SETAE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETB flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETB)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTW x:(MOVBQZX s:(SETBE flags)) x))
+	// cond: t.Block == s.Block
+	// result: (SETA flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			flags := s.Args[0]
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETA)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTB s:(SETEQ flags) s))
+	// cond: t.Block == s.Block
+	// result: (SETNE flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETNE)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTB s:(SETNE flags) s))
+	// cond: t.Block == s.Block
+	// result: (SETEQ flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETEQ)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTB s:(SETL flags) s))
+	// cond: t.Block == s.Block
+	// result: (SETGE flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETGE)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTB s:(SETG flags) s))
+	// cond: t.Block == s.Block
+	// result: (SETLE flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETLE)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTB s:(SETLE flags) s))
+	// cond: t.Block == s.Block
+	// result: (SETG flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETG)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTB s:(SETGE flags) s))
+	// cond: t.Block == s.Block
+	// result: (SETL flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETL)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTB s:(SETA flags) s))
+	// cond: t.Block == s.Block
+	// result: (SETBE flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETBE)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTB s:(SETB flags) s))
+	// cond: t.Block == s.Block
+	// result: (SETAE flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETAE)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTB s:(SETAE flags) s))
+	// cond: t.Block == s.Block
+	// result: (SETB flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETB)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
+	// match: (SETEQ t:(TESTB s:(SETBE flags) s))
+	// cond: t.Block == s.Block
+	// result: (SETA flags)
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			flags := s.Args[0]
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.reset(OpAMD64SETA)
+			v.AddArg(flags)
+			return true
+		}
+		break
+	}
 	return false
 }
 func rewriteValueAMD64_OpAMD64SETEQstore(v *Value) bool {
@@ -25464,6 +35552,1518 @@ func rewriteValueAMD64_OpAMD64SETNE(v *Value) bool {
 			v0 := b.NewValue0(v.Pos, OpSelect1, types.TypeFlags)
 			v0.AddArg(blsr)
 			v.AddArg(v0)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTQ x:(MOVBQZX s:(SETEQ flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTQ x:(MOVBQZX s:(SETNE flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTQ x:(MOVBQZX s:(SETL flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTQ x:(MOVBQZX s:(SETG flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTQ x:(MOVBQZX s:(SETLE flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTQ x:(MOVBQZX s:(SETGE flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTQ x:(MOVBQZX s:(SETA flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTQ x:(MOVBQZX s:(SETB flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTQ x:(MOVBQZX s:(SETAE flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTQ x:(MOVBQZX s:(SETBE flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTQ x:(MOVBQZX s:(SETEQF flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQF {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTQ x:(MOVBQZX s:(SETNEF flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNEF {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTQ x:(MOVBQZX s:(SETGF flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGF {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTQ x:(MOVBQZX s:(SETGEF flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTQ {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGEF {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTL x:(MOVBQZX s:(SETEQ flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTL x:(MOVBQZX s:(SETNE flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTL x:(MOVBQZX s:(SETL flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTL x:(MOVBQZX s:(SETG flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTL x:(MOVBQZX s:(SETLE flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTL x:(MOVBQZX s:(SETGE flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTL x:(MOVBQZX s:(SETA flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTL x:(MOVBQZX s:(SETB flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTL x:(MOVBQZX s:(SETAE flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTL x:(MOVBQZX s:(SETBE flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTL x:(MOVBQZX s:(SETEQF flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQF {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTL x:(MOVBQZX s:(SETNEF flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNEF {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTL x:(MOVBQZX s:(SETGF flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGF {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTL x:(MOVBQZX s:(SETGEF flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTL {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGEF {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTW x:(MOVBQZX s:(SETEQ flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTW x:(MOVBQZX s:(SETNE flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTW x:(MOVBQZX s:(SETL flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTW x:(MOVBQZX s:(SETG flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTW x:(MOVBQZX s:(SETLE flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTW x:(MOVBQZX s:(SETGE flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTW x:(MOVBQZX s:(SETA flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTW x:(MOVBQZX s:(SETB flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTW x:(MOVBQZX s:(SETAE flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTW x:(MOVBQZX s:(SETBE flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTW x:(MOVBQZX s:(SETEQF flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETEQF {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTW x:(MOVBQZX s:(SETNEF flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETNEF {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTW x:(MOVBQZX s:(SETGF flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGF {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTW x:(MOVBQZX s:(SETGEF flags)) x))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTW {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			x := t_0
+			if x.Op != OpAMD64MOVBQZX {
+				continue
+			}
+			s := x.Args[0]
+			if s.Op != OpAMD64SETGEF {
+				continue
+			}
+			if x != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTB s:(SETEQ flags) s))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETEQ {
+				continue
+			}
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTB s:(SETNE flags) s))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETNE {
+				continue
+			}
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTB s:(SETL flags) s))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETL {
+				continue
+			}
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTB s:(SETG flags) s))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETG {
+				continue
+			}
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTB s:(SETLE flags) s))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETLE {
+				continue
+			}
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTB s:(SETGE flags) s))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETGE {
+				continue
+			}
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTB s:(SETA flags) s))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETA {
+				continue
+			}
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTB s:(SETB flags) s))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETB {
+				continue
+			}
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTB s:(SETAE flags) s))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETAE {
+				continue
+			}
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTB s:(SETBE flags) s))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETBE {
+				continue
+			}
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTB s:(SETEQF flags) s))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETEQF {
+				continue
+			}
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTB s:(SETNEF flags) s))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETNEF {
+				continue
+			}
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTB s:(SETGF flags) s))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETGF {
+				continue
+			}
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
+			return true
+		}
+		break
+	}
+	// match: (SETNE t:(TESTB s:(SETGEF flags) s))
+	// cond: t.Block == s.Block
+	// result: s
+	for {
+		t := v_0
+		if t.Op != OpAMD64TESTB {
+			break
+		}
+		_ = t.Args[1]
+		t_0 := t.Args[0]
+		t_1 := t.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+			s := t_0
+			if s.Op != OpAMD64SETGEF {
+				continue
+			}
+			if s != t_1 || !(t.Block == s.Block) {
+				continue
+			}
+			v.copyOf(s)
 			return true
 		}
 		break
@@ -78393,6 +89993,1006 @@ func rewriteBlockAMD64(b *Block) bool {
 			b.resetWithControl(BlockAMD64ULT, v0)
 			return true
 		}
+		// match: (EQ t:(TESTQ x:(MOVBQZX s:(SETEQ flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (NE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTQ {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETEQ {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64NE, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTQ x:(MOVBQZX s:(SETNE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (EQ flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTQ {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETNE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64EQ, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTQ x:(MOVBQZX s:(SETL flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (GE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTQ {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETL {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64GE, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTQ x:(MOVBQZX s:(SETG flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (LE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTQ {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETG {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64LE, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTQ x:(MOVBQZX s:(SETLE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (GT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTQ {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETLE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64GT, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTQ x:(MOVBQZX s:(SETGE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (LT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTQ {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETGE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64LT, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTQ x:(MOVBQZX s:(SETA flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (ULE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTQ {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETA {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64ULE, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTQ x:(MOVBQZX s:(SETB flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (UGE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTQ {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETB {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64UGE, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTQ x:(MOVBQZX s:(SETAE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (ULT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTQ {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETAE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64ULT, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTQ x:(MOVBQZX s:(SETBE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (UGT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTQ {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETBE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64UGT, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTL x:(MOVBQZX s:(SETEQ flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (NE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTL {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETEQ {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64NE, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTL x:(MOVBQZX s:(SETNE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (EQ flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTL {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETNE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64EQ, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTL x:(MOVBQZX s:(SETL flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (GE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTL {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETL {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64GE, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTL x:(MOVBQZX s:(SETG flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (LE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTL {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETG {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64LE, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTL x:(MOVBQZX s:(SETLE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (GT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTL {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETLE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64GT, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTL x:(MOVBQZX s:(SETGE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (LT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTL {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETGE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64LT, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTL x:(MOVBQZX s:(SETA flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (ULE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTL {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETA {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64ULE, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTL x:(MOVBQZX s:(SETB flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (UGE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTL {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETB {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64UGE, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTL x:(MOVBQZX s:(SETAE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (ULT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTL {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETAE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64ULT, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTL x:(MOVBQZX s:(SETBE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (UGT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTL {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETBE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64UGT, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTW x:(MOVBQZX s:(SETEQ flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (NE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTW {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETEQ {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64NE, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTW x:(MOVBQZX s:(SETNE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (EQ flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTW {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETNE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64EQ, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTW x:(MOVBQZX s:(SETL flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (GE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTW {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETL {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64GE, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTW x:(MOVBQZX s:(SETG flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (LE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTW {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETG {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64LE, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTW x:(MOVBQZX s:(SETLE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (GT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTW {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETLE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64GT, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTW x:(MOVBQZX s:(SETGE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (LT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTW {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETGE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64LT, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTW x:(MOVBQZX s:(SETA flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (ULE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTW {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETA {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64ULE, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTW x:(MOVBQZX s:(SETB flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (UGE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTW {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETB {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64UGE, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTW x:(MOVBQZX s:(SETAE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (ULT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTW {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETAE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64ULT, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTW x:(MOVBQZX s:(SETBE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (UGT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTW {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETBE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64UGT, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTB s:(SETEQ flags) s) yes no)
+		// cond: t.Block == s.Block
+		// result: (NE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTB {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				s := t_0
+				if s.Op != OpAMD64SETEQ {
+					continue
+				}
+				flags := s.Args[0]
+				if s != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64NE, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTB s:(SETNE flags) s) yes no)
+		// cond: t.Block == s.Block
+		// result: (EQ flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTB {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				s := t_0
+				if s.Op != OpAMD64SETNE {
+					continue
+				}
+				flags := s.Args[0]
+				if s != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64EQ, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTB s:(SETL flags) s) yes no)
+		// cond: t.Block == s.Block
+		// result: (GE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTB {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				s := t_0
+				if s.Op != OpAMD64SETL {
+					continue
+				}
+				flags := s.Args[0]
+				if s != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64GE, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTB s:(SETG flags) s) yes no)
+		// cond: t.Block == s.Block
+		// result: (LE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTB {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				s := t_0
+				if s.Op != OpAMD64SETG {
+					continue
+				}
+				flags := s.Args[0]
+				if s != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64LE, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTB s:(SETLE flags) s) yes no)
+		// cond: t.Block == s.Block
+		// result: (GT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTB {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				s := t_0
+				if s.Op != OpAMD64SETLE {
+					continue
+				}
+				flags := s.Args[0]
+				if s != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64GT, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTB s:(SETGE flags) s) yes no)
+		// cond: t.Block == s.Block
+		// result: (LT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTB {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				s := t_0
+				if s.Op != OpAMD64SETGE {
+					continue
+				}
+				flags := s.Args[0]
+				if s != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64LT, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTB s:(SETA flags) s) yes no)
+		// cond: t.Block == s.Block
+		// result: (ULE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTB {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				s := t_0
+				if s.Op != OpAMD64SETA {
+					continue
+				}
+				flags := s.Args[0]
+				if s != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64ULE, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTB s:(SETB flags) s) yes no)
+		// cond: t.Block == s.Block
+		// result: (UGE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTB {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				s := t_0
+				if s.Op != OpAMD64SETB {
+					continue
+				}
+				flags := s.Args[0]
+				if s != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64UGE, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTB s:(SETAE flags) s) yes no)
+		// cond: t.Block == s.Block
+		// result: (ULT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTB {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				s := t_0
+				if s.Op != OpAMD64SETAE {
+					continue
+				}
+				flags := s.Args[0]
+				if s != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64ULT, flags)
+				return true
+			}
+			break
+		}
+		// match: (EQ t:(TESTB s:(SETBE flags) s) yes no)
+		// cond: t.Block == s.Block
+		// result: (UGT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTB {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				s := t_0
+				if s.Op != OpAMD64SETBE {
+					continue
+				}
+				flags := s.Args[0]
+				if s != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64UGT, flags)
+				return true
+			}
+			break
+		}
 	case BlockAMD64GE:
 		// match: (GE c:(CMPQconst [128] z) yes no)
 		// cond: c.Uses == 1
@@ -79434,6 +92034,1406 @@ func rewriteBlockAMD64(b *Block) bool {
 				v0 := b.NewValue0(t.Pos, OpSelect1, types.TypeFlags)
 				v0.AddArg(a.Args[0])
 				b.resetWithControl(BlockAMD64NE, v0)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTQ x:(MOVBQZX s:(SETEQ flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (EQ flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTQ {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETEQ {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64EQ, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTQ x:(MOVBQZX s:(SETNE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (NE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTQ {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETNE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64NE, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTQ x:(MOVBQZX s:(SETL flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (LT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTQ {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETL {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64LT, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTQ x:(MOVBQZX s:(SETG flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (GT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTQ {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETG {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64GT, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTQ x:(MOVBQZX s:(SETLE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (LE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTQ {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETLE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64LE, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTQ x:(MOVBQZX s:(SETGE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (GE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTQ {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETGE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64GE, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTQ x:(MOVBQZX s:(SETA flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (UGT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTQ {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETA {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64UGT, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTQ x:(MOVBQZX s:(SETB flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (ULT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTQ {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETB {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64ULT, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTQ x:(MOVBQZX s:(SETAE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (UGE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTQ {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETAE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64UGE, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTQ x:(MOVBQZX s:(SETBE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (ULE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTQ {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETBE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64ULE, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTQ x:(MOVBQZX s:(SETEQF flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (EQF flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTQ {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETEQF {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64EQF, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTQ x:(MOVBQZX s:(SETNEF flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (NEF flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTQ {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETNEF {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64NEF, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTQ x:(MOVBQZX s:(SETGF flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (UGE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTQ {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETGF {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64UGE, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTQ x:(MOVBQZX s:(SETGEF flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (UGT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTQ {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETGEF {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64UGT, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTL x:(MOVBQZX s:(SETEQ flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (EQ flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTL {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETEQ {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64EQ, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTL x:(MOVBQZX s:(SETNE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (NE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTL {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETNE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64NE, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTL x:(MOVBQZX s:(SETL flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (LT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTL {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETL {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64LT, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTL x:(MOVBQZX s:(SETG flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (GT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTL {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETG {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64GT, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTL x:(MOVBQZX s:(SETLE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (LE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTL {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETLE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64LE, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTL x:(MOVBQZX s:(SETGE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (GE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTL {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETGE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64GE, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTL x:(MOVBQZX s:(SETA flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (UGT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTL {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETA {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64UGT, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTL x:(MOVBQZX s:(SETB flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (ULT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTL {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETB {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64ULT, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTL x:(MOVBQZX s:(SETAE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (UGE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTL {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETAE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64UGE, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTL x:(MOVBQZX s:(SETBE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (ULE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTL {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETBE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64ULE, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTL x:(MOVBQZX s:(SETEQF flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (EQF flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTL {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETEQF {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64EQF, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTL x:(MOVBQZX s:(SETNEF flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (NEF flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTL {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETNEF {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64NEF, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTL x:(MOVBQZX s:(SETGF flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (UGE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTL {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETGF {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64UGE, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTL x:(MOVBQZX s:(SETGEF flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (UGT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTL {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETGEF {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64UGT, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTW x:(MOVBQZX s:(SETEQ flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (EQ flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTW {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETEQ {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64EQ, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTW x:(MOVBQZX s:(SETNE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (NE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTW {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETNE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64NE, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTW x:(MOVBQZX s:(SETL flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (LT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTW {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETL {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64LT, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTW x:(MOVBQZX s:(SETG flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (GT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTW {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETG {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64GT, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTW x:(MOVBQZX s:(SETLE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (LE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTW {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETLE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64LE, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTW x:(MOVBQZX s:(SETGE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (GE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTW {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETGE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64GE, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTW x:(MOVBQZX s:(SETA flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (UGT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTW {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETA {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64UGT, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTW x:(MOVBQZX s:(SETB flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (ULT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTW {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETB {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64ULT, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTW x:(MOVBQZX s:(SETAE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (UGE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTW {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETAE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64UGE, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTW x:(MOVBQZX s:(SETBE flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (ULE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTW {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETBE {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64ULE, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTW x:(MOVBQZX s:(SETEQF flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (EQF flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTW {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETEQF {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64EQF, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTW x:(MOVBQZX s:(SETNEF flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (NEF flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTW {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETNEF {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64NEF, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTW x:(MOVBQZX s:(SETGF flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (UGE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTW {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETGF {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64UGE, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTW x:(MOVBQZX s:(SETGEF flags)) x) yes no)
+		// cond: t.Block == s.Block
+		// result: (UGT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTW {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				x := t_0
+				if x.Op != OpAMD64MOVBQZX {
+					continue
+				}
+				s := x.Args[0]
+				if s.Op != OpAMD64SETGEF {
+					continue
+				}
+				flags := s.Args[0]
+				if x != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64UGT, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTB s:(SETEQ flags) s) yes no)
+		// cond: t.Block == s.Block
+		// result: (EQ flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTB {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				s := t_0
+				if s.Op != OpAMD64SETEQ {
+					continue
+				}
+				flags := s.Args[0]
+				if s != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64EQ, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTB s:(SETNE flags) s) yes no)
+		// cond: t.Block == s.Block
+		// result: (NE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTB {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				s := t_0
+				if s.Op != OpAMD64SETNE {
+					continue
+				}
+				flags := s.Args[0]
+				if s != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64NE, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTB s:(SETL flags) s) yes no)
+		// cond: t.Block == s.Block
+		// result: (LT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTB {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				s := t_0
+				if s.Op != OpAMD64SETL {
+					continue
+				}
+				flags := s.Args[0]
+				if s != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64LT, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTB s:(SETG flags) s) yes no)
+		// cond: t.Block == s.Block
+		// result: (GT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTB {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				s := t_0
+				if s.Op != OpAMD64SETG {
+					continue
+				}
+				flags := s.Args[0]
+				if s != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64GT, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTB s:(SETLE flags) s) yes no)
+		// cond: t.Block == s.Block
+		// result: (LE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTB {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				s := t_0
+				if s.Op != OpAMD64SETLE {
+					continue
+				}
+				flags := s.Args[0]
+				if s != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64LE, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTB s:(SETGE flags) s) yes no)
+		// cond: t.Block == s.Block
+		// result: (GE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTB {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				s := t_0
+				if s.Op != OpAMD64SETGE {
+					continue
+				}
+				flags := s.Args[0]
+				if s != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64GE, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTB s:(SETA flags) s) yes no)
+		// cond: t.Block == s.Block
+		// result: (UGT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTB {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				s := t_0
+				if s.Op != OpAMD64SETA {
+					continue
+				}
+				flags := s.Args[0]
+				if s != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64UGT, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTB s:(SETB flags) s) yes no)
+		// cond: t.Block == s.Block
+		// result: (ULT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTB {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				s := t_0
+				if s.Op != OpAMD64SETB {
+					continue
+				}
+				flags := s.Args[0]
+				if s != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64ULT, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTB s:(SETAE flags) s) yes no)
+		// cond: t.Block == s.Block
+		// result: (UGE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTB {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				s := t_0
+				if s.Op != OpAMD64SETAE {
+					continue
+				}
+				flags := s.Args[0]
+				if s != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64UGE, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTB s:(SETBE flags) s) yes no)
+		// cond: t.Block == s.Block
+		// result: (ULE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTB {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				s := t_0
+				if s.Op != OpAMD64SETBE {
+					continue
+				}
+				flags := s.Args[0]
+				if s != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64ULE, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTB s:(SETEQF flags) s) yes no)
+		// cond: t.Block == s.Block
+		// result: (EQF flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTB {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				s := t_0
+				if s.Op != OpAMD64SETEQF {
+					continue
+				}
+				flags := s.Args[0]
+				if s != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64EQF, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTB s:(SETNEF flags) s) yes no)
+		// cond: t.Block == s.Block
+		// result: (NEF flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTB {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				s := t_0
+				if s.Op != OpAMD64SETNEF {
+					continue
+				}
+				flags := s.Args[0]
+				if s != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64NEF, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTB s:(SETGF flags) s) yes no)
+		// cond: t.Block == s.Block
+		// result: (UGE flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTB {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				s := t_0
+				if s.Op != OpAMD64SETGF {
+					continue
+				}
+				flags := s.Args[0]
+				if s != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64UGE, flags)
+				return true
+			}
+			break
+		}
+		// match: (NE t:(TESTB s:(SETGEF flags) s) yes no)
+		// cond: t.Block == s.Block
+		// result: (UGT flags yes no)
+		for b.Controls[0].Op == OpAMD64TESTB {
+			t := b.Controls[0]
+			_ = t.Args[1]
+			t_0 := t.Args[0]
+			t_1 := t.Args[1]
+			for _i0 := 0; _i0 <= 1; _i0, t_0, t_1 = _i0+1, t_1, t_0 {
+				s := t_0
+				if s.Op != OpAMD64SETGEF {
+					continue
+				}
+				flags := s.Args[0]
+				if s != t_1 || !(t.Block == s.Block) {
+					continue
+				}
+				b.resetWithControl(BlockAMD64UGT, flags)
 				return true
 			}
 			break

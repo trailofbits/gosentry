@@ -62,8 +62,21 @@ type fakeConnector struct {
 
 func (c *fakeConnector) Connect(context.Context) (driver.Conn, error) {
 	conn, err := fdriver.Open(c.name)
+	if err != nil {
+		return nil, err
+	}
 	conn.(*fakeConn).waiter = c.waiter
-	return conn, err
+	return conn, nil
+}
+
+func getFakeConn(c driver.Conn) *fakeConn {
+	return c.(interface {
+		getFakeConn() *fakeConn
+	}).getFakeConn()
+}
+
+func (c *fakeConn) getFakeConn() *fakeConn {
+	return c
 }
 
 func (c *fakeConnector) Driver() driver.Driver {
