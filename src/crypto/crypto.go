@@ -131,7 +131,7 @@ func (h Hash) New() hash.Hash {
 			return f()
 		}
 	}
-	panic("crypto: requested hash function #" + strconv.Itoa(int(h)) + " is unavailable")
+	panic("crypto: requested hash function unavailable: " + h.String())
 }
 
 // Available reports whether the given hash function is linked into the binary.
@@ -246,12 +246,21 @@ func SignMessage(signer Signer, rand io.Reader, msg []byte, opts SignerOpts) (si
 	if ms, ok := signer.(MessageSigner); ok {
 		return ms.SignMessage(rand, msg, opts)
 	}
-	if opts.HashFunc() != 0 {
-		h := opts.HashFunc().New()
+	if hash := opts.HashFunc(); hash != 0 {
+		if !hash.Available() {
+			return nil, hashUnavailableError(hash)
+		}
+		h := hash.New()
 		h.Write(msg)
 		msg = h.Sum(nil)
 	}
 	return signer.Sign(rand, msg, opts)
+}
+
+type hashUnavailableError Hash
+
+func (h hashUnavailableError) Error() string {
+	return "crypto: requested hash function unavailable: " + Hash(h).String()
 }
 
 // Decapsulator is an interface for an opaque private KEM key that can be used for

@@ -32,7 +32,10 @@ var testConfigFIPS140 = &Config{
 }
 
 func allCipherSuitesIncludingTLS13() []uint16 {
-	s := allCipherSuites()
+	s := make([]uint16, 0, len(cipherSuites))
+	for _, suite := range cipherSuites {
+		s = append(s, suite.id)
+	}
 	for _, suite := range cipherSuitesTLS13 {
 		s = append(s, suite.id)
 	}
@@ -330,7 +333,7 @@ func testFIPSClientHello(t *testing.T) {
 	// All sorts of traps for the client to avoid.
 	clientConfig.MinVersion = VersionSSL30
 	clientConfig.MaxVersion = VersionTLS13
-	clientConfig.CipherSuites = allCipherSuites()
+	clientConfig.CipherSuites = allCipherSuitesIncludingTLS13()
 	clientConfig.CurvePreferences = defaultCurvePreferences()
 
 	go Client(c, clientConfig).Handshake()
@@ -398,13 +401,15 @@ func TestFIPSCertAlgs(t *testing.T) {
 
 	// client verifying server cert
 	testServerCert := func(t *testing.T, desc string, pool *x509.CertPool, key any, list [][]byte, ok bool) {
-		clientConfig := testConfig.Clone()
+		clientConfig := testConfigFIPS140.Clone()
 		clientConfig.RootCAs = pool
 		clientConfig.InsecureSkipVerify = false
 		clientConfig.ServerName = "example.com"
+		clientConfig.Time = func() time.Time { return time.Unix(0, 0) }
 
-		serverConfig := testConfig.Clone()
+		serverConfig := testConfigFIPS140.Clone()
 		serverConfig.Certificates = []Certificate{{Certificate: list, PrivateKey: key}}
+		serverConfig.Time = func() time.Time { return time.Unix(0, 0) }
 
 		clientErr, _ := fipsHandshake(t, clientConfig, serverConfig)
 
@@ -425,13 +430,15 @@ func TestFIPSCertAlgs(t *testing.T) {
 
 	// server verifying client cert
 	testClientCert := func(t *testing.T, desc string, pool *x509.CertPool, key any, list [][]byte, ok bool) {
-		clientConfig := testConfig.Clone()
-		clientConfig.ServerName = "example.com"
+		clientConfig := testConfigFIPS140.Clone()
+		clientConfig.InsecureSkipVerify = true
 		clientConfig.Certificates = []Certificate{{Certificate: list, PrivateKey: key}}
+		clientConfig.Time = func() time.Time { return time.Unix(0, 0) }
 
-		serverConfig := testConfig.Clone()
+		serverConfig := testConfigFIPS140.Clone()
 		serverConfig.ClientCAs = pool
 		serverConfig.ClientAuth = RequireAndVerifyClientCert
+		serverConfig.Time = func() time.Time { return time.Unix(0, 0) }
 
 		_, serverErr := fipsHandshake(t, clientConfig, serverConfig)
 
