@@ -560,7 +560,8 @@ var depsRules = `
 	  crypto/hkdf,
 	  crypto/pbkdf2,
 	  crypto/ecdh,
-	  crypto/mlkem
+	  crypto/mlkem,
+	  crypto/mldsa
 	< CRYPTO;
 
 	CRYPTO
@@ -772,6 +773,9 @@ var depsRules = `
 
 	CRYPTO-MATH, testing, internal/testenv, internal/testhash, encoding/json, regexp
 	< crypto/internal/cryptotest;
+
+	crypto/internal/cryptotest, encoding/hex
+	< crypto/internal/cryptotest/wycheproof;
 
 	CGO, FMT
 	< crypto/internal/sysrand/internal/seccomp;
