@@ -114,6 +114,8 @@ const (
 	inlineFunc = replacementKind(iota)
 	subBasicLit
 	foldCondition
+	subIdent
+	deleteConst
 )
 
 // op is a single inlining operation for the inliner. Any calls to the function
@@ -172,10 +174,12 @@ func specializedMallocConfig(classes []class, sizeToSizeClass []uint8) generator
 					{inlineFunc, "heapSetTypeNoHeaderStub", "heapSetTypeNoHeaderStub"},
 					{inlineFunc, "nextFreeFastStub", "nextFreeFastStub"},
 					{inlineFunc, "writeHeapBitsSmallStub", "writeHeapBitsSmallStub"},
+					{foldCondition, "isSlowPath_", str(false)},
 					{subBasicLit, "elemsize_", str(elemsize)},
 					{subBasicLit, "sizeclass_", str(sc)},
 					{subBasicLit, "noscanint_", str(noscan)},
 					{foldCondition, "isTiny_", str(false)},
+					{subIdent, "mallocgcSlowPathStub", "mallocgcSmallScanSlowPath"},
 				},
 			})
 		}
@@ -198,7 +202,7 @@ func specializedMallocConfig(classes []class, sizeToSizeClass []uint8) generator
 					{inlineFunc, "nextFreeFastTiny", "nextFreeFastTiny"},
 					{inlineFunc, "postMallocgc", "postMallocgc"},
 					{inlineFunc, "nextFreeFastStub", "nextFreeFastStub"},
-					{inlineFunc, "deductAssistCredit", "deductAssistCredit"},
+					{foldCondition, "isSlowPath_", str(false)},
 					{subBasicLit, "elemsize_", str(elemsize)},
 					{subBasicLit, "sizeclass_", str(tinySizeClass)},
 					{subBasicLit, "noscanint_", str(noscan)},
@@ -219,14 +223,71 @@ func specializedMallocConfig(classes []class, sizeToSizeClass []uint8) generator
 					{inlineFunc, "postMallocgc", "postMallocgc"},
 					{foldCondition, "isNoScan_", str(true)},
 					{inlineFunc, "nextFreeFastStub", "nextFreeFastStub"},
+					{foldCondition, "isSlowPath_", str(false)},
 					{subBasicLit, "elemsize_", str(elemsize)},
 					{subBasicLit, "sizeclass_", str(sc)},
 					{subBasicLit, "noscanint_", str(noscan)},
 					{foldCondition, "isTiny_", str(false)},
+					{subIdent, "mallocgcSlowPathStub", "mallocgcSmallNoScanSlowPath"},
 				},
 			})
 		}
 	}
+
+	// Non-size-specialized fallbacks in case we can't do the fast path.
+	config.specs = append(config.specs, spec{
+		templateFunc: "mallocStub",
+		name:         "mallocgcTinySlowPath",
+		ops: []op{
+			{inlineFunc, "inlinedMalloc", "tinyStub"},
+			{inlineFunc, "postMallocgc", "postMallocgc"},
+			{inlineFunc, "nextFreeFastTiny", "nextFreeFastTiny"},
+			{inlineFunc, "deductAssistCredit", "deductAssistCredit"},
+			{foldCondition, "isSlowPath_", str(true)},
+			{foldCondition, "isTiny_", str(true)},
+			{subBasicLit, "elemsize_", str(classes[sizeToSizeClass[tinySize]].size)},
+		},
+	})
+	config.specs = append(config.specs, spec{
+		templateFunc: "mallocgcSlowPathStub",
+		name:         "mallocgcSmallScanSlowPath",
+		ops: []op{
+			{inlineFunc, "mallocStub", "mallocStub"},
+			{inlineFunc, "inlinedMalloc", "smallStub"},
+			{inlineFunc, "heapSetTypeNoHeaderStub", "heapSetTypeNoHeaderStub"},
+			{inlineFunc, "writeHeapBitsSmallStub", "writeHeapBitsSmallStub"},
+			{inlineFunc, "postMallocgc", "postMallocgc"},
+			{inlineFunc, "nextFreeFastStub", "nextFreeFastStub"},
+			{inlineFunc, "deductAssistCredit", "deductAssistCredit"},
+			{foldCondition, "isSlowPath_", str(true)},
+			{foldCondition, "isTiny_", str(false)},
+			{foldCondition, "isNoScan_", str(false)},
+
+			// Remove constants used by size-specialized variants.
+			{deleteConst, "elemsize", ""},
+			{deleteConst, "sizeclass", ""},
+			{deleteConst, "spc", ""},
+		},
+	})
+	config.specs = append(config.specs, spec{
+		templateFunc: "mallocgcSlowPathStub",
+		name:         "mallocgcSmallNoScanSlowPath",
+		ops: []op{
+			{inlineFunc, "mallocStub", "mallocStub"},
+			{inlineFunc, "inlinedMalloc", "smallStub"},
+			{inlineFunc, "postMallocgc", "postMallocgc"},
+			{inlineFunc, "nextFreeFastStub", "nextFreeFastStub"},
+			{inlineFunc, "deductAssistCredit", "deductAssistCredit"},
+			{foldCondition, "isSlowPath_", str(true)},
+			{foldCondition, "isTiny_", str(false)},
+			{foldCondition, "isNoScan_", str(true)},
+
+			// Remove constants used by size-specialized variants.
+			{deleteConst, "elemsize", ""},
+			{deleteConst, "sizeclass", ""},
+			{deleteConst, "spc", ""},
+		},
+	})
 
 	return config
 }
@@ -291,6 +352,10 @@ func inline(config generatorConfig) []byte {
 				stamped = substituteWithBasicLit(stamped, repl.from, repl.to)
 			case foldCondition:
 				stamped = foldIfCondition(stamped, repl.from, repl.to)
+			case subIdent:
+				stamped = substituteIdent(stamped, repl.from, repl.to)
+			case deleteConst:
+				stamped = deleteConstDecl(stamped, repl.from)
 			default:
 				log.Fatalf("unknown op kind %v", repl.kind)
 			}
@@ -306,7 +371,7 @@ func inline(config generatorConfig) []byte {
 // substituteWithBasicLit recursively renames identifiers in the provided AST
 // according to 'from' and 'to'.
 func substituteWithBasicLit(node ast.Node, from, to string) ast.Node {
-	// The op is a substitution of an identifier with an basic literal.
+	// The op is a substitution of an identifier with a basic literal.
 	toExpr, err := parser.ParseExpr(to)
 	if err != nil {
 		log.Fatalf("parsing expr %q: %v", to, err)
@@ -325,39 +390,118 @@ func substituteWithBasicLit(node ast.Node, from, to string) ast.Node {
 	}, nil)
 }
 
-// foldIfCondition looks for if statements with a single boolean variable from, or
-// the negation of from and either replaces it with its body or nothing,
-// depending on whether the to value is true or false.
-func foldIfCondition(node ast.Node, from, to string) ast.Node {
-	var isTrue bool
-	switch to {
-	case "true":
-		isTrue = true
-	case "false":
-		isTrue = false
-	default:
-		log.Fatalf("op 'to' expr %q is not true or false", to)
-	}
+// substituteIdent replaces the ident named 'from' to 'to'.
+func substituteIdent(node ast.Node, from, to string) ast.Node {
 	return astutil.Apply(node, func(cursor *astutil.Cursor) bool {
-		var foldIfTrue bool
-		ifexpr, ok := cursor.Node().(*ast.IfStmt)
-		if !ok {
-			return true
+		if ident, ok := cursor.Node().(*ast.Ident); ok && ident.Name == from {
+			cursor.Replace(&ast.Ident{Name: to, NamePos: ident.NamePos})
 		}
-		if isIdentWithName(ifexpr.Cond, from) {
-			foldIfTrue = true
-		} else if unaryexpr, ok := ifexpr.Cond.(*ast.UnaryExpr); ok && unaryexpr.Op == token.NOT && isIdentWithName(unaryexpr.X, from) {
-			foldIfTrue = false
-		} else {
-			// not an if with from or !from.
-			return true
+		return true
+	}, nil)
+}
+
+// foldIfCondition replaces 'from' with 'to', which must be "true" or "false".
+// It then applies simplifications to any boolean expressions that have literal
+// true or false values, from the bottom up. Any if statements that have a condition
+// that is a literal true or false after the simplification will be replaced with
+// their bodies (in the true case) or deleted (in the false case).
+func foldIfCondition(node ast.Node, from, to string) ast.Node {
+	boolLit := func(n ast.Expr) (v, ok bool) {
+		if ident, ok := ast.Unparen(n).(*ast.Ident); ok {
+			switch ident.Name {
+			case "true":
+				return true, true
+			case "false":
+				return false, true
+			}
+			return false, false
 		}
-		if foldIfTrue == isTrue {
-			for _, stmt := range ifexpr.Body.List {
-				cursor.InsertBefore(stmt)
+		return false, false
+	}
+	handleIfs := func(cursor *astutil.Cursor) bool {
+		switch n := cursor.Node().(type) {
+		case *ast.Ident:
+			// First, do the replacement.
+			if n.Name == from {
+				cursor.Replace(&ast.Ident{Name: to, NamePos: n.NamePos})
+			}
+		case *ast.UnaryExpr:
+			if n.Op == token.NOT {
+				if b, ok := boolLit(n.X); ok {
+					name := "true"
+					if b {
+						name = "false"
+					}
+					cursor.Replace(&ast.Ident{Name: name, NamePos: n.Pos()})
+				}
+			}
+		case *ast.BinaryExpr:
+			xBool, xOk := boolLit(n.X)
+			yBool, yOk := boolLit(n.Y)
+			if n.Op == token.LAND {
+				switch {
+				case xOk && !xBool || yOk && !yBool:
+					cursor.Replace(&ast.Ident{Name: "false", NamePos: n.Pos()})
+				case xOk && xBool:
+					cursor.Replace(n.Y)
+				case yOk && yBool:
+					cursor.Replace(n.X)
+				}
+			} else if n.Op == token.LOR {
+				switch {
+				case xOk && xBool || yOk && yBool:
+					cursor.Replace(&ast.Ident{Name: "true", NamePos: n.Pos()})
+				case xOk && !xBool:
+					cursor.Replace(n.Y)
+				case yOk && !yBool:
+					cursor.Replace(n.X)
+				}
+			}
+		case *ast.IfStmt:
+			if v, ok := boolLit(n.Cond); ok {
+				if v {
+					for _, stmt := range n.Body.List {
+						cursor.InsertBefore(stmt)
+					}
+				}
+				cursor.Delete()
 			}
 		}
-		cursor.Delete()
+		return true
+	}
+	return astutil.Apply(node, nil, handleIfs)
+}
+
+// reports whether this is a non-grouped constant decl named 'name'.
+func isNamedConstDecl(node ast.Node, name string) bool {
+	declStmt, ok := node.(*ast.DeclStmt)
+	if !ok {
+		return false
+	}
+
+	genDecl, ok := declStmt.Decl.(*ast.GenDecl)
+	if !ok || genDecl.Tok != token.CONST {
+		return false
+	}
+
+	if len(genDecl.Specs) != 1 {
+		return false
+	}
+	vs, ok := genDecl.Specs[0].(*ast.ValueSpec)
+	if !ok || len(vs.Names) != 1 || len(vs.Values) != 1 {
+		return false
+	}
+
+	return vs.Names[0].Name == name
+}
+
+// deleteConstDecl removes const declarations whose name matches the given name.
+// It only applies to declaration statements with a single declaration.
+func deleteConstDecl(node ast.Node, name string) ast.Node {
+	return astutil.Apply(node, func(cursor *astutil.Cursor) bool {
+		if isNamedConstDecl(cursor.Node(), name) {
+			cursor.Delete()
+		}
 		return true
 	}, nil)
 }
