@@ -151,7 +151,7 @@ func isFIPSCurve(id CurveID) bool {
 	switch id {
 	case CurveP256, CurveP384, CurveP521:
 		return true
-	case X25519MLKEM768, SecP256r1MLKEM768, SecP384r1MLKEM1024:
+	case X25519MLKEM768, SecP256r1MLKEM768, SecP384r1MLKEM1024, MLKEM1024:
 		// Only for the native module.
 		return !boring.Enabled
 	case X25519:
@@ -233,7 +233,7 @@ func TestFIPSServerCipherSuites(t *testing.T) {
 }
 
 func TestFIPSServerCurves(t *testing.T) {
-	for _, curveid := range defaultCurvePreferences() {
+	for _, curveid := range curvePreferenceOrder() {
 		t.Run(fmt.Sprintf("curve=%v", curveid), func(t *testing.T) {
 			testConfig := testConfigFIPS140.Clone()
 			testConfig.CurvePreferences = []CurveID{curveid}
@@ -342,7 +342,7 @@ func testFIPSClientHello(t *testing.T) {
 	clientConfig.MinVersion = VersionSSL30
 	clientConfig.MaxVersion = VersionTLS13
 	clientConfig.CipherSuites = allCipherSuitesIncludingTLS13()
-	clientConfig.CurvePreferences = defaultCurvePreferences()
+	clientConfig.CurvePreferences = curvePreferenceOrder()
 
 	go Client(c, clientConfig).Handshake()
 	srv := Server(s, testConfigFIPS140)

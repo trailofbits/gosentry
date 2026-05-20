@@ -155,11 +155,12 @@ const (
 	X25519MLKEM768     CurveID = 4588
 	SecP256r1MLKEM768  CurveID = 4587
 	SecP384r1MLKEM1024 CurveID = 4589
+	MLKEM1024          CurveID = 514
 )
 
 func isTLS13OnlyKeyExchange(curve CurveID) bool {
 	switch curve {
-	case X25519MLKEM768, SecP256r1MLKEM768, SecP384r1MLKEM1024:
+	case X25519MLKEM768, SecP256r1MLKEM768, SecP384r1MLKEM1024, MLKEM1024:
 		return true
 	default:
 		return false
@@ -168,7 +169,7 @@ func isTLS13OnlyKeyExchange(curve CurveID) bool {
 
 func isPQKeyExchange(curve CurveID) bool {
 	switch curve {
-	case X25519MLKEM768, SecP256r1MLKEM768, SecP384r1MLKEM1024:
+	case X25519MLKEM768, SecP256r1MLKEM768, SecP384r1MLKEM1024, MLKEM1024:
 		return true
 	default:
 		return false
@@ -337,11 +338,6 @@ type ConnectionState struct {
 // the seed. If the connection was set to allow renegotiation via
 // Config.Renegotiation, or if the connections supports neither TLS 1.3 nor
 // Extended Master Secret, this function will return an error.
-//
-// Exporting key material without Extended Master Secret or TLS 1.3 was disabled
-// in Go 1.22 due to security issues (see the Security Considerations sections
-// of RFC 5705 and RFC 7627), but can be re-enabled with the GODEBUG setting
-// tlsunsafeekm=1.
 func (cs *ConnectionState) ExportKeyingMaterial(label string, context []byte, length int) ([]byte, error) {
 	return cs.ekm(label, context, length)
 }
@@ -499,6 +495,9 @@ type ClientHelloInfo struct {
 	// for use with SupportsCertificate.
 	config *Config
 
+	// isQUIC indicates whether the connection is a QUIC connection.
+	isQUIC bool
+
 	// ctx is the context of the handshake that is in progress.
 	ctx context.Context
 }
@@ -572,10 +571,13 @@ const (
 // modified. A Config may be reused; the tls package will also not
 // modify it.
 type Config struct {
-	// Rand provides the source of entropy for nonces and RSA blinding.
+	// Rand provides the source of entropy for the connection.
 	// If Rand is nil, TLS uses the cryptographic random reader in package
-	// crypto/rand.
-	// The Reader must be safe for use by multiple goroutines.
+	// crypto/rand. The Reader must be safe for use by multiple goroutines.
+	//
+	// Deprecated: this should be left nil in production. Not all TLS
+	// configurations are guaranteed to use Rand. Test code can use
+	// [testing/cryptotest.SetGlobalRandom] instead.
 	Rand io.Reader
 
 	// Time returns the current time as the number of seconds since the epoch.
@@ -724,11 +726,7 @@ type Config struct {
 	// the list is ignored. Note that TLS 1.3 ciphersuites are not configurable.
 	//
 	// If CipherSuites is nil, a safe default list is used. The default cipher
-	// suites might change over time. In Go 1.22 RSA key exchange based cipher
-	// suites were removed from the default list, but can be re-added with the
-	// GODEBUG setting tlsrsakex=1. In Go 1.23 3DES cipher suites were removed
-	// from the default list, but can be re-added with the GODEBUG setting
-	// tls3des=1.
+	// suites might change over time.
 	CipherSuites []uint16
 
 	// PreferServerCipherSuites is a legacy field and has no effect.
@@ -793,9 +791,6 @@ type Config struct {
 	//
 	// By default, TLS 1.2 is currently used as the minimum. TLS 1.0 is the
 	// minimum supported by this package.
-	//
-	// The server-side default can be reverted to TLS 1.0 by including the value
-	// "tls10server=1" in the GODEBUG environment variable.
 	MinVersion uint16
 
 	// MaxVersion contains the maximum TLS version that is acceptable.
@@ -1076,7 +1071,6 @@ func (c *Config) initLegacySessionTicketKeyRLocked() {
 	} else if !bytes.HasPrefix(c.SessionTicketKey[:], deprecatedSessionTicketKey) && len(c.sessionTicketKeys) == 0 {
 		c.sessionTicketKeys = []ticketKey{c.ticketKeyFromBytes(c.SessionTicketKey)}
 	}
-
 }
 
 // ticketKeys returns the ticketKeys for this connection.
@@ -1224,20 +1218,16 @@ var supportedVersions = []uint16{
 const roleClient = true
 const roleServer = false
 
-var tls10server = godebug.New("tls10server")
-
 // supportedVersions returns the list of supported TLS versions, sorted from
 // highest to lowest (and hence also in preference order).
-func (c *Config) supportedVersions(isClient bool) []uint16 {
+func (c *Config) supportedVersions(isClient, isQUIC bool) []uint16 {
 	versions := make([]uint16, 0, len(supportedVersions))
 	for _, v := range supportedVersions {
 		if fips140tls.Required() && !slices.Contains(allowedSupportedVersionsFIPS, v) {
 			continue
 		}
 		if (c == nil || c.MinVersion == 0) && v < VersionTLS12 {
-			if isClient || tls10server.Value() != "1" {
-				continue
-			}
+			continue
 		}
 		if isClient && c.EncryptedClientHelloConfigList != nil && v < VersionTLS13 {
 			continue
@@ -1248,13 +1238,16 @@ func (c *Config) supportedVersions(isClient bool) []uint16 {
 		if c != nil && c.MaxVersion != 0 && v > c.MaxVersion {
 			continue
 		}
+		if isQUIC && v < VersionTLS13 {
+			continue
+		}
 		versions = append(versions, v)
 	}
 	return versions
 }
 
-func (c *Config) maxSupportedVersion(isClient bool) uint16 {
-	supportedVersions := c.supportedVersions(isClient)
+func (c *Config) maxSupportedVersion(isClient, isQUIC bool) uint16 {
+	supportedVersions := c.supportedVersions(isClient, isQUIC)
 	if len(supportedVersions) == 0 {
 		return 0
 	}
@@ -1276,31 +1269,38 @@ func supportedVersionsFromMax(maxVersion uint16) []uint16 {
 }
 
 func (c *Config) curvePreferences(version uint16) []CurveID {
-	curvePreferences := defaultCurvePreferences()
-	if fips140tls.Required() {
-		curvePreferences = slices.DeleteFunc(curvePreferences, func(x CurveID) bool {
-			return !slices.Contains(allowedCurvePreferencesFIPS, x)
-		})
-	}
-	if c != nil && len(c.CurvePreferences) != 0 {
-		curvePreferences = slices.DeleteFunc(curvePreferences, func(x CurveID) bool {
-			return !slices.Contains(c.CurvePreferences, x)
-		})
-	}
-	if version < VersionTLS13 {
-		curvePreferences = slices.DeleteFunc(curvePreferences, isTLS13OnlyKeyExchange)
-	}
-	return curvePreferences
+	return slices.DeleteFunc(curvePreferenceOrder(), func(x CurveID) bool {
+		return !c.supportsCurve(version, x)
+	})
 }
 
-func (c *Config) supportsCurve(version uint16, curve CurveID) bool {
-	return slices.Contains(c.curvePreferences(version), curve)
+func (c *Config) supportsCurve(version uint16, x CurveID) bool {
+	if c != nil && len(c.CurvePreferences) != 0 {
+		if !slices.Contains(c.CurvePreferences, x) {
+			return false
+		}
+		// Ignore unimplemented entries in c.CurvePreferences.
+		if !slices.Contains(curvePreferenceOrder(), x) {
+			return false
+		}
+	} else {
+		if !defaultCurveEnabled(x) {
+			return false
+		}
+	}
+	if fips140tls.Required() && !slices.Contains(allowedCurvePreferencesFIPS, x) {
+		return false
+	}
+	if version < VersionTLS13 && isTLS13OnlyKeyExchange(x) {
+		return false
+	}
+	return true
 }
 
 // mutualVersion returns the protocol version to use given the advertised
 // versions of the peer. The highest supported version is preferred.
-func (c *Config) mutualVersion(isClient bool, peerVersions []uint16) (uint16, bool) {
-	supportedVersions := c.supportedVersions(isClient)
+func (c *Config) mutualVersion(isClient, isQUIC bool, peerVersions []uint16) (uint16, bool) {
+	supportedVersions := c.supportedVersions(isClient, isQUIC)
 	for _, v := range supportedVersions {
 		if slices.Contains(peerVersions, v) {
 			return v, true
@@ -1386,7 +1386,7 @@ func (chi *ClientHelloInfo) SupportsCertificate(c *Certificate) error {
 	if config == nil {
 		config = &Config{}
 	}
-	vers, ok := config.mutualVersion(roleServer, chi.SupportedVersions)
+	vers, ok := config.mutualVersion(roleServer, chi.isQUIC, chi.SupportedVersions)
 	if !ok {
 		return errors.New("no mutually supported protocol versions")
 	}

@@ -298,7 +298,7 @@ func inline(config generatorConfig) []byte {
 
 	// Read the template file in.
 	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, config.file, nil, 0)
+	f, err := parser.ParseFile(fset, config.file, nil, parser.SkipObjectResolution)
 	if err != nil {
 		log.Fatalf("parsing %s: %v", config.file, err)
 	}
@@ -462,6 +462,13 @@ func foldIfCondition(node ast.Node, from, to string) ast.Node {
 				if v {
 					for _, stmt := range n.Body.List {
 						cursor.InsertBefore(stmt)
+					}
+				}
+				if n.Else != nil {
+					if block, ok := n.Else.(*ast.BlockStmt); ok {
+						for i := len(block.List) - 1; i >= 0; i-- {
+							cursor.InsertAfter(block.List[i])
+						}
 					}
 				}
 				cursor.Delete()
@@ -889,6 +896,11 @@ func benchmarkConfig(classes []class, sizeToSizeClass []uint8) generatorConfig {
 				{foldCondition, "noscan_", str(false)},
 			},
 		})
+		config.specs = append(config.specs, spec{
+			templateFunc: "benchmarkScanSliceStub",
+			name:         fmt.Sprintf("benchmarkMallocgcScanSlice%d", elemsize),
+			ops:          []op{{subBasicLit, "size_", str(elemsize)}},
+		})
 	}
 
 	for size := 1; size < tinySize; size++ {
@@ -920,6 +932,14 @@ func generateTopBenchmark(classes []class, sizeToSizeClass []uint8) string {
 	for sc := uint8(1); sc <= scMax; sc++ {
 		elemsize := classes[sc].size
 		bench += fmt.Sprintf(`b.Run("size=%d", benchmarkMallocgcScan%d)`, elemsize, elemsize) + "\n"
+
+	}
+	bench += `})
+		b.Run("scan=scanslice", func(b *testing.B) {
+`
+	for sc := uint8(1); sc <= scMax; sc++ {
+		elemsize := classes[sc].size
+		bench += fmt.Sprintf(`b.Run("size=%d", benchmarkMallocgcScanSlice%d)`, elemsize, elemsize) + "\n"
 	}
 	bench += `})
 }`

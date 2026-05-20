@@ -54,7 +54,8 @@ func (hs *clientHandshakeStateTLS13) handshake() error {
 	}
 
 	// Consistency check on the presence of a keyShare and its parameters.
-	if hs.keyShareKeys == nil || hs.keyShareKeys.ecdhe == nil || len(hs.hello.keyShares) == 0 {
+	if hs.keyShareKeys == nil || (hs.keyShareKeys.ecdhe == nil && hs.keyShareKeys.mlkem == nil) ||
+		len(hs.hello.keyShares) == 0 {
 		return c.sendAlert(alertInternalError)
 	}
 
@@ -322,7 +323,7 @@ func (hs *clientHandshakeStateTLS13) processHelloRetryRequest() error {
 		ke, err := keyExchangeForCurveID(curveID)
 		if err != nil {
 			c.sendAlert(alertInternalError)
-			return errors.New("tls: CurvePreferences includes unsupported curve")
+			return errors.New("tls: internal error: supportsCurve accepted unimplemented curve")
 		}
 		hs.keyShareKeys, hello.keyShares, err = ke.keyShares(c.config.rand())
 		if err != nil {

@@ -1715,16 +1715,14 @@ func TestCipherSuites(t *testing.T) {
 	}
 
 	// Check that disabled suites are marked insecure.
-	for _, badSuites := range []map[uint16]bool{disabledCipherSuites, rsaKexCiphers} {
-		for id := range badSuites {
-			c := CipherSuiteByID(id)
-			if c == nil {
-				t.Errorf("%#04x: no CipherSuite entry", id)
-				continue
-			}
-			if !c.Insecure {
-				t.Errorf("%#04x: disabled by default but not marked insecure", id)
-			}
+	for id := range disabledCipherSuites {
+		c := CipherSuiteByID(id)
+		if c == nil {
+			t.Errorf("%#04x: no CipherSuite entry", id)
+			continue
+		}
+		if !c.Insecure {
+			t.Errorf("%#04x: disabled by default but not marked insecure", id)
 		}
 	}
 
@@ -2109,6 +2107,18 @@ func TestHandshakeMLKEM(t *testing.T) {
 			expectSelected: CurveP256,
 		},
 		{
+			name: "CurveP384HRR",
+			clientConfig: func(config *Config) {
+				config.CurvePreferences = []CurveID{SecP256r1MLKEM768, CurveP384}
+			},
+			serverConfig: func(config *Config) {
+				config.CurvePreferences = []CurveID{CurveP384}
+			},
+			expectClient:   []CurveID{SecP256r1MLKEM768, CurveP384},
+			expectSelected: CurveP384,
+			expectHRR:      true,
+		},
+		{
 			name: "ClientMLKEMOnly",
 			clientConfig: func(config *Config) {
 				config.CurvePreferences = []CurveID{X25519MLKEM768}
@@ -2155,6 +2165,67 @@ func TestHandshakeMLKEM(t *testing.T) {
 			},
 			expectClient:   []CurveID{X25519MLKEM768, X25519, CurveP256, CurveP384, CurveP521},
 			expectSelected: X25519MLKEM768,
+		},
+		{
+			name: "CurvePreferences override GODEBUG",
+			preparation: func(t *testing.T) {
+				testenv.SetGODEBUG(t, "tlsmlkem=0")
+				testenv.SetGODEBUG(t, "tlssecpmlkem=0")
+			},
+			clientConfig: func(config *Config) {
+				config.CurvePreferences = []CurveID{CurveP256, SecP256r1MLKEM768, MLKEM1024}
+			},
+			serverConfig: func(config *Config) {
+				config.CurvePreferences = []CurveID{CurveP256, SecP256r1MLKEM768, MLKEM1024}
+			},
+			expectClient:   []CurveID{SecP256r1MLKEM768, MLKEM1024, CurveP256},
+			expectSelected: SecP256r1MLKEM768,
+		},
+		{
+			name: "ClientMLKEM1024Only",
+			clientConfig: func(config *Config) {
+				config.CurvePreferences = []CurveID{MLKEM1024}
+			},
+			serverConfig: func(config *Config) {
+				config.CurvePreferences = append(defaultWithPQ, MLKEM1024)
+			},
+			expectClient:   []CurveID{MLKEM1024},
+			expectSelected: MLKEM1024,
+		},
+		{
+			name: "ServerMLKEM1024Only",
+			clientConfig: func(config *Config) {
+				config.CurvePreferences = append(defaultWithPQ, MLKEM1024)
+			},
+			serverConfig: func(config *Config) {
+				config.CurvePreferences = []CurveID{MLKEM1024}
+			},
+			expectClient: []CurveID{X25519MLKEM768, SecP256r1MLKEM768, SecP384r1MLKEM1024,
+				MLKEM1024, X25519, CurveP256, CurveP384, CurveP521},
+			expectSelected: MLKEM1024,
+			expectHRR:      true,
+		},
+		{
+			name: "MLKEM1024NotPreferredOverHybrid",
+			clientConfig: func(config *Config) {
+				config.CurvePreferences = []CurveID{MLKEM1024, X25519MLKEM768}
+			},
+			serverConfig: func(config *Config) {
+				config.CurvePreferences = []CurveID{MLKEM1024, X25519MLKEM768}
+			},
+			expectClient:   []CurveID{X25519MLKEM768, MLKEM1024},
+			expectSelected: X25519MLKEM768,
+		},
+		{
+			name: "MLKEM1024PreferredOverECC",
+			clientConfig: func(config *Config) {
+				config.CurvePreferences = []CurveID{X25519, MLKEM1024}
+			},
+			serverConfig: func(config *Config) {
+				config.CurvePreferences = []CurveID{X25519, MLKEM1024}
+			},
+			expectClient:   []CurveID{MLKEM1024, X25519},
+			expectSelected: MLKEM1024,
 		},
 	}
 
@@ -2450,21 +2521,6 @@ func TestHandshakeMLDSA(t *testing.T) {
 	}
 }
 
-// bitFlippingSigner wraps a crypto.Signer and flips the last bit of every
-// signature it produces, used to test that peers reject invalid signatures.
-type bitFlippingSigner struct{ crypto.Signer }
-
-func (s bitFlippingSigner) Sign(rand io.Reader, msg []byte, opts crypto.SignerOpts) ([]byte, error) {
-	sig, err := s.Signer.Sign(rand, msg, opts)
-	if err != nil {
-		return nil, err
-	}
-	if len(sig) > 0 {
-		sig[len(sig)-1] ^= 1
-	}
-	return sig, nil
-}
-
 func TestX509KeyPairPopulateCertificate(t *testing.T) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -2485,35 +2541,13 @@ func TestX509KeyPairPopulateCertificate(t *testing.T) {
 	}
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
 
-	t.Run("x509keypairleaf=0", func(t *testing.T) {
-		testenv.SetGODEBUG(t, "x509keypairleaf=0")
-		cert, err := X509KeyPair(certPEM, keyPEM)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if cert.Leaf != nil {
-			t.Fatal("Leaf should not be populated")
-		}
-	})
-	t.Run("x509keypairleaf=1", func(t *testing.T) {
-		testenv.SetGODEBUG(t, "x509keypairleaf=1")
-		cert, err := X509KeyPair(certPEM, keyPEM)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if cert.Leaf == nil {
-			t.Fatal("Leaf should be populated")
-		}
-	})
-	t.Run("GODEBUG unset", func(t *testing.T) {
-		cert, err := X509KeyPair(certPEM, keyPEM)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if cert.Leaf == nil {
-			t.Fatal("Leaf should be populated")
-		}
-	})
+	cert, err := X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cert.Leaf == nil {
+		t.Fatal("Leaf should be populated")
+	}
 }
 
 func TestEarlyLargeCertMsg(t *testing.T) {
@@ -2784,4 +2818,117 @@ func (s messageOnlySigner) SignMessage(rand io.Reader, msg []byte, opts crypto.S
 	h.Write(msg)
 	digest := h.Sum(nil)
 	return s.Signer.Sign(rand, digest, opts)
+}
+
+// bitFlippingSigner wraps a crypto.Signer and flips a bit in the signature,
+// producing an invalid signature.
+type bitFlippingSigner struct{ crypto.Signer }
+
+func (s bitFlippingSigner) Public() crypto.PublicKey {
+	return s.Signer.Public()
+}
+
+func (s bitFlippingSigner) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
+	sig, err := s.Signer.Sign(rand, digest, opts)
+	if err != nil {
+		return nil, err
+	}
+	sig[0] ^= 1
+	return sig, nil
+}
+
+// TestInvalidHandshakeSignature tests that invalid handshake signatures are
+// rejected for all TLS versions, for both server and client certificates,
+// even when InsecureSkipVerify or RequireAnyClientCert are used (which disable
+// certificate chain verification, but not signature verification).
+func TestInvalidHandshakeSignature(t *testing.T) {
+	t.Run("TLSv10", func(t *testing.T) {
+		skipFIPS(t)
+		testInvalidHandshakeSignature(t, VersionTLS10)
+	})
+	t.Run("TLSv12", func(t *testing.T) { testInvalidHandshakeSignature(t, VersionTLS12) })
+	t.Run("TLSv13", func(t *testing.T) { testInvalidHandshakeSignature(t, VersionTLS13) })
+}
+
+func testInvalidHandshakeSignature(t *testing.T, version uint16) {
+	serverConfig := testConfigServer.Clone()
+	serverConfig.MaxVersion = version
+	serverConfig.MinVersion = version
+	serverConfig.SessionTicketsDisabled = true
+	clientConfig := testConfigClient.Clone()
+	clientConfig.MaxVersion = version
+	clientConfig.MinVersion = version
+
+	// Test that the server rejects invalid client certificate signatures,
+	// even when RequireAnyClientCert is used.
+	t.Run("ClientSignature", func(t *testing.T) {
+		serverConfig := serverConfig.Clone()
+		serverConfig.ClientAuth = RequireAnyClientCert
+		clientConfig := clientConfig.Clone()
+		clientConfig.Certificates = []Certificate{{
+			Certificate: testClientECDSAP256Cert.Certificate,
+			PrivateKey:  bitFlippingSigner{testClientECDSAP256Cert.PrivateKey.(crypto.Signer)},
+		}}
+
+		clientErr, serverErr := testInvalidSignatureHandshake(t, clientConfig, serverConfig)
+		if serverErr == nil {
+			t.Fatalf("expected server to reject invalid client signature; client err = %v", clientErr)
+		}
+		if !strings.Contains(serverErr.Error(), "invalid signature") {
+			t.Errorf("expected 'invalid signature' error, got: %v", serverErr)
+		}
+	})
+
+	// Test that the client rejects invalid server certificate signatures.
+	t.Run("ServerSignature", func(t *testing.T) {
+		serverConfig := serverConfig.Clone()
+		serverConfig.Certificates = []Certificate{{
+			Certificate: testRSA2048Cert.Certificate,
+			PrivateKey:  bitFlippingSigner{testRSA2048Cert.PrivateKey.(crypto.Signer)},
+		}}
+
+		clientErr, serverErr := testInvalidSignatureHandshake(t, clientConfig, serverConfig)
+		if clientErr == nil {
+			t.Fatalf("expected client to reject invalid server signature; server err = %v", serverErr)
+		}
+		if !strings.Contains(clientErr.Error(), "invalid signature") {
+			t.Errorf("expected 'invalid signature' error, got: %v", clientErr)
+		}
+	})
+
+	// Test that InsecureSkipVerify doesn't disable server signature verification.
+	t.Run("ServerSignature/InsecureSkipVerify", func(t *testing.T) {
+		clientConfig := clientConfig.Clone()
+		clientConfig.InsecureSkipVerify = true
+		serverConfig := serverConfig.Clone()
+		serverConfig.Certificates = []Certificate{{
+			Certificate: testRSA2048Cert.Certificate,
+			PrivateKey:  bitFlippingSigner{testRSA2048Cert.PrivateKey.(crypto.Signer)},
+		}}
+
+		clientErr, serverErr := testInvalidSignatureHandshake(t, clientConfig, serverConfig)
+		if clientErr == nil {
+			t.Fatalf("expected client to reject invalid server signature despite InsecureSkipVerify; server err = %v", serverErr)
+		}
+		if !strings.Contains(clientErr.Error(), "invalid signature") {
+			t.Errorf("expected 'invalid signature' error, got: %v", clientErr)
+		}
+	})
+}
+
+// testInvalidSignatureHandshake performs a TLS handshake and returns the
+// errors from both client and server. Unlike testHandshake, it doesn't try
+// to exchange data after the handshake.
+func testInvalidSignatureHandshake(t *testing.T, clientConfig, serverConfig *Config) (clientErr, serverErr error) {
+	c, s := localPipe(t)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		clientErr = Client(c, clientConfig).Handshake()
+		c.Close()
+	}()
+	serverErr = Server(s, serverConfig).Handshake()
+	s.Close()
+	<-done
+	return
 }
