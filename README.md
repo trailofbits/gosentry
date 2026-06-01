@@ -2,8 +2,8 @@
 
 [![integration tests](https://github.com/kevin-valerio/gosentry/actions/workflows/go.yml/badge.svg?branch=master)](https://github.com/kevin-valerio/gosentry/actions/workflows/go.yml)
 
-gosentry is a security-focused fork of the Go toolchain, integrating numerous features for state-of-the-art fuzzing campaigns on Go codebases. If you were using `go test -fuzz` before, you should use gosentry as a replacement.
-It comes with various fuzzing improvements and bug detectors that are not present natively in the Go toolchain. See TLDR; below.
+gosentry is a security-focused fork of the Go toolchain, integrating numerous features for state-of-the-art fuzzing campaigns on Go codebases. If you were using `go test -fuzz` before, you should use gosentry as a replacement. 
+It comes with various fuzzing improvements and bug detectors that are not present natively in the Go toolchain. See TLDR; below. You can also read the associated blog article [here](https://blog.trailofbits.com/2026/05/12/go-fuzzing-was-missing-half-the-toolkit.-we-forked-the-toolchain-to-fix-it./).
 
 **TLDR (features and options)**:
 
