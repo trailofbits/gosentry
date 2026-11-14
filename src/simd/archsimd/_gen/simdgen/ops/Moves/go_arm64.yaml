@@ -1,20 +1,48 @@
 !sum
 
-# GetElem VMOV (UMOV, integer)
+# GetElem VSMOV (SMOV, signed narrow lanes): sign-extending extract
 - go: GetElem
-  asm: "VMOV"
+  asm: "VSMOV"
   ssaVariant: "extr"
+  peepholeRules:
+  - !string "(MOV%rreg x:(VSMOV%sextr [i] _)) => x"
+  - !string "(MOV%rreg (VMOV%sextr [i] x)) => (VSMOV%sextr [i] x)"
+  - !string "(MOV%rUreg x:(VMOV%sextr [i] _)) => x"
+  - !string "(MOV%rUreg (VSMOV%sextr [i] x)) => (VMOV%sextr [i] x)"
   in:
   - &immIndex
     class: immediate
     go: Immediate
-    name: index
-  - &vector
-    go: $t
-    base: int|uint
+    name: i
+  - go: $t
+    base: int
+    elemBits: 8|16|32
   out:
   - &scalar
     class: greg
+
+# GetElem VMOV (UMOV, unsigned lanes)
+- go: GetElem
+  asm: "VMOV"
+  ssaVariant: "extr"
+  in:
+  - *immIndex
+  - go: $t
+    base: uint
+  out:
+  - *scalar
+
+# GetElem VMOV (UMOV, D lanes)
+- go: GetElem
+  asm: "VMOV"
+  ssaVariant: "extr"
+  in:
+  - *immIndex
+  - go: $t
+    base: int
+    elemBits: 64
+  out:
+  - *scalar
 
 # GetElem VDUP (duplicate element into scalar float in vreg)
 - go: GetElem
@@ -38,7 +66,9 @@
   ssaVariant: "ins"
   in:
   - *immIndex
-  - *vector
+  - &vector
+    go: $t
+    base: int|uint
   - *scalar
   out:
   - *vector
@@ -47,7 +77,8 @@
 - go: SetElem
   asm: "VMOV"
   ssaVariant: "ins0"
-  specialLower: !string "match (%h [0] (VMOVI16B [0]) y:(VDUP%sextr [i] _)) => y"
+  peepholeRules:
+  - !string "(%h [0] (VMOVI16B [0]) y:(VDUP%sextr [i] _)) => y"
   in:
   - *immIndex
   - &imm0
@@ -58,6 +89,7 @@
   - &fscalarIn
     class: vreg
     treatLikeAScalarOfSize: 0
+    name: y
   out:
   - *fvector
 
@@ -66,7 +98,8 @@
   asm: "VDUP"
   ssaVariant: "bcast"
   constImm: 0
-  specialLower: !string "match (%h [i] (VMOV%sins [j] _ (MOVDconst [c]))) && i == j && c>=-128 && c<=255 => (VMOVI%a [uint8(c)])"
+  peepholeRules:
+  - !string "(%h [i] (VMOV%sins [j] _ (MOVDconst [c]))) && i == j && c>=-128 && c<=255 => (VMOVI%a [uint8(c)])"
   in:
   - &immLane0
     name: "@" # tag "fully constant" (no aux field needed)
@@ -127,7 +160,8 @@
 # Other types cast to Int8x16 before calling bitSelect.
 - go: bitSelect
   asm: "VBIF"
-  specialLower: !string "match (%h x y (VNOT16B mask)) => (VBIT16B x y mask)"
+  peepholeRules:
+  - !string "(%h x y (VNOT16B mask)) => (VBIT16B x y mask)"
   in:
   - &v8
     go: $t
@@ -145,7 +179,8 @@
 # bitSelectNot — VBIT (bit insert if true, internal)
 - go: bitSelectNot
   asm: "VBIT"
-  specialLower: !string "match (%h x y (VNOT16B mask)) => (VBIF16B x y mask)"
+  peepholeRules:
+  - !string "(%h x y (VNOT16B mask)) => (VBIF16B x y mask)"
   in:
   - *v8
   - *v8
@@ -158,21 +193,18 @@
   regexpTag: "move"
   asm: "VTBL"
   in:
-  - &bytesTable
-    go: $t
-    base: int|uint
-    elemBits: 8
-    name: table
-  - &byteIndices
-    go: $t
-    base: int|uint
-    elemBits: 8
-    name: indices
-  out:
   - &bytes
     go: $t
     base: int|uint
     elemBits: 8
+  - &byteIndices
+    go: $t
+    base: int|uint
+    elemBits: 8
+    overwriteBase: uint
+    name: indices
+  out:
+  - *bytes
 
 # LookupOrKeep — TBX (table lookup extended, keeps original for out-of-range)
 - go: lookupOrKeep
@@ -185,7 +217,10 @@
     base: int|uint
     elemBits: 8
     name: keep
-  - *bytesTable
+  - go: $t
+    base: int|uint
+    elemBits: 8
+    name: table
   - *byteIndices
   out:
   - *bytes

@@ -3,6 +3,9 @@
 
 [short] skip 'compiles and links executables'
 
+# Ensure the build ID from "go list -export" matches that of "go build".
+env GOEXPERIMENT=nogolistexportnewformat
+
 # Set up fresh GOCACHE.
 env GOCACHE=$WORK/gocache
 mkdir $GOCACHE

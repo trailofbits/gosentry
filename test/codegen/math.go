@@ -16,6 +16,7 @@ func approx(x float64) {
 	// s390x:"FIDBR [$]6"
 	// arm64:"FRINTPD"
 	// ppc64x:"FRIP"
+	// riscv64:"FCVTLD\\.RUP" "FCVTDL" "FSGNJD"
 	// wasm:"F64Ceil"
 	sink64[0] = math.Ceil(x)
 
@@ -24,12 +25,14 @@ func approx(x float64) {
 	// s390x:"FIDBR [$]7"
 	// arm64:"FRINTMD"
 	// ppc64x:"FRIM"
+	// riscv64:"FCVTLD\\.RDN" "FCVTDL" "FSGNJD"
 	// wasm:"F64Floor"
 	sink64[1] = math.Floor(x)
 
 	// s390x:"FIDBR [$]1"
 	// arm64:"FRINTAD"
 	// ppc64x:"FRIN"
+	// riscv64:"FCVTLD\\.RMM" "FCVTDL" "FSGNJD"
 	sink64[2] = math.Round(x)
 
 	// amd64/v2:-".*x86HasSSE41" amd64/v3:-".*x86HasSSE41"
@@ -37,6 +40,7 @@ func approx(x float64) {
 	// s390x:"FIDBR [$]5"
 	// arm64:"FRINTZD"
 	// ppc64x:"FRIZ"
+	// riscv64:"FCVTLD\\.RTZ" "FCVTDL" "FSGNJD"
 	// wasm:"F64Trunc"
 	sink64[3] = math.Trunc(x)
 
@@ -44,6 +48,7 @@ func approx(x float64) {
 	// amd64:"ROUNDSD [$]0"
 	// s390x:"FIDBR [$]4"
 	// arm64:"FRINTND"
+	// riscv64:"FCVTLD\\.RNE" "FCVTDL" "FSGNJD"
 	// wasm:"F64Nearest"
 	sink64[4] = math.RoundToEven(x)
 }
@@ -158,6 +163,33 @@ func fnms(x, y, z float64) float64 {
 func fnma(x, y, z float64) float64 {
 	// riscv64:"FNMADDD" -"FNMSUBD"
 	return math.FMA(x, -y, -z)
+}
+
+func fma32(x, y, z float32) float32 {
+	// amd64/v3:-".*x86HasFMA"
+	// amd64:"VFMADD231SS"
+	// arm/6:"FMULAF"
+	// arm64:"FMADDS"
+	// loong64:"FMADDF"
+	// s390x:"FMADDS"
+	// ppc64x:"FMADDS"
+	// riscv64:"FMADDS"
+	return math.FMA32(x, y, z)
+}
+
+func fms32(x, y, z float32) float32 {
+	// riscv64:"FMSUBS"
+	return math.FMA32(x, y, -z)
+}
+
+func fnms32(x, y, z float32) float32 {
+	// riscv64:"FNMSUBS" -"FNMADDS"
+	return math.FMA32(-x, y, z)
+}
+
+func fnma32(x, y, z float32) float32 {
+	// riscv64:"FNMADDS" -"FNMSUBS"
+	return math.FMA32(x, -y, -z)
 }
 
 func isPosInf(x float64) bool {

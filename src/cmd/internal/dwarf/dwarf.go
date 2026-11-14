@@ -356,6 +356,7 @@ const (
 	DW_ABRV_STRUCTTYPE
 	DW_ABRV_TYPEDECL
 	DW_ABRV_DICT_INDEX
+	DW_ABRV_LINKER_TRAMPOLINE
 	DW_ABRV_PUTVAR_START
 )
 
@@ -836,6 +837,20 @@ var abbrevs = []dwAbbrev{
 			{DW_AT_name, DW_FORM_string},
 			{DW_AT_type, DW_FORM_ref_addr},
 			{DW_AT_go_dict_index, DW_FORM_udata},
+		},
+	},
+
+	// LINKER_TRAMPOLINE
+	// Use DW_FORM_addr for DW_AT_low_pc instead of DW_FORM_lo_pc_pseudo.
+	// A trampoline PC has one reference, so DW_FORM_addrx would add a
+	// .debug_addr entry without reducing output size.
+	{
+		DW_TAG_subprogram,
+		DW_CHILDREN_no,
+		[]dwAttrForm{
+			{DW_AT_low_pc, DW_FORM_addr},
+			{DW_AT_high_pc, DW_FORM_udata},
+			{DW_AT_trampoline, DW_FORM_addr},
 		},
 	},
 }

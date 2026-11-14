@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"fmt"
 	"go/format"
+	"hash/maphash"
 	"log"
 	"os"
 	"path/filepath"
@@ -99,6 +100,7 @@ const (
 	OneKmaskOut               // mask output
 	OneVregOutAtIn            // the first input is also the output
 	OneVregOutScalar          // (one) vector register output scalar in lane 0, other lanes zeroed
+	OneFpregOut               // (one) floating-point scalar register output
 )
 
 const (
@@ -147,6 +149,8 @@ func (op *Operation) shape() (shapeIn inShape, shapeOut outShape, maskType maskS
 			if op.Out[0].TreatLikeAScalarOfSize != nil {
 				shapeOut = OneVregOutScalar
 			}
+		} else if op.Out[0].Class == "fpreg" {
+			shapeOut = OneFpregOut
 		} else if op.Out[0].Class == "mask" {
 			shapeOut = OneKmaskOut
 		} else {
@@ -282,13 +286,15 @@ func (op *Operation) shape() (shapeIn inShape, shapeOut outShape, maskType maskS
 func (op *Operation) regShape(mem memShape) (string, error) {
 	_, _, _, _, gOp, _ := op.shape()
 	var regInfo, fixedName string
-	var vRegInCnt, gRegInCnt, kMaskInCnt, vRegOutCnt, gRegOutCnt, kMaskOutCnt, memInCnt, memOutCnt int
+	var vRegInCnt, gRegInCnt, fpRegInCnt, kMaskInCnt, vRegOutCnt, gRegOutCnt, fpRegOutCnt, kMaskOutCnt, memInCnt, memOutCnt int
 	for i, in := range gOp.In {
 		switch in.Class {
 		case "vreg":
 			vRegInCnt++
 		case "greg":
 			gRegInCnt++
+		case "fpreg":
+			fpRegInCnt++
 		case "mask":
 			kMaskInCnt++
 		case "mem":
@@ -308,6 +314,8 @@ func (op *Operation) regShape(mem memShape) (string, error) {
 			vRegOutCnt++
 		} else if out.Class == "greg" {
 			gRegOutCnt++
+		} else if out.Class == "fpreg" {
+			fpRegOutCnt++
 		} else if out.Class == "mask" {
 			kMaskOutCnt++
 		} else if out.Class == "mem" {
@@ -336,13 +344,15 @@ func (op *Operation) regShape(mem memShape) (string, error) {
 
 	inRegs = rmAbbrev("v", vRegInCnt)
 	inRegs += rmAbbrev("gp", gRegInCnt)
+	inRegs += rmAbbrev("fp", fpRegInCnt)
 	inMasks = rmAbbrev("k", kMaskInCnt)
 
 	outRegs = rmAbbrev("v", vRegOutCnt)
 	outRegs += rmAbbrev("gp", gRegOutCnt)
+	outRegs += rmAbbrev("fp", fpRegOutCnt)
 	outMasks = rmAbbrev("k", kMaskOutCnt)
 
-	if kMaskInCnt == 0 && kMaskOutCnt == 0 && gRegInCnt == 0 && gRegOutCnt == 0 {
+	if kMaskInCnt == 0 && kMaskOutCnt == 0 && gRegInCnt == 0 && gRegOutCnt == 0 && fpRegInCnt == 0 && fpRegOutCnt == 0 {
 		// For pure v we can abbreviate it as v%d%d.
 		regInfo = fmt.Sprintf("v%d%d", vRegInCnt, vRegOutCnt)
 	} else if kMaskInCnt == 0 && kMaskOutCnt == 0 {
@@ -367,10 +377,25 @@ func (op *Operation) regShape(mem memShape) (string, error) {
 		// destructive; a plain predicate operand (SEL's <Pv>) is not, and an
 		// implicit-all-true predicate is synthesized rather than passed in. They
 		// share register classes but need different ssa-to-prog helpers, so give
-		// the caller-predicated form its own shape name.
+		// the caller-predicated form its own shape name. A destructive operation
+		// under its implicit-all-true predicate (SMAX and friends, which have no
+		// unpredicated encoding) is emitted the same way as its caller-predicated
+		// sibling — a swap or MOVPRFX puts the destination in place — so it takes
+		// the same shape.
 		for i := range gOp.In {
-			if gOp.In[i].Class == "mask" && gOp.In[i].Predication != nil && !gOp.In[i].IsGoverning() {
+			if gOp.In[i].Class != "mask" {
+				continue
+			}
+			callerPredicated := gOp.In[i].Predication != nil && !gOp.In[i].IsGoverning()
+			destructiveAllTrue := gOp.In[i].IsGoverning() && gOp.sveInPlaceInput() == 0
+			if callerPredicated || destructiveAllTrue {
 				regInfo += "Pred"
+				// An accumulating operation (FMLA's <Zda>) names one more
+				// distinct register than a <Zdn>-destructive one, so it is
+				// emitted by a different helper and gets its own shape.
+				if gOp.sveAccumulatorInput() {
+					regInfo += "Acc"
+				}
 				break
 			}
 		}
@@ -436,6 +461,9 @@ func (op Operation) SSAType() string {
 	if op.Out[0].Class == "greg" {
 		return fmt.Sprintf("types.Types[types.T%s]", strings.ToUpper(op.goNormalType()))
 	}
+	if op.Out[0].Class == "fpreg" {
+		return fmt.Sprintf("types.Types[types.T%s]", strings.ToUpper(*op.Out[0].Go))
+	}
 	if op.Out[0].Class == "mask" && CurrentArch().isSVE() {
 		// SVE predicates are represented as-is (a real mask/P-register value),
 		// not as a data vector. On AVX a mask is a vector at the generic-op level
@@ -445,7 +473,7 @@ func (op Operation) SSAType() string {
 	if op.Out[0].Bits.Scalable {
 		return fmt.Sprintf("types.TypeVec%d", types.MaxVectorBits)
 	}
-	return fmt.Sprintf("types.TypeVec%d", op.Out[0].Bits.N())
+	return fmt.Sprintf("types.TypeVec%d", op.Out[0].GoWidth().N())
 }
 
 // GoType returns the Go type returned by this operation (relative to the simd package),
@@ -625,6 +653,12 @@ func rewriteVecAsScalarRegInfo(op Operation, regInfo string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if idx != -1 && CurrentArch().isSVE() {
+		// SVE has no form that takes a scalar register in place of a vector
+		// operand; the lowering broadcasts the scalar (see sveBroadcastScalarArgs),
+		// so the machine op's registers are all vectors.
+		return regInfo, nil
+	}
 	if idx != -1 {
 		if regInfo == "v21" {
 			regInfo = "vfpv"
@@ -664,15 +698,40 @@ func rewriteLastVregToMem(op Operation) Operation {
 
 // dedup is deduping operations in the full structure level.
 func dedup(ops []Operation) (deduped []Operation) {
+	// Comparing every pair of operations with reflect.DeepEqual would be
+	// quadratic, so we group operations by a hash of their Go name, assembly
+	// mnemonic, CPU feature, and operand Go types, and only compare operations
+	// with the same hash. Operations that are DeepEqual always have the same
+	// hash.
+	seed := maphash.MakeSeed()
+	seen := make(map[uint64][]int) // Indexes into deduped
 	for _, op := range ops {
-		seen := false
-		for _, dop := range deduped {
-			if reflect.DeepEqual(op, dop) {
-				seen = true
+		var h maphash.Hash
+		h.SetSeed(seed)
+		h.WriteString(op.Go)
+		h.WriteByte(0)
+		h.WriteString(op.Asm)
+		h.WriteByte(0)
+		h.WriteString(op.CPUFeature)
+		for _, operands := range [][]types.Operand{op.In, op.Out} {
+			h.WriteByte(0)
+			for _, o := range operands {
+				if o.Go != nil {
+					h.WriteString(*o.Go)
+				}
+				h.WriteByte(',')
+			}
+		}
+		k := h.Sum64()
+		dup := false
+		for _, i := range seen[k] {
+			if reflect.DeepEqual(op, deduped[i]) {
+				dup = true
 				break
 			}
 		}
-		if !seen {
+		if !dup {
+			seen[k] = append(seen[k], len(deduped))
 			deduped = append(deduped, op)
 		}
 	}
@@ -861,12 +920,36 @@ func overwrite(ops []Operation) error {
 				*op[idx].Go = strings.ReplaceAll(*op[idx].Go, *op[idx].Base, oBase)
 			}
 			*op[idx].Base = oBase
-		} else if op[idx].OverwriteBits != nil {
+		}
+		// OverwriteBits and GoBits come last, so that the Go type they
+		// construct uses the final element width and base type.
+		if op[idx].OverwriteBits != nil {
 			if op[idx].Class != "greg" {
-				panic(fmt.Errorf("simdgen: [OverwriteBits] is only supported for greg int: %v", op[idx]))
+				panic(fmt.Errorf("simdgen: [OverwriteBits] is only supported for greg int (use [GoBits] for a vreg): %v", op[idx]))
 			}
 			op[idx].Bits = types.VectorSize{Scalable: false, NRaw: *op[idx].OverwriteBits}
 			*op[idx].Go = fmt.Sprintf("%s%d", *op[idx].Base, op[idx].Bits.N())
+		}
+		if op[idx].GoBits != nil {
+			// The register may be narrower than the Go type: the
+			// instruction reads or writes only its low part.
+			if op[idx].Class != "vreg" {
+				panic(fmt.Errorf("simdgen: [GoBits] is only supported for vreg: %v", op[idx]))
+			}
+			if op[idx].Bits.Scalable || op[idx].ElemBits == nil {
+				panic(fmt.Errorf("simdgen: [GoBits] requires a fixed-width vreg with elemBits: %v", op[idx]))
+			}
+			if *op[idx].GoBits < op[idx].Bits.N() {
+				panic(fmt.Errorf("simdgen: [GoBits] cannot make a vreg narrower than its register: %v", op[idx]))
+			}
+			if op[idx].NarrowReg() {
+				// Bits remains the register width from XED; make Lanes
+				// and Go describe the wider Go type.
+				lanes := *op[idx].GoBits / *op[idx].ElemBits
+				op[idx].Lanes = new(lanes)
+				goType := fmt.Sprintf("%s%dx%d", capitalizeFirst(*op[idx].Base), *op[idx].ElemBits, lanes)
+				op[idx].Go = &goType
+			}
 		}
 		return nil
 	}
@@ -883,6 +966,17 @@ func overwrite(ops []Operation) error {
 		for j := range ops[i].Out {
 			if err := overwrite(ops[i].Out, j, o); err != nil {
 				return err
+			}
+		}
+		if len(ops[i].Out) > 0 && ops[i].Out[0].NarrowReg() {
+			// The instruction writes a register narrower than the result's Go
+			// type, and zeroes the rest of the Go vector regardless of masking.
+			// That's a partial result, just like an instruction that computes
+			// fewer elements than its result register holds.
+			for j := range ops[i].In {
+				if in := &ops[i].In[j]; in.MaskRole != nil && *in.MaskRole == "opmask" {
+					in.MaskRole = new("opmask-partial")
+				}
 			}
 		}
 		if hasClassOverwrite {
@@ -942,15 +1036,10 @@ func reportXEDInconsistency(ops []Operation) error {
 }
 
 func (o *Operation) hasMaskedMerging(maskType maskShape, outType outShape) bool {
-	if o.SpecialLower != nil {
-		// asmRule and argsMatchRule/earlyMatchRule should not affect masked merging
-		ok, _, _ := parseAsmRule(*o.SpecialLower)
-		if !ok {
-			ok, _, _ = parseArgsMatchRule(*o.SpecialLower)
-			if !ok {
-				return false
-			}
-		}
+	if o.Sftimm {
+		// Asm, lower, and peephole rules don't affect masked merging, but
+		// sftimm does.
+		return false
 	}
 	if CurrentArch().isSVE() {
 		// AMD64 merging takes the merge source as an extra destination operand.
@@ -959,9 +1048,34 @@ func (o *Operation) hasMaskedMerging(maskType maskShape, outType outShape) bool 
 		// form is just the /M-predicated machine op.
 		return false
 	}
+	for i := range o.In {
+		if in := &o.In[i]; in.MaskRole != nil && *in.MaskRole == "opmask-partial" {
+			// The merging form would zero the upper elements of the result,
+			// rather than merging them. This means the unmasked op followed by
+			// a blend into dst is not generally equivalent to its mask-merging
+			// form, so keep the blend separate.
+			return false
+		}
+	}
 	// BLEND and VMOVDQU are not user-facing ops so we should filter them out.
 	return o.OperandOrder == nil && maskType == OneMask && outType == OneVregOut &&
 		len(o.InVariant) == 1 && !strings.Contains(o.Asm, "BLEND") && !strings.Contains(o.Asm, "VMOVDQU")
+}
+
+// hasNarrowReg reports whether any operand of o is in a register narrower than
+// its Go type. See [types.Operand.NarrowReg].
+func (o *Operation) hasNarrowReg() bool {
+	for i := range o.In {
+		if o.In[i].NarrowReg() {
+			return true
+		}
+	}
+	for i := range o.Out {
+		if o.Out[i].NarrowReg() {
+			return true
+		}
+	}
+	return false
 }
 
 func getVbcstData(s string) (string, string) {

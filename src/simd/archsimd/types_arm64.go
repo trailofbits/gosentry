@@ -15,15 +15,15 @@ type Float32x4 struct {
 	vals      [4]float32
 }
 
-// Len returns the number of elements in a Float32x4.
+// Len returns the number of elements in x.
 func (x Float32x4) Len() int { return 4 }
 
-// LoadFloat32x4Array loads a Float32x4 from an array.
+// LoadFloat32x4Array loads an array into a vector.
 //
 //go:noescape
-func LoadFloat32x4Array(y *[4]float32) Float32x4
+func LoadFloat32x4Array(x *[4]float32) (z Float32x4)
 
-// StoreArray stores a Float32x4 to an array.
+// StoreArray stores the elements of x to an array.
 //
 //go:noescape
 func (x Float32x4) StoreArray(y *[4]float32)
@@ -34,15 +34,15 @@ type Float64x2 struct {
 	vals      [2]float64
 }
 
-// Len returns the number of elements in a Float64x2.
+// Len returns the number of elements in x.
 func (x Float64x2) Len() int { return 2 }
 
-// LoadFloat64x2Array loads a Float64x2 from an array.
+// LoadFloat64x2Array loads an array into a vector.
 //
 //go:noescape
-func LoadFloat64x2Array(y *[2]float64) Float64x2
+func LoadFloat64x2Array(x *[2]float64) (z Float64x2)
 
-// StoreArray stores a Float64x2 to an array.
+// StoreArray stores the elements of x to an array.
 //
 //go:noescape
 func (x Float64x2) StoreArray(y *[2]float64)
@@ -53,15 +53,15 @@ type Int8x16 struct {
 	vals    [16]int8
 }
 
-// Len returns the number of elements in an Int8x16.
+// Len returns the number of elements in x.
 func (x Int8x16) Len() int { return 16 }
 
-// LoadInt8x16Array loads an Int8x16 from an array.
+// LoadInt8x16Array loads an array into a vector.
 //
 //go:noescape
-func LoadInt8x16Array(y *[16]int8) Int8x16
+func LoadInt8x16Array(x *[16]int8) (z Int8x16)
 
-// StoreArray stores an Int8x16 to an array.
+// StoreArray stores the elements of x to an array.
 //
 //go:noescape
 func (x Int8x16) StoreArray(y *[16]int8)
@@ -72,15 +72,15 @@ type Int16x8 struct {
 	vals    [8]int16
 }
 
-// Len returns the number of elements in an Int16x8.
+// Len returns the number of elements in x.
 func (x Int16x8) Len() int { return 8 }
 
-// LoadInt16x8Array loads an Int16x8 from an array.
+// LoadInt16x8Array loads an array into a vector.
 //
 //go:noescape
-func LoadInt16x8Array(y *[8]int16) Int16x8
+func LoadInt16x8Array(x *[8]int16) (z Int16x8)
 
-// StoreArray stores an Int16x8 to an array.
+// StoreArray stores the elements of x to an array.
 //
 //go:noescape
 func (x Int16x8) StoreArray(y *[8]int16)
@@ -91,15 +91,15 @@ type Int32x4 struct {
 	vals    [4]int32
 }
 
-// Len returns the number of elements in an Int32x4.
+// Len returns the number of elements in x.
 func (x Int32x4) Len() int { return 4 }
 
-// LoadInt32x4Array loads an Int32x4 from an array.
+// LoadInt32x4Array loads an array into a vector.
 //
 //go:noescape
-func LoadInt32x4Array(y *[4]int32) Int32x4
+func LoadInt32x4Array(x *[4]int32) (z Int32x4)
 
-// StoreArray stores an Int32x4 to an array.
+// StoreArray stores the elements of x to an array.
 //
 //go:noescape
 func (x Int32x4) StoreArray(y *[4]int32)
@@ -110,15 +110,15 @@ type Int64x2 struct {
 	vals    [2]int64
 }
 
-// Len returns the number of elements in an Int64x2.
+// Len returns the number of elements in x.
 func (x Int64x2) Len() int { return 2 }
 
-// LoadInt64x2Array loads an Int64x2 from an array.
+// LoadInt64x2Array loads an array into a vector.
 //
 //go:noescape
-func LoadInt64x2Array(y *[2]int64) Int64x2
+func LoadInt64x2Array(x *[2]int64) (z Int64x2)
 
-// StoreArray stores an Int64x2 to an array.
+// StoreArray stores the elements of x to an array.
 //
 //go:noescape
 func (x Int64x2) StoreArray(y *[2]int64)
@@ -129,15 +129,15 @@ type Uint8x16 struct {
 	vals     [16]uint8
 }
 
-// Len returns the number of elements in a Uint8x16.
+// Len returns the number of elements in x.
 func (x Uint8x16) Len() int { return 16 }
 
-// LoadUint8x16Array loads a Uint8x16 from an array.
+// LoadUint8x16Array loads an array into a vector.
 //
 //go:noescape
-func LoadUint8x16Array(y *[16]uint8) Uint8x16
+func LoadUint8x16Array(x *[16]uint8) (z Uint8x16)
 
-// StoreArray stores a Uint8x16 to an array.
+// StoreArray stores the elements of x to an array.
 //
 //go:noescape
 func (x Uint8x16) StoreArray(y *[16]uint8)
@@ -148,15 +148,15 @@ type Uint16x8 struct {
 	vals     [8]uint16
 }
 
-// Len returns the number of elements in a Uint16x8.
+// Len returns the number of elements in x.
 func (x Uint16x8) Len() int { return 8 }
 
-// LoadUint16x8Array loads a Uint16x8 from an array.
+// LoadUint16x8Array loads an array into a vector.
 //
 //go:noescape
-func LoadUint16x8Array(y *[8]uint16) Uint16x8
+func LoadUint16x8Array(x *[8]uint16) (z Uint16x8)
 
-// StoreArray stores a Uint16x8 to an array.
+// StoreArray stores the elements of x to an array.
 //
 //go:noescape
 func (x Uint16x8) StoreArray(y *[8]uint16)
@@ -167,15 +167,15 @@ type Uint32x4 struct {
 	vals     [4]uint32
 }
 
-// Len returns the number of elements in a Uint32x4.
+// Len returns the number of elements in x.
 func (x Uint32x4) Len() int { return 4 }
 
-// LoadUint32x4Array loads a Uint32x4 from an array.
+// LoadUint32x4Array loads an array into a vector.
 //
 //go:noescape
-func LoadUint32x4Array(y *[4]uint32) Uint32x4
+func LoadUint32x4Array(x *[4]uint32) (z Uint32x4)
 
-// StoreArray stores a Uint32x4 to an array.
+// StoreArray stores the elements of x to an array.
 //
 //go:noescape
 func (x Uint32x4) StoreArray(y *[4]uint32)
@@ -186,39 +186,39 @@ type Uint64x2 struct {
 	vals     [2]uint64
 }
 
-// Len returns the number of elements in a Uint64x2.
+// Len returns the number of elements in x.
 func (x Uint64x2) Len() int { return 2 }
 
-// LoadUint64x2Array loads a Uint64x2 from an array.
+// LoadUint64x2Array loads an array into a vector.
 //
 //go:noescape
-func LoadUint64x2Array(y *[2]uint64) Uint64x2
+func LoadUint64x2Array(x *[2]uint64) (z Uint64x2)
 
-// StoreArray stores a Uint64x2 to an array.
+// StoreArray stores the elements of x to an array.
 //
 //go:noescape
 func (x Uint64x2) StoreArray(y *[2]uint64)
 
 // Mask8x16 is a mask for a SIMD vector of 16 8-bit elements.
 type Mask8x16 struct {
-	int8x16 v128
-	vals    [16]int8
+	mask8x16 v128
+	vals     [16]int8
 }
 
 // Mask16x8 is a mask for a SIMD vector of 8 16-bit elements.
 type Mask16x8 struct {
-	int16x8 v128
-	vals    [8]int16
+	mask16x8 v128
+	vals     [8]int16
 }
 
 // Mask32x4 is a mask for a SIMD vector of 4 32-bit elements.
 type Mask32x4 struct {
-	int32x4 v128
-	vals    [4]int32
+	mask32x4 v128
+	vals     [4]int32
 }
 
 // Mask64x2 is a mask for a SIMD vector of 2 64-bit elements.
 type Mask64x2 struct {
-	int64x2 v128
-	vals    [2]int64
+	mask64x2 v128
+	vals     [2]int64
 }

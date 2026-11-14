@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"slices"
 	"strings"
 	"text/template"
@@ -16,13 +17,15 @@ import (
 
 	"simd/archsimd/_gen/gentools"
 	"simd/archsimd/_gen/sgutil"
+	"simd/archsimd/_gen/specdoc"
+	"simd/archsimd/_gen/specgen"
 )
 
 var (
 	genTypesFile      = flag.String("types", "simd/archsimd/types_wasm.go", "output file for simd types (e.g. types_wasm.go)")
 	genOpsFile        = flag.String("ops", "simd/archsimd/ops_wasm.go", "output file for simd ops (e.g. ops_wasm.go)")
 	genSSAOpsFile     = flag.String("ssaops", "cmd/compile/internal/ssa/_gen/simdWasmops.go", "output file for ssa ops (e.g. simdWasmops.go)")
-	genGenOpsFile     = flag.String("genops", "cmd/compile/internal/ssa/_gen/simdgenericOps.go", "output file for generic ssa ops (e.g. simdgenericOps.go)")
+	genGenOpsFile     = flag.String("genops", "cmd/compile/internal/ssa/_gen/simdWasmgenericOps_gen.go", "output file for generic ssa ops (e.g. simdWasmgenericOps_gen.go)")
 	genSSARulesFile   = flag.String("ssarules", "cmd/compile/internal/ssa/_gen/simdWasm.rules", "output file for ssa rules (e.g. simdWasm.rules)")
 	genWasmSSAFile    = flag.String("wasmssa", "cmd/compile/internal/wasm/simdssa.go", "output file for wasm ssa (e.g. simdssa.go)")
 	genIntrinsicsFile = flag.String("intrinsics", "cmd/compile/internal/ssagen/simdWasmintrinsics.go", "output file for intrinsics (e.g. simdWasmintrinsics.go)")
@@ -91,7 +94,7 @@ func (a *simdType) Compare(b *simdType) int {
 // WasmUName returns the Capitalized wasm type name e.g. I64x2
 func (s *simdType) WasmUName() string {
 	T := s.Name[:1]
-	if T == "U" {
+	if T == "U" || T == "M" {
 		T = "I"
 	}
 	return fmt.Sprintf("%s%dx%d", T, s.ElemSize, s.Count)
@@ -278,8 +281,8 @@ type wasmOp struct {
 	t          *simdType // the receiver and default arg type
 	op         string    // the basic Op type, e.g. "load", "add"
 	argCount   int       // Number of arguments (inputs)
-	argType    string    // (Binary) arg type (e.g., "v128", "i32", "void") -- defaults to t
-	resultType string    // Result type (e.g., "v128", "i32", "void") -- defaults to t
+	argType    string    // Go argument type (e.g. "Int32x4" for vector, or "int32" for lane replacement) -- defaults to t.Name
+	resultType string    // Go result type (e.g. "Uint32x4", or element type "int32" for lane extraction) -- defaults to t.Name
 	opFlags    OpFlags
 	doc        string
 
@@ -287,6 +290,7 @@ type wasmOp struct {
 	immName  string // The parameter name for an immediate operations
 	arg1Name string // The 1st (non-immediate) arg name. Arg1Name() defaults to "y"
 	arg2Name string // The 2nd (non-immediate) arg name. Arg2Name() defaults to "z"
+	arg2Type string // The 2nd (non-immediate) arg type. Arg2Type() defaults to t.Name
 }
 
 func (o *wasmOp) String() string {
@@ -369,18 +373,18 @@ func (o *wasmOp) T() *simdType {
 // this appears in the Go API declaration files and in the intrinsic registration files.
 func (o *wasmOp) Method() string {
 	goname := gonames[o.op]
-	if o.Flag(NameHasFormat) {
-		// This is an extend method of the form Extend{Lo,Hi}%dTo%s
-		count := o.T().Count / 2
-		x := strings.Index(o.ResultType(), "x")
-		typ := o.ResultType()[:x]
-		return fmt.Sprintf(goname, count, typ)
+	if len(goname) == 1 {
+		// it's something like "-" or "?" or "!"
+		return ""
 	}
-	if len(goname) >= 1 {
-		if len(goname) == 1 {
-			// it's something like "-" or "?" or "!"
-			return ""
-		}
+	if o.Flag(NameHasFormat) {
+		// goname is a format string such as "ExtendTo%s". It accepts one
+		// placeholder: the result element type. Format it into a specific
+		// name.
+		resElemType, _, _ := strings.Cut(o.ResultType(), "x")
+		return fmt.Sprintf(goname, resElemType)
+	}
+	if goname != "" {
 		return goname
 	}
 	return snakeToCamel(o.op)
@@ -402,8 +406,8 @@ func (o *wasmOp) SsaResultType() string {
 }
 
 func (o *wasmOp) RegInfo() string {
-	if o.argType == "" {
-		if o.resultType == "" {
+	if o.argType == "" || (o.argType[0] >= 'A' && o.argType[0] <= 'Z') {
+		if o.resultType == "" || (o.resultType[0] >= 'A' && o.resultType[0] <= 'Z') {
 			switch o.argCount {
 			case 1:
 				return "v11"
@@ -411,13 +415,6 @@ func (o *wasmOp) RegInfo() string {
 				return "v21"
 			case 3:
 				return "v31"
-			}
-		} else if o.Flag(IsConversion) {
-			if o.argCount == 1 {
-				return "v11"
-			} else if o.argCount == 2 {
-				// widening multiplies
-				return "v21"
 			}
 		} else {
 			if o.argCount == 1 {
@@ -491,7 +488,19 @@ func (o *wasmOp) SsaGenOp() string {
 // for example input "foo_s" -> returns "foo", "_s", "S"
 func (o *wasmOp) conversionCorrectedOp() (op, lowerSuffix, upperSuffix string) {
 	op = o.op
-	if strings.HasSuffix(op, "_s") {
+	if strings.HasSuffix(op, "_s_zero") {
+		op = op[:len(op)-len("_s_zero")]
+		upperSuffix = "SZero"
+		lowerSuffix = "_s_zero"
+	} else if strings.HasSuffix(op, "_u_zero") {
+		op = op[:len(op)-len("_u_zero")]
+		upperSuffix = "UZero"
+		lowerSuffix = "_u_zero"
+	} else if strings.HasSuffix(op, "_zero") {
+		op = op[:len(op)-len("_zero")]
+		upperSuffix = "Zero"
+		lowerSuffix = "_zero"
+	} else if strings.HasSuffix(op, "_s") {
 		op = op[:len(op)-2]
 		upperSuffix = "S"
 		lowerSuffix = "_s"
@@ -568,6 +577,13 @@ func (o *wasmOp) Arg2Name() string {
 	return "z"
 }
 
+func (o *wasmOp) Arg2Type() string {
+	if n := o.arg2Type; n != "" {
+		return n
+	}
+	return o.T().Name
+}
+
 func (o *wasmOp) Arg1Name() string {
 	if n := o.arg1Name; n != "" {
 		return n
@@ -633,7 +649,8 @@ var (
 
 	v_t = []string{"any_true"} // vector, test (scalar result)
 
-	s_1  = []string{"abs", "neg"}                                              // integer, unary
+	s_1  = []string{"neg"}                                                     // integer, unary
+	su_1 = []string{"abs"}                                                     // signed->unsigned integer, unary
 	f_1  = []string{"abs", "neg", "sqrt", "ceil", "floor", "trunc", "nearest"} // float, unary
 	i8_1 = []string{"popcnt"}                                                  // int8, unary
 
@@ -692,9 +709,10 @@ var (
 	convert_s = []string{"convert_s"}
 	convert_u = []string{"convert_u"}
 
-	f_c   = []string{"trunc_sat_s", "trunc_sat_u"} // f32 -> s/u 32 (2 choices)
-	f32_c = []string{"promote_low"}                // produces f64 vector
-	f64_c = []string{"demote_zero"}                // produces f32 vector
+	f_c     = []string{"trunc_sat_s", "trunc_sat_u"}           // f32 -> s/u 32 (2 choices)
+	f64_c   = []string{"trunc_sat_s_zero", "trunc_sat_u_zero"} // f64 -> s/u 32, upper half zero
+	f32_c   = []string{"promote_low"}                          // produces f64 vector
+	f64_c32 = []string{"demote_zero"}                          // produces f32 vector
 
 	// these have an immediate operand, and return an element_type operand
 	nge32_x = []string{"extract_lane"}
@@ -706,10 +724,12 @@ var (
 
 	rotates = []string{"RotateAllLeft", "RotateAllRight"}
 
-	// TODO, once the semantics are understood.
-	// N1xM1.narrow_N2xM2_{S,U}
+	// N1xM1.narrow_N2xM2_{s,u}
 	// N1xM1 is the result type.  There are two N2xM2 inputs, where N1 = N2/2 and M1 = M2*2
-	// Each N2-sized input element is narrow, saturating signed or unsigned in the process.
+	// Each N2-sized signed input element is narrowed, saturating to the signed or
+	// unsigned range of N1. The narrowed elements of x go in the low half of the
+	// result and those of y in the high half.
+	narrows = []string{"narrow_s", "narrow_u"}
 
 	// Some operations are renamed, and some are not directly present as an intrinsic
 	// or generic SIMD operation.  A name beginning "_" means the intrinsic begins with
@@ -783,22 +803,34 @@ var (
 		"relaxed_dot_s":     "?",
 
 		// widen integer types
-		"extend_low_s":  "ExtendLo%dTo%s",
-		"extend_high_s": "ExtendHi%dTo%s",
-		"extend_low_u":  "ExtendLo%dTo%s",
-		"extend_high_u": "ExtendHi%dTo%s",
+		"extend_low_s": "ExtendTo%s",
+		"extend_low_u": "ExtendTo%s",
+		// extend_high has no API. It's used only by the rules that fold
+		// x.HiToLo().ExtendTo*() into it.
+		"extend_high_s": "-",
+		"extend_high_u": "-",
 
 		// [u]int32x4 to float32x4
 		"convert_s": "ConvertToFloat32",
 		"convert_u": "ConvertToFloat32",
 
-		// [u]int32x4 to float32x4
-		"trunc_sat_s": "ConvertToInt32",
-		"trunc_sat_u": "ConvertToUint32",
+		// float32x4 or float64x2 to [u]int32x4
+		"trunc_sat_s":      "ConvertToInt32",
+		"trunc_sat_u":      "ConvertToUint32",
+		"trunc_sat_s_zero": "ConvertToInt32",
+		"trunc_sat_u_zero": "ConvertToUint32",
 
-		// [u]int32x4 to float64x2
-		"convert_low_s": "ConvertLo2ToFloat64",
-		"convert_low_u": "ConvertLo2ToFloat64",
+		// [u]int32x4 or float32x4 to float64x2
+		"convert_low_s": "ConvertToFloat64",
+		"convert_low_u": "ConvertToFloat64",
+		"promote_low":   "ConvertToFloat64",
+
+		// float64x2 to float32x4
+		"demote_zero": "ConvertToFloat32",
+
+		// Internal saturating narrowing, used by SaturateTo* emulations.
+		"narrow_s": "concatSaturateTo%s",
+		"narrow_u": "concatSaturateTo%s",
 
 		"swizzle": "LookupOrZero",
 		"splat":   "Broadcast",
@@ -837,6 +869,11 @@ func initWasmOps() {
 		if strings.HasPrefix(s, "sub") || s == "div" {
 			return 0
 		}
+		if t.Float && (s == "min" || s == "max") {
+			// Generic Min/Max ops are shared with AMD64, where NaNs and
+			// signed zeros make these operations non-commutative.
+			return 0
+		}
 		return IsCommutative
 	}
 	isMask := func(s string, t *simdType) OpFlags {
@@ -864,6 +901,7 @@ func initWasmOps() {
 	bitSelect := func(op *wasmOp) {
 		op.opFlags = IsBitwise
 		op.arg2Name = "cond"
+		op.arg2Type = op.T().UintFor().Name
 	}
 
 	addWasmOps(ints, iv_1, 1, isBitwise)  // because reasons, not floats
@@ -871,6 +909,9 @@ func initWasmOps() {
 	addWasmOpsDetail(ints, v_3, 3, bitSelect)
 	addWasmOps(allTypes, v_t, 1, isTest)
 	addWasmOps(signed, s_1, 1, unShape)
+	addWasmOpsDetail(signed, su_1, 1, func(op *wasmOp) {
+		op.resultType = op.T().UintShaped.Name
+	})
 	addWasmOps(floats, f_1, 1, unShape)
 	addWasmOps([]*simdType{vi8}, i8_1, 1, nil)
 
@@ -898,15 +939,19 @@ func initWasmOps() {
 
 	// Shuffle is a mess, it takes a 8x16 vector in and SIXTEEN immediates specifying the indices.
 	// addWasmOps([]*simdType{vi8}, i8_shuf, 1, nil)
-	addWasmOpsDetail([]*simdType{vi8}, i8_swiz, 2, func(op *wasmOp) { op.arg1Name = "i" })
+	addWasmOpsDetail([]*simdType{vi8}, i8_swiz, 2, func(op *wasmOp) {
+		op.arg1Name = "indices"
+		op.argType = op.t.UintFor().Name
+	})
 
 	// Masks have some operations.
 	addWasmOps(masks, iv_2, 2, isMask)
+	addWasmOps(masks, iv_1, 1, isMask)
 
 	extractImmediate := func(op *wasmOp) {
 		op.resultType = op.t.Elem
 		op.immRange = uint8(op.t.Count)
-		op.immName = "index"
+		op.immName = "i"
 	}
 
 	addWasmOpsDetail(nge32, nge32_x, 1, extractImmediate)
@@ -916,13 +961,14 @@ func initWasmOps() {
 	replaceImmediate := func(op *wasmOp) {
 		op.argType = op.t.Elem
 		op.immRange = uint8(op.t.Count)
-		op.immName = "index"
+		op.immName = "i"
 	}
 	addWasmOpsDetail(allTypes, n_x, 2, replaceImmediate)
 
 	shift := func(op *wasmOp) {
 		op.argType = "uint64"
 		op.opFlags = IsShift
+		op.arg1Name = "shift"
 	}
 	addWasmOpsDetail(signed, s_s, 2, shift)
 	addWasmOpsDetail(unsigned, u_s, 2, shift)
@@ -970,11 +1016,21 @@ func initWasmOps() {
 	}
 	truncSat := func(op *wasmOp) {
 		op.opFlags = IsConversion
-		if op.op == "trunc_sat_s" {
+		if strings.HasPrefix(op.op, "trunc_sat_s") {
 			op.resultType = "Int32x4"
 		} else {
 			op.resultType = "Uint32x4"
 		}
+	}
+
+	narrow := func(op *wasmOp) {
+		op.opFlags = IsConversion | NameHasFormat
+		// result type is half the width, signedness from the op, twice the count
+		stem := "Int"
+		if op.op[len(op.op)-1] == 'u' {
+			stem = "Uint"
+		}
+		op.resultType = op.t.ShrinkElements(stem)
 	}
 
 	rotate := func(op *wasmOp) {
@@ -991,11 +1047,15 @@ func initWasmOps() {
 	addWasmOpsDetail([]*simdType{vu32}, convert_u, 1, convert)
 
 	addWasmOpsDetail([]*simdType{vf32}, f_c, 1, truncSat)
+	addWasmOpsDetail([]*simdType{vf64}, f64_c, 1, truncSat)
+	addWasmOpsDetail([]*simdType{vf32}, f32_c, 1, convertHalf)
+	addWasmOpsDetail([]*simdType{vf64}, f64_c32, 1, convert)
+	addWasmOpsDetail([]*simdType{vi16, vi32}, narrows, 2, narrow)
 
 	addWasmOpsDetail(sle32, s_q2, 2, mulHalf)
 	addWasmOpsDetail(ule32, u_q2, 2, mulHalf)
 
-	addWasmOpsDetail(ints, rotates, 2, rotate)
+	addWasmOpsDetail(unsigned, rotates, 2, rotate)
 
 	slices.SortFunc(wasmOps, compareWasmOps)
 
@@ -1066,7 +1126,18 @@ func main() {
 		return
 	}
 
+	specDir := specgen.MustFindSpecDir(genFlags.GOROOT)
+	specFuncs, err := specgen.Load(specDir, nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "loading spec: %v\n", err)
+		os.Exit(1)
+	}
+	specIdx := specgen.NewIndex(specFuncs)
+
 	var files gentools.Files
+	files.AddPostProcessor(specdoc.Filler(specIdx, specdoc.Options{
+		AllowDocRewrite: true,
+	}))
 	defer files.FlushOrExit()
 
 	genTypes(files.NewGoFile(*genTypesFile))
@@ -1086,7 +1157,7 @@ var loadDecl = templateOf("load from array", `
 // Load{{.Name}}Array loads {{.Article}} {{.Name}} from a [{{.Count}}]{{.Elem}}.
 //
 //go:noescape
-func Load{{.Name}}Array(y *[{{.Count}}]{{.Elem}}) {{.Name}}
+func Load{{.Name}}Array(x *[{{.Count}}]{{.Elem}}) {{.Name}}
 
 // Load{{.Name}} loads {{.Article}} {{.Name}} from a slice of at least {{.Count}} {{.Elem}}s.
 func Load{{.Name}}(s []{{.Elem}}) {{.Name}} {
@@ -1122,7 +1193,7 @@ type {{.Name}} struct {
 var maskTypeDecl = templateOf("type decl", `
 // {{.Name}} is a 128-bit SIMD mask of {{.Count}} {{.Elem}}s.
 type {{.Name}} struct {
-	{{.Elem}}x{{.Count}} v128
+	mask{{slice .Elem 3}}x{{.Count}} v128
 	vals      [{{.Count}}]{{.Elem}}
 }
 `)
@@ -1157,46 +1228,54 @@ func genTypes(f *bytes.Buffer) {
 }
 
 var docForOp map[string]string = map[string]string{
-	"Add":                 " returns the result of adding x and y, elementwise.",
-	"Sub":                 " returns the result of subtracting y from x, elementwise.",
-	"Mul":                 " returns the result of multiplying x and y, elementwise.",
-	"Div":                 " returns the result of dividing x by y, elementwise.",
-	"Neg":                 " returns the elementwise negation of x.",
-	"Abs":                 " returns the elementwise absolute value of x.",
-	"Sqrt":                " returns the elementwise square root of x.",
-	"Not":                 " returns the bitwise NOT of x.",
-	"And":                 " returns the bitwise AND of x and y.",
-	"Or":                  " returns the bitwise OR of x and y.",
-	"Xor":                 " returns the bitwise XOR of x and y.",
-	"AndNot":              " returns the bitwise AND NOT of x and y (x & ^y).",
-	"Min":                 " returns the elementwise minimum of x and y.",
-	"Max":                 " returns the elementwise maximum of x and y.",
-	"Round":               " returns the elementwise nearest integer, rounding ties to even.",
-	"OnesCount":           " returns the elementwise population count (number of bits set).",
-	"Average":             " returns the elementwise average of unsigned integers in x and y.",
-	"Equal":               " returns true if x equals y, elementwise.",
-	"NotEqual":            " returns true if x does not equal y, elementwise.",
-	"Less":                " returns true if x is less than y, elementwise.",
-	"Greater":             " returns true if x is greater than y, elementwise.",
-	"LessEqual":           " returns true if x is less than or equal to y, elementwise.",
-	"GreaterEqual":        " returns true if x is greater than or equal to y, elementwise.",
-	"MulAdd":              " returns the elementwise multiply-add of x, y, and z.",
-	"ShiftAllLeft":        " returns the elementwise left shift of x by y bits.",
-	"ShiftAllRight":       " returns the elementwise right shift of x by y bits.",
-	"Ceil":                " returns the elementwise ceiling of x.",
-	"Floor":               " returns the elementwise floor of x.",
-	"Trunc":               " returns the elementwise truncation of x.",
-	"BitSelect":           " returns the bitwise selection if mask[i] then x[i] else y[i]",
-	"GetElem":             " gets the lane value at the given index.",
-	"SetElem":             " sets the lane at the given index to y.",
-	"TruncSatS":           " returns the elementwise saturating signed conversion to integer.",
-	"TruncSatU":           " returns the elementwise saturating unsigned conversion to integer.",
-	"PromoteLow":          " promotes the lower half elements of x to double width values.",
-	"DemoteZero":          " demotes elements of x to half width values in lower elements of result, with zeroes in the upper elements",
-	"ConvertToFloat32":    " converts elements of x to Float32x4.",
-	"ConvertToInt32":      " converts elements of x to Int32x4.",
-	"ConvertToUint32":     " converts elements of x to Uint32x4.",
-	"ConvertLo2ToFloat64": " converts the first two elements of x to Float64x2.",
+	"Add":              " returns the result of adding x and y, elementwise.",
+	"Sub":              " returns the result of subtracting y from x, elementwise.",
+	"Mul":              " returns the result of multiplying x and y, elementwise.",
+	"Div":              " returns the result of dividing x by y, elementwise.",
+	"Neg":              " returns the elementwise negation of x.",
+	"Abs":              " returns the elementwise absolute value of x.",
+	"Sqrt":             " returns the elementwise square root of x.",
+	"Not":              " returns the bitwise NOT of x.",
+	"And":              " returns the bitwise AND of x and y.",
+	"Or":               " returns the bitwise OR of x and y.",
+	"Xor":              " returns the bitwise XOR of x and y.",
+	"AndNot":           " returns the bitwise AND NOT of x and y (x & ^y).",
+	"Min":              " returns the elementwise minimum of x and y.",
+	"Max":              " returns the elementwise maximum of x and y.",
+	"Round":            " returns the elementwise nearest integer, rounding ties to even.",
+	"OnesCount":        " returns the elementwise population count (number of bits set).",
+	"Average":          " returns the elementwise average of unsigned integers in x and y.",
+	"Equal":            " returns true if x equals y, elementwise.",
+	"NotEqual":         " returns true if x does not equal y, elementwise.",
+	"Less":             " returns true if x is less than y, elementwise.",
+	"Greater":          " returns true if x is greater than y, elementwise.",
+	"LessEqual":        " returns true if x is less than or equal to y, elementwise.",
+	"GreaterEqual":     " returns true if x is greater than or equal to y, elementwise.",
+	"MulAdd":           " returns the elementwise multiply-add of x, y, and z.",
+	"ShiftAllLeft":     " returns the elementwise left shift of x by shift bits.",
+	"ShiftAllRight":    " returns the elementwise right shift of x by shift bits.",
+	"Ceil":             " returns the elementwise ceiling of x.",
+	"Floor":            " returns the elementwise floor of x.",
+	"Trunc":            " returns the elementwise truncation of x.",
+	"BitSelect":        " returns the bitwise selection if mask[i] then x[i] else y[i]",
+	"GetElem":          " gets the lane value at the given index.",
+	"SetElem":          " sets the lane at the given index to y.",
+	"TruncSatS":        " returns the elementwise saturating signed conversion to integer.",
+	"TruncSatU":        " returns the elementwise saturating unsigned conversion to integer.",
+	"PromoteLow":       " promotes the lower half elements of x to double width values.",
+	"DemoteZero":       " demotes elements of x to half width values in lower elements of result, with zeroes in the upper elements",
+	"ConvertToFloat32": " converts elements of x to Float32x4.",
+	"ConvertToInt32":   " converts elements of x to Int32x4.",
+	"ConvertToUint32":  " converts elements of x to Uint32x4.",
+	"ConvertToFloat64": " converts elements of x to float64.",
+	"concatSaturateToInt8": ` converts the elements of x and y to int8 with signed
+// saturation and packs them into the low and high halves of the result.`,
+	"concatSaturateToUint8": ` converts the signed elements of x and y to uint8 with
+// saturation and packs them into the low and high halves of the result.`,
+	"concatSaturateToInt16": ` converts the elements of x and y to int16 with signed
+// saturation and packs them into the low and high halves of the result.`,
+	"concatSaturateToUint16": ` converts the signed elements of x and y to uint16 with
+// saturation and packs them into the low and high halves of the result.`,
 	"MulWidenHi": ` returns the doubled-width product of respective elements of the upper halves of x and y.
 //
 //	Result[i] = x[i+{{.Type.HalfCount}}] * y[i+{{.Type.HalfCount}}], for 0 <= i < {{.Type.HalfCount}} == |x|/2.`,
@@ -1204,22 +1283,10 @@ var docForOp map[string]string = map[string]string{
 //
 //	Result[i] = x[i] * y[i], for 0 <= i < {{.Type.HalfCount}} == |x|/2.`,
 	// Size-specific extend operations
-	"ExtendLo8ToInt16":   " extends the lower 8 elements of x to 16-bit integers.",
-	"ExtendLo16ToInt32":  " extends the lower 4 elements of x to 32-bit integers.",
-	"ExtendLo32ToInt64":  " extends the lower 2 elements of x to 64-bit integers.",
-	"ExtendHi8ToInt16":   " extends the higher 8 elements of x to 16-bit integers.",
-	"ExtendHi16ToInt32":  " extends the higher 4 elements of x to 32-bit integers.",
-	"ExtendHi32ToInt64":  " extends the higher 2 elements of x to 64-bit integers.",
-	"ExtendLo8ToUint16":  " extends the lower 8 elements of x to 16-bit unsigned integers.",
-	"ExtendLo16ToUint32": " extends the lower 4 elements of x to 32-bit unsigned integers.",
-	"ExtendLo32ToUint64": " extends the lower 2 elements of x to 64-bit unsigned integers.",
-	"ExtendHi8ToUint16":  " extends the higher 8 elements of x to 16-bit unsigned integers.",
-	"ExtendHi16ToUint32": " extends the higher 4 elements of x to 32-bit unsigned integers.",
-	"ExtendHi32ToUint64": " extends the higher 2 elements of x to 64-bit unsigned integers.",
-	"AddSaturated":       " returns the result of adding x and y, saturating instead of overflowing, elementwise.",
-	"SubSaturated":       " returns the result of subtracting x and y, saturating instead of overflowing, elementwise.",
-	"Shuffle":            " returns the elements of y concatenated with z that are selected by elements of x",
-	"LookupOrZero": ` returns the elements of x as indexed by the elements of i. If an index is out of range, its result is 0.
+	"AddSaturated": " returns the result of adding x and y, saturating instead of overflowing, elementwise.",
+	"SubSaturated": " returns the result of subtracting x and y, saturating instead of overflowing, elementwise.",
+	"Shuffle":      " returns the elements of y concatenated with z that are selected by elements of x",
+	"LookupOrZero": ` returns the elements of x as indexed by the elements of indices. If an index is out of range, its result is 0.
 //
 //	if 0 <= indices[i] && indices[i] < len(table) {
 //	    result[i] = table[indices[i]]
@@ -1262,7 +1329,7 @@ var ternOp = templateOf("ternaryOp", `
 	// {{.Method}}{{.DocRest}}
 	//
 	// Asm: {{.AsmOp}}
-	func (x {{.RcvrType}}) {{.Method}}(y {{.RcvrType}}, {{.Arg2Name}} {{.ArgType}}) {{.ResultType}}
+	func (x {{.RcvrType}}) {{.Method}}(y {{.RcvrType}}, {{.Arg2Name}} {{.Arg2Type}}) {{.ResultType}}
 `)
 
 var unOpImm = templateOf("unaryOpImm", `
@@ -1330,7 +1397,7 @@ func (x {{.Name}}) Masked(mask Mask{{.ElemSize}}x{{.Count}}) {{.Name}} {
 
 // IfElse returns x but with elements set to y where mask is false.
 func (x {{.Name}}) IfElse(mask Mask{{.ElemSize}}x{{.Count}}, y {{.Name}}) {{.Name}} {
-	im := mask.ToInt{{.ElemSize}}x{{.Count}}()
+	im := mask.ToInt{{.ElemSize}}x{{.Count}}().ToBits()
 	return x.BitSelect(y, im)
 }
 `)
@@ -1340,7 +1407,7 @@ var toString = templateOf("toString",
 func (x {{.Name}}) String() string {
 	var s [{{.Count}}]{{.Elem}}
 	x.StoreArray(&s)
-	return sliceToString(s[:])
+	return simdfmt.SliceToString(s[:])
 }
 `)
 
@@ -1349,7 +1416,7 @@ var maskToString = templateOf("maskToString",
 func (x Mask{{.ElemSize}}x{{.Count}}) String() string {
 	var s [{{.Count}}]{{.Elem}}
 	x.ToInt{{.ElemSize}}x{{.Count}}().Neg().StoreArray(&s)
-	return sliceToString(s[:])
+	return simdfmt.SliceToString(s[:])
 }
 `)
 
@@ -1400,6 +1467,8 @@ func genOps(f *bytes.Buffer) {
 	fmt.Fprintln(f, "//go:build goexperiment.simd && wasm")
 	fmt.Fprintln(f)
 	fmt.Fprintln(f, "package archsimd")
+	fmt.Fprintln(f)
+	fmt.Fprintln(f, `import "simd/internal/simdfmt"`)
 	fmt.Fprintln(f)
 
 	// Basic operations
@@ -1584,6 +1653,20 @@ func genSSARules(f *bytes.Buffer) {
 			panic("Haven't figured out SSA rule for " + op.String())
 		}
 
+	}
+
+	// Fold x.HiToLo().ExtendTo*() into extend_high. HiToLo moves the high
+	// 64 bits of x into the low 64 bits of a zero vector by way of
+	// f64x2.extract_lane and f64x2.replace_lane, and extend_low reads only
+	// the low 64 bits, so the vector being replaced into doesn't matter.
+	fmt.Fprintln(f)
+	fmt.Fprintln(f, "// x.HiToLo().ExtendTo*() => extend_high")
+	for _, op := range wasmOps {
+		if !strings.HasPrefix(op.op, "extend_low") {
+			continue
+		}
+		hi := op.T().Methods[strings.Replace(op.op, "low", "high", 1)]
+		fmt.Fprintf(f, "(%s (F64x2ReplaceLane [0] _ (F64x2ExtractLane [1] x))) => (%s x)\n", op.SsaWasmOp(), hi.SsaWasmOp())
 	}
 }
 
@@ -1784,6 +1867,11 @@ func genWasmSSA(f *bytes.Buffer) {
 				fmt.Fprintf(f,
 					`		getValue128(s, v.Args[0])
 		s.Prog(v.Op.Asm())
+		if extend && v.Type.IsBoolean() {
+			// The tests, like v128.any_true, produce an i32, but
+			// the rest of the backend expects booleans to be i64s.
+			s.Prog(wasm.AI64ExtendI32U)
+		}
 `)
 			case VV:
 				fmt.Fprintf(f,
@@ -1859,8 +1947,8 @@ func genGenerics(f *bytes.Buffer) {
 		newOps = append(newOps, newOp)
 	}
 
-	buf := sgutil.MergeSIMDGenericOps(newOps, genFlags.InputPath(*genGenOpsFile), "wasm")
-	f.Write(buf.Bytes())
+	fmt.Fprintf(f, "// Code generated by 'wasmgen'; DO NOT EDIT.\n\n")
+	sgutil.WriteSIMDGenericOps(f, newOps, "wasm")
 }
 
 // genIntrinsics creates the function that registers all of the WASM SIMD intrinsics.

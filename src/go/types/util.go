@@ -56,3 +56,43 @@ func endPos(n ast.Node) token.Pos { return n.End() }
 func makeFromLiteral(lit string, kind token.Token) constant.Value {
 	return constant.MakeFromLiteral(lit, kind, 0)
 }
+
+// unTilde returns the operand of ~x and true, or x and false.
+func unTilde(x ast.Expr) (ast.Expr, bool) {
+	if op, _ := x.(*ast.UnaryExpr); op != nil && op.Op == token.TILDE {
+		return op.X, true
+	}
+	return x, false
+}
+
+// splitOr returns the operands of x | y, or nil, nil.
+func splitOr(e ast.Expr) (x, y ast.Expr) {
+	if op, _ := e.(*ast.BinaryExpr); op != nil && op.Op == token.OR {
+		return op.X, op.Y
+	}
+	return nil, nil
+}
+
+// newIdent returns a new identifier with the given position and name.
+func newIdent(pos token.Pos, name string) *ast.Ident {
+	return &ast.Ident{NamePos: pos, Name: name}
+}
+
+// If x represents an index expression, unpackIndexExpr returns the indexed expression
+// and, if unpackParams is set, its indices. If unpackParams is not set, indices is nil.
+// If x is not an index expression, unpackIndexExpr returns (nil, nil).
+func unpackIndexExpr(x ast.Expr, unpackParams bool) (indexed ast.Expr, indices []ast.Expr) {
+	switch ix := x.(type) {
+	case *ast.IndexExpr:
+		indexed = ix.X
+		if unpackParams {
+			indices = []ast.Expr{ix.Index}
+		}
+	case *ast.IndexListExpr:
+		indexed = ix.X
+		if unpackParams {
+			indices = ix.Indices
+		}
+	}
+	return
+}

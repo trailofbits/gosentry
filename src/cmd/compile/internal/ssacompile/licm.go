@@ -65,12 +65,13 @@ func licm(f *ssa.Func) {
 		for _, v := range b.Values {
 			if ssaop.OpcodeTable[v.Op].EarlyOk {
 				// Double check we didn't mark the wrong ops as earlyOk
-				if v.Type.IsMemory() || ssaop.OpcodeTable[v.Op].NilCheck || ssaop.OpcodeTable[v.Op].HasSideEffects || v.MemoryArg() != nil {
+				if (v.Type.IsMemory() || ssaop.OpcodeTable[v.Op].NilCheck || ssaop.OpcodeTable[v.Op].HasSideEffects || v.MemoryArg() != nil) && v.Op != ssaop.OpInlMark {
 					v.Fatalf("op %s has bad earlyOk mark", v.Op)
 				}
-				if !v.Type.IsPtr() {
+				if !v.Type.IsPtrShaped() {
 					// Note: can't move pointer arithmetic, as it may be guarded by conditionals
 					// and thus could materialize a bad pointer across a safepoint.
+					// This includes unsafe.Pointer arithmetic. See issue 82865.
 
 					continue // Ok to lift out of loop.
 				}

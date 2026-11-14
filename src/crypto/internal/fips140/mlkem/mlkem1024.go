@@ -142,6 +142,7 @@ func NewDecapsulationKey1024(seed []byte) (*DecapsulationKey1024, error) {
 }
 
 func newKeyFromSeed1024(dk *DecapsulationKey1024, seed []byte) (*DecapsulationKey1024, error) {
+	fipsSelfTest()
 	if len(seed) != SeedSize {
 		return nil, errors.New("mlkem: invalid seed length")
 	}
@@ -305,7 +306,7 @@ func kemEncaps1024(cc *[CiphertextSize1024]byte, ek *EncapsulationKey1024, m *[m
 	g.Write(m[:])
 	g.Write(ek.h[:])
 	G := g.Sum(nil)
-	K, r := G[:SharedKeySize], G[SharedKeySize:]
+	K, r := G[:SharedKeySize:SharedKeySize], G[SharedKeySize:]
 	c = pkeEncrypt1024(cc, &ek.encryptionKey1024, m, r)
 	return K, c
 }
@@ -410,6 +411,8 @@ func (dk *DecapsulationKey1024) Decapsulate(ciphertext []byte) (sharedKey []byte
 	return kemDecaps1024(dk, c), nil
 }
 
+var testingOnlyRejectionOutcome1024 func(int)
+
 // kemDecaps1024 produces a shared key from a ciphertext.
 //
 // It implements ML-KEM.Decaps_internal according to FIPS 203, Algorithm 18.
@@ -428,6 +431,10 @@ func kemDecaps1024(dk *DecapsulationKey1024, c *[CiphertextSize1024]byte) (K []b
 	J.Read(Kout)
 	var cc [CiphertextSize1024]byte
 	c1 := pkeEncrypt1024(&cc, &dk.encryptionKey1024, (*[32]byte)(m), r)
+
+	if testingOnlyRejectionOutcome1024 != nil {
+		testingOnlyRejectionOutcome1024(subtle.ConstantTimeCompare(c[:], c1))
+	}
 
 	subtle.ConstantTimeCopy(subtle.ConstantTimeCompare(c[:], c1), Kout, Kprime)
 	return Kout

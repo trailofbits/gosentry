@@ -21,11 +21,11 @@ go build .
 
 go list -deps -f '{{.ImportPath}} {{.Dir}}' .
 stdout $GOPATH[/\\]src[/\\]vendor[/\\]golang.org[/\\]x[/\\]net[/\\]http2[/\\]hpack
-! stdout $GOROOT[/\\]src[/\\]vendor
+! stdout $GOROOT[/\\]src[/\\]vendor[/\\]golang.org[/\\]x[/\\]net[/\\]http2[/\\]hpack
 
 go list -test -deps -f '{{.ImportPath}} {{.Dir}}' .
 stdout $GOPATH[/\\]src[/\\]vendor[/\\]golang.org[/\\]x[/\\]net[/\\]http2[/\\]hpack
-! stdout $GOROOT[/\\]src[/\\]vendor
+! stdout $GOROOT[/\\]src[/\\]vendor[/\\]golang.org[/\\]x[/\\]net[/\\]http2[/\\]hpack
 
 -- issue16333/issue16333.go --
 package vendoring17

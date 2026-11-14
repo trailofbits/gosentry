@@ -542,7 +542,7 @@ func (state *pclntab) generateFuncdata(ctxt *Link, funcs []loader.Sym, inlsyms m
 			continue
 		}
 		fi.Preload()
-		fd := funcData(ldr, s, fi, inlsyms[s], fd)
+		fd = funcData(ldr, s, fi, inlsyms[s], fd)
 		for j, fdSym := range fd {
 			if ignoreFuncData(ldr, s, j, fdSym) {
 				continue
@@ -994,6 +994,10 @@ func expandGoroot(s string) string {
 	if len(s) >= n+1 && s[:n] == "$GOROOT" && (s[n] == '/' || s[n] == '\\') {
 		if final := buildcfg.GOROOT; final != "" {
 			return filepath.ToSlash(filepath.Join(final, s[n:]))
+		}
+		// Without GOROOT, as with -trimpath, trim to the import path.
+		if rest, ok := strings.CutPrefix(s[n+1:], "src/"); ok {
+			return rest
 		}
 	}
 	return s

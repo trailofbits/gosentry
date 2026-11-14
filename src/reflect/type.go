@@ -17,6 +17,7 @@ package reflect
 
 import (
 	"internal/abi"
+	"internal/bytealg"
 	"internal/goarch"
 	"iter"
 	"runtime"
@@ -676,35 +677,58 @@ func (t *rtype) Method(i int) (m Method) {
 }
 
 func (t *rtype) MethodByName(name string) (m Method, ok bool) {
+	if i := t.methodIndex(name); i >= 0 {
+		return t.Method(i), true
+	}
+	return Method{}, false
+}
+
+// methodIndex returns the index of the method with the given name in t's
+// method set, or -1.
+func (t *rtype) methodIndex(name string) int {
 	if t.Kind() == Interface {
 		tt := (*interfaceType)(unsafe.Pointer(t))
-		return tt.MethodByName(name)
+		for i := range tt.Methods {
+			if tt.nameOff(tt.Methods[i].Name).Name() == name {
+				return i
+			}
+		}
+		return -1
 	}
 	ut := t.uncommon()
 	if ut == nil {
-		return Method{}, false
+		return -1
 	}
 
 	methods := ut.ExportedMethods()
 
-	// We are looking for the first index i where the string becomes >= s.
-	// This is a copy of sort.Search, with f(h) replaced by (t.nameOff(methods[h].name).name() >= name).
+	// We are looking for the first index i where the method name becomes
+	// >= name. This is a copy of sort.Find, with cmp(h) replaced by
+	// comparing the name of method h against name.
+	//
+	// Invariant: cmp(i-1) < 0, cmp(j) >= 0,
+	// and found == (j < len(methods) && cmp(j) == 0).
 	i, j := 0, len(methods)
+	// found only goes from false to true: j only decreases, and the methods
+	// are sorted by name, so a method below one whose name compares equal
+	// cannot compare greater.
+	found := false
 	for i < j {
 		h := int(uint(i+j) >> 1) // avoid overflow when computing h
 		// i ≤ h < j
-		if !(t.nameOff(methods[h].Name).Name() >= name) {
-			i = h + 1 // preserves f(i-1) == false
+		if c := bytealg.CompareString(t.nameOff(methods[h].Name).Name(), name); c < 0 {
+			i = h + 1 // preserves cmp(i-1) < 0
 		} else {
-			j = h // preserves f(j) == true
+			j = h // preserves cmp(j) >= 0
+			found = c == 0
 		}
 	}
-	// i == j, f(i-1) == false, and f(j) (= f(i)) == true  =>  answer is i.
-	if i < len(methods) && name == t.nameOff(methods[i].Name).Name() {
-		return t.Method(i), true
+	// i == j, cmp(i-1) < 0, and cmp(j) (= cmp(i)) >= 0  =>  answer is i,
+	// and found reports whether methods[i] is the method we want.
+	if found {
+		return i
 	}
-
-	return Method{}, false
+	return -1
 }
 
 func (t *rtype) PkgPath() string {

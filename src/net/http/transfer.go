@@ -150,7 +150,7 @@ func newTransferWriter(r any) (t *transferWriter, err error) {
 	// Validate Trailer names and values. The names are later written
 	// unmodified on the "Trailer:" line of the header, so invalid bytes
 	// (in particular CR and LF) would permit header injection. (Issue 78775.)
-	if err := validateHeaders(t.Trailer); err != "" {
+	if err := validateTrailers(t.Trailer); err != "" {
 		return nil, fmt.Errorf("net/http: invalid trailer %s", err)
 	}
 
@@ -284,7 +284,7 @@ func (t *transferWriter) shouldSendContentLength() bool {
 }
 
 func (t *transferWriter) writeHeader(w io.Writer, trace *httptrace.ClientTrace) error {
-	if t.Close && !hasToken(t.Header.get("Connection"), "close") {
+	if t.Close && !httpguts.HeaderValuesContainsToken(t.Header["Connection"], "close") {
 		if _, err := io.WriteString(w, "Connection: close\r\n"); err != nil {
 			return err
 		}
@@ -468,15 +468,7 @@ func (t *transferReader) protoAtLeast(m, n int) bool {
 // bodyAllowedForStatus reports whether a given response status code
 // permits a body. See RFC 7230, section 3.3.
 func bodyAllowedForStatus(status int) bool {
-	switch {
-	case status >= 100 && status <= 199:
-		return false
-	case status == 204:
-		return false
-	case status == 304:
-		return false
-	}
-	return true
+	return internal.BodyAllowedForStatus(status)
 }
 
 var (
@@ -537,7 +529,7 @@ func readTransfer(msg any, r *bufio.Reader, maxTrailerHeaders int64) (err error)
 	}
 
 	// Trailer
-	t.Trailer, err = fixTrailer(t.Header, t.Chunked)
+	t.Trailer, err = fixTrailer(t.Header, t.Chunked, maxTrailerHeaders)
 	if err != nil {
 		return err
 	}
@@ -657,6 +649,10 @@ func (t *transferReader) determineBodyLength(isResponse bool) error {
 	if err != nil {
 		return err
 	}
+	if parsedContentLength >= 0 {
+		contentLength = contentLength[:1]   // Handle duplicate Content-Length headers.
+		contentLength[0] = contentLengthStr // Reuse existing slice to avoid extra alloc.
+	}
 
 	// 1. "Any response to a HEAD request and any response with a
 	//    1xx (Informational), 204 (No Content), or 304 (Not Modified)
@@ -670,7 +666,7 @@ func (t *transferReader) determineBodyLength(isResponse bool) error {
 			t.Chunked = true
 			t.ContentLength = -1
 		} else if parsedContentLength >= 0 {
-			t.Header.Set("Content-Length", contentLengthStr)
+			t.Header["Content-Length"] = contentLength
 			t.ContentLength = parsedContentLength
 		} else {
 			t.ContentLength = -1
@@ -690,7 +686,7 @@ func (t *transferReader) determineBodyLength(isResponse bool) error {
 		if hasTransferEncoding {
 			t.Chunked = true // sets Transfer-Encoding header
 		} else if parsedContentLength >= 0 {
-			t.Header.Set("Content-Length", contentLengthStr)
+			t.Header["Content-Length"] = contentLength
 		}
 		return nil
 	}
@@ -704,6 +700,16 @@ func (t *transferReader) determineBodyLength(isResponse bool) error {
 		t.RealBodyLength = -1
 		t.ContentLength = -1
 		t.Close = true
+		if hasContentLength && parsedContentLength == 0 {
+			// This is not particularly principled, but avoids breaking some
+			// users depending on past behavior. If a 2xx CONNECT response contains
+			// a "Content-Length: 0" header, we leave the header in place and
+			// set the content length to 0 (so Response.Body is NoBody).
+			// We still set t.Close to close the connection.
+			t.RealBodyLength = 0
+			t.ContentLength = 0
+			t.Header["Content-Length"] = contentLength
+		}
 		return nil
 	}
 
@@ -751,7 +757,7 @@ func (t *transferReader) determineBodyLength(isResponse bool) error {
 	//    without Transfer-Encoding, its decimal value defines the
 	//    expected message body length in octets."
 	if parsedContentLength >= 0 {
-		t.Header.Set("Content-Length", contentLengthStr)
+		t.Header["Content-Length"] = contentLength
 		t.RealBodyLength = parsedContentLength
 		t.ContentLength = parsedContentLength
 		return nil
@@ -798,7 +804,7 @@ func shouldClose(major, minor int, header Header, removeCloseHeader bool) bool {
 }
 
 // Parse the trailer header.
-func fixTrailer(header Header, chunked bool) (Header, error) {
+func fixTrailer(header Header, chunked bool, maxHeaders int64) (Header, error) {
 	vv, ok := header["Trailer"]
 	if !ok {
 		return nil, nil
@@ -814,6 +820,12 @@ func fixTrailer(header Header, chunked bool) (Header, error) {
 		return nil, nil
 	}
 	header.Del("Trailer")
+	for _, v := range vv {
+		maxHeaders -= int64(strings.Count(v, ",") + 1)
+		if maxHeaders < 0 {
+			return nil, errTooLarge
+		}
+	}
 
 	trailer := make(Header)
 	var err error

@@ -15,6 +15,7 @@ import (
 	"cmd/compile/internal/ssa/block"
 	"cmd/compile/internal/ssa/ssabase"
 	"cmd/compile/internal/ssa/ssaop"
+	"cmd/compile/internal/stats"
 	"cmd/compile/internal/typecheck"
 	"cmd/compile/internal/types"
 	"cmd/internal/obj"
@@ -114,6 +115,7 @@ const (
 	constInterfaceMagic   = 2233445566
 	constNilMagic         = 3344556677
 	constEmptyStringMagic = 4455667788
+	constSIMDMagic        = 5566778899
 )
 
 // IsMergeCandidate returns true if variable n could participate in
@@ -147,6 +149,15 @@ func (c *Config) NewFunc(fe Frontend, cache *Cache) *Func {
 		CanonicalLocalSplits: make(map[LocalSlotSplitKey]*LocalSlot),
 		OwnAux:               &AuxCall{},
 	}
+}
+
+func (f *Func) NewStats(prefix string) *stats.PrefixStats {
+	fef := f.Fe.Func()
+	if fef == nil {
+		return nil
+	}
+	s := fef.Stats
+	return s.NewPrefixStat(prefix)
 }
 
 // NumBlocks returns an integer larger than the id of any Block in the Func.
@@ -421,6 +432,8 @@ func (f *Func) UnCache(v *Value) {
 				aux = constEmptyStringMagic
 			case ssaop.OpConstInterface:
 				aux = constInterfaceMagic
+			case ssaop.OpZeroSIMD:
+				aux = constSIMDMagic
 			}
 			if aux != 0 && f.unCacheLine(v, aux) {
 				return
@@ -770,6 +783,10 @@ func (f *Func) ConstEmptyString(t *types.Type) *Value {
 	v := f.ConstVal(ssaop.OpConstString, t, constEmptyStringMagic, false)
 	v.Aux = StringToAux("")
 	return v
+}
+
+func (f *Func) ConstSIMD(t *types.Type) *Value {
+	return f.ConstVal(ssaop.OpZeroSIMD, t, constSIMDMagic, false)
 }
 
 func (f *Func) ConstOffPtrSP(t *types.Type, c int64, sp *Value) *Value {

@@ -21,6 +21,19 @@ func TestCeil(t *testing.T) {
 	testFloat64x2Unary(t, archsimd.Float64x2.Ceil, ceilSlice[float64])
 }
 
+func TestHiToLo(t *testing.T) {
+	testInt8x16Unary(t, archsimd.Int8x16.HiToLo, hiToLoSlice[int8])
+	testInt16x8Unary(t, archsimd.Int16x8.HiToLo, hiToLoSlice[int16])
+	testInt32x4Unary(t, archsimd.Int32x4.HiToLo, hiToLoSlice[int32])
+	testInt64x2Unary(t, archsimd.Int64x2.HiToLo, hiToLoSlice[int64])
+	testUint8x16Unary(t, archsimd.Uint8x16.HiToLo, hiToLoSlice[uint8])
+	testUint16x8Unary(t, archsimd.Uint16x8.HiToLo, hiToLoSlice[uint16])
+	testUint32x4Unary(t, archsimd.Uint32x4.HiToLo, hiToLoSlice[uint32])
+	testUint64x2Unary(t, archsimd.Uint64x2.HiToLo, hiToLoSlice[uint64])
+	testFloat32x4Unary(t, archsimd.Float32x4.HiToLo, hiToLoSlice[float32])
+	testFloat64x2Unary(t, archsimd.Float64x2.HiToLo, hiToLoSlice[float64])
+}
+
 func TestFloor(t *testing.T) {
 	testFloat32x4Unary(t, archsimd.Float32x4.Floor, floorSlice[float32])
 	testFloat64x2Unary(t, archsimd.Float64x2.Floor, floorSlice[float64])
@@ -50,12 +63,6 @@ func TestNot(t *testing.T) {
 func TestAbs(t *testing.T) {
 	testFloat32x4Unary(t, archsimd.Float32x4.Abs, map1[float32](abs))
 	testFloat64x2Unary(t, archsimd.Float64x2.Abs, map1[float64](abs))
-	testInt8x16Unary(t, archsimd.Int8x16.Abs, map1[int8](abs))
-	testInt16x8Unary(t, archsimd.Int16x8.Abs, map1[int16](abs))
-	testInt32x4Unary(t, archsimd.Int32x4.Abs, map1[int32](abs))
-	if runtime.GOARCH != "amd64" || archsimd.X86.AVX512() {
-		testInt64x2Unary(t, archsimd.Int64x2.Abs, map1[int64](abs))
-	}
 }
 
 func TestNeg(t *testing.T) {
@@ -68,9 +75,9 @@ func TestNeg(t *testing.T) {
 }
 
 func TestOnesCount(t *testing.T) {
-	if runtime.GOARCH == "amd64" && !archsimd.X86.AVX512BITALG() {
-		t.Skip("OnesCount on 128-bit 8-bit vectors on amd64 requires AVX512BITALG")
-	}
 	testInt8x16Unary(t, archsimd.Int8x16.OnesCount, map1[int8](onesCount))
+	if runtime.GOARCH == "amd64" && !archsimd.X86.AVX512BITALG() {
+		t.Skip("OnesCount on 128-bit Uint8x16 vectors on amd64 requires AVX512BITALG")
+	}
 	testUint8x16Unary(t, archsimd.Uint8x16.OnesCount, map1[uint8](onesCount))
 }

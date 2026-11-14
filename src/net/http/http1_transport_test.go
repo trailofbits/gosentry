@@ -6,9 +6,11 @@ package http_test
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"internal/nettest"
+	"io"
 	"net"
 	"net/http"
 	"slices"
@@ -157,11 +159,19 @@ type http1TestDial struct {
 }
 
 func (dial *http1TestDial) connect() *http1TestConn {
+	return dial.connectConfig(nil)
+}
+
+func (dial *http1TestDial) connectConfig(f func(cliConn *nettest.Conn) net.Conn) *http1TestConn {
 	cliConn, srvConn := nettest.NewConnPair()
 	dial.t.Cleanup(func() {
 		srvConn.Close()
 	})
-	dial.resultc <- connOrError{conn: cliConn}
+	if f == nil {
+		dial.resultc <- connOrError{conn: cliConn}
+	} else {
+		dial.resultc <- connOrError{conn: f(cliConn)}
+	}
 	srvConn.SetReadError(errWouldBlock) // effectively make reads non-blocking
 	return &http1TestConn{
 		t:    dial.t,
@@ -252,5 +262,26 @@ func (rt *testRoundTrip) wantStatus(want int) {
 	t.Helper()
 	if got := rt.response().StatusCode; got != want {
 		t.Fatalf("got response status %v, want %v", got, want)
+	}
+}
+
+// readBody reads the contents of the response body.
+func (rt *testRoundTrip) readBody() ([]byte, error) {
+	t := rt.t
+	t.Helper()
+	return io.ReadAll(rt.response().Body)
+}
+
+// wantBody indicates the expected response body.
+// (Note that this consumes the body.)
+func (rt *testRoundTrip) wantBody(want []byte) {
+	t := rt.t
+	t.Helper()
+	got, err := rt.readBody()
+	if err != nil {
+		t.Fatalf("unexpected error reading response body: %v", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("unexpected response body:\ngot:  %q\nwant: %q", got, want)
 	}
 }

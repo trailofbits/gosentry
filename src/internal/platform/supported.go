@@ -57,6 +57,22 @@ func ASanSupported(goos, goarch string) bool {
 	}
 }
 
+// FIPS140Supported reports whether goos/goarch supports FIPS 140-3 mode.
+// It does not consider non-platform constraints such as the purego build tag,
+// -asan, or GOEXPERIMENT=boringcrypto.
+// There is a copy of this function in cmd/dist/test.go.
+func FIPS140Supported(goos, goarch string) bool {
+	// Keep this in sync with crypto/internal/fips140.Supported.
+	switch {
+	case goarch == "wasm",
+		goos == "windows" && goarch == "386",
+		goos == "openbsd",
+		goos == "aix":
+		return false
+	}
+	return true
+}
+
 // FuzzSupported reports whether goos/goarch supports fuzzing
 // ('go test -fuzz=.').
 func FuzzSupported(goos, goarch string) bool {
@@ -186,7 +202,7 @@ func BuildModeSupported(compiler, buildmode, goos, goarch string) bool {
 			"darwin/amd64", "darwin/arm64",
 			"ios/amd64", "ios/arm64",
 			"aix/ppc64",
-			"openbsd/arm64",
+			"openbsd/amd64", "openbsd/arm64",
 			"windows/386", "windows/amd64", "windows/arm64":
 			return true
 		}
@@ -218,6 +234,7 @@ func InternalLinkPIESupported(goos, goarch string) bool {
 	switch goos + "/" + goarch {
 	case "android/arm64",
 		"darwin/amd64", "darwin/arm64",
+		"freebsd/amd64",
 		"linux/amd64", "linux/arm64", "linux/loong64", "linux/ppc64", "linux/ppc64le", "linux/s390x",
 		"windows/386", "windows/amd64", "windows/arm64":
 		return true

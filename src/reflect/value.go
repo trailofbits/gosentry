@@ -258,7 +258,8 @@ func (f flag) mustBeAssignableSlow() {
 }
 
 // Addr returns a pointer value representing the address of v.
-// It panics if [Value.CanAddr] returns false.
+// It panics if v is not addressable.
+// [Value.CanAddr] can be used to check for an addressable value.
 // Addr is typically used to obtain a pointer to a struct field
 // or slice element in order to call a method that requires a
 // pointer receiver.
@@ -336,7 +337,13 @@ func (v Value) runes() []rune {
 // Such values are called addressable. A value is addressable if it is
 // an element of a slice, an element of an addressable array,
 // a field of an addressable struct, or the result of dereferencing a pointer.
-// If CanAddr returns false, calling [Value.Addr] will panic.
+// The underlying value of an interface is not addressable,
+// and neither is a map key or value.
+//
+// If CanAddr returns false, then calling the following methods will panic:
+//   - [Value.Addr], [Value.UnsafeAddr], or [Value.Grow],
+//   - [Value.Set] and related methods (see [Value.CanSet]), and
+//   - [Value.Bytes], [Value.Slice] and [Value.Slice3] when v is an array.
 func (v Value) CanAddr() bool {
 	return v.flag&flagAddr != 0
 }
@@ -346,6 +353,7 @@ func (v Value) CanAddr() bool {
 // obtained by the use of unexported struct fields.
 // If CanSet returns false, calling [Value.Set] or any type-specific
 // setter (e.g., [Value.SetBool], [Value.SetInt]) will panic.
+// Calling [Value.Grow] will also panic.
 func (v Value) CanSet() bool {
 	return v.flag&(flagAddr|flagRO) == flagAddr
 }
@@ -1212,6 +1220,8 @@ func (v Value) Complex() complex128 {
 
 // Elem returns the value that the interface v contains
 // or that the pointer v points to.
+// If v is a non-nil pointer, the returned Value is addressable.
+// If v is an interface, the returned Value is not addressable.
 // It panics if v's Kind is not [Interface] or [Pointer].
 // It returns the zero Value if v is nil.
 func (v Value) Elem() Value {
@@ -1257,6 +1267,7 @@ func (v Value) Elem() Value {
 }
 
 // Field returns the i'th field of the struct v.
+// The field value of an addressable struct is addressable.
 // It panics if v's Kind is not [Struct] or i is out of range.
 func (v Value) Field(i int) Value {
 	if v.kind() != Struct {
@@ -1301,8 +1312,9 @@ func (v Value) Field(i int) Value {
 }
 
 // FieldByIndex returns the nested field corresponding to index.
-// It panics if evaluation requires stepping through a nil
-// pointer or a field that is not a struct.
+// The field value of an addressable struct is addressable.
+// It panics if evaluation requires stepping through a nil pointer or
+// a field that is not a struct.
 func (v Value) FieldByIndex(index []int) Value {
 	if len(index) == 1 {
 		return v.Field(index[0])
@@ -1323,9 +1335,9 @@ func (v Value) FieldByIndex(index []int) Value {
 }
 
 // FieldByIndexErr returns the nested field corresponding to index.
-// It returns an error if evaluation requires stepping through a nil
-// pointer, but panics if it must step through a field that
-// is not a struct.
+// The field value of an addressable struct is addressable.
+// It returns an error if evaluation requires stepping through a nil pointer,
+// but panics if it must step through a field that is not a struct.
 func (v Value) FieldByIndexErr(index []int) (Value, error) {
 	if len(index) == 1 {
 		return v.Field(index[0]), nil
@@ -1393,6 +1405,7 @@ func (v Value) Float() float64 {
 var uint8Type = rtypeOf(uint8(0))
 
 // Index returns v's i'th element.
+// The element of a slice or an addressable array is addressable.
 // It panics if v's Kind is not [Array], [Slice], or [String] or i is out of range.
 func (v Value) Index(i int) Value {
 	switch v.kind() {
@@ -1932,11 +1945,11 @@ func (v Value) MethodByName(name string) Value {
 	if v.typ() == nil {
 		panic(&ValueError{"reflect.Value.MethodByName", Invalid})
 	}
-	m, ok := toRType(v.typ()).MethodByName(name)
-	if !ok {
+	i := toRType(v.typ()).methodIndex(name)
+	if i < 0 {
 		return Value{}
 	}
-	return v.Method(m.Index)
+	return v.Method(i)
 }
 
 // NumField returns the number of fields in the struct v.

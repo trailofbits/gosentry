@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"internal/analysis/suite/vet"
 	"internal/testenv"
 	"log"
 	"os"
@@ -23,8 +24,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-
-	"golang.org/x/tools/go/analysis/suite/vet"
 )
 
 // TestMain executes the test binary as the vet command if
@@ -63,7 +62,7 @@ func TestVet(t *testing.T) {
 			case "testtag", "stdversion":
 				t.Skipf("%s has its own test", name)
 
-			case "loopclosure":
+			case "loopclosure", "stringintconv":
 				t.Skipf("%s is no longer needed", name)
 
 			case "cgocall":

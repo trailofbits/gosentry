@@ -452,6 +452,7 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		ssagen.AddAux(&p.From, v)
 		p.To.Type = obj.TYPE_REG
 		p.To.Reg = v.Reg()
+
 	case ssaop.OpLOONG64MOVBstore,
 		ssaop.OpLOONG64MOVHstore,
 		ssaop.OpLOONG64MOVWstore,

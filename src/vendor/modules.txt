@@ -2,7 +2,7 @@
 ## explicit; go 1.20
 go.uber.org/goleak
 go.uber.org/goleak/internal/stack
-# golang.org/x/crypto v0.57.0
+# golang.org/x/crypto v0.58.0
 ## explicit; go 1.26.0
 golang.org/x/crypto/chacha20
 golang.org/x/crypto/chacha20poly1305
@@ -11,7 +11,7 @@ golang.org/x/crypto/cryptobyte/asn1
 golang.org/x/crypto/hkdf
 golang.org/x/crypto/internal/alias
 golang.org/x/crypto/internal/poly1305
-# golang.org/x/net v0.59.0
+# golang.org/x/net v0.61.1-0.20261022225259-05c76ee9adc5
 ## explicit; go 1.26.0
 golang.org/x/net/dns/dnsmessage
 golang.org/x/net/http/httpguts
@@ -22,12 +22,92 @@ golang.org/x/net/internal/quic/quicwire
 golang.org/x/net/lif
 golang.org/x/net/nettest
 golang.org/x/net/quic
-# golang.org/x/sys v0.48.0
+# golang.org/x/sys v0.49.0
 ## explicit; go 1.26.0
 golang.org/x/sys/cpu
-# golang.org/x/text v0.42.0
+# golang.org/x/text v0.43.0
 ## explicit; go 1.26.0
 golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
+# golang.org/x/tools v0.52.1-0.20261030190145-0f433775b36d
+## explicit; go 1.26.0
+golang.org/x/tools/go/analysis
+golang.org/x/tools/go/analysis/internal/analysisflags
+golang.org/x/tools/go/analysis/passes/appends
+golang.org/x/tools/go/analysis/passes/asmdecl
+golang.org/x/tools/go/analysis/passes/assign
+golang.org/x/tools/go/analysis/passes/atomic
+golang.org/x/tools/go/analysis/passes/bools
+golang.org/x/tools/go/analysis/passes/buildtag
+golang.org/x/tools/go/analysis/passes/cgocall
+golang.org/x/tools/go/analysis/passes/composite
+golang.org/x/tools/go/analysis/passes/copylock
+golang.org/x/tools/go/analysis/passes/ctrlflow
+golang.org/x/tools/go/analysis/passes/defers
+golang.org/x/tools/go/analysis/passes/directive
+golang.org/x/tools/go/analysis/passes/errorsas
+golang.org/x/tools/go/analysis/passes/framepointer
+golang.org/x/tools/go/analysis/passes/hostport
+golang.org/x/tools/go/analysis/passes/httpresponse
+golang.org/x/tools/go/analysis/passes/ifaceassert
+golang.org/x/tools/go/analysis/passes/inline
+golang.org/x/tools/go/analysis/passes/inspect
+golang.org/x/tools/go/analysis/passes/internal/gofixdirective
+golang.org/x/tools/go/analysis/passes/loopclosure
+golang.org/x/tools/go/analysis/passes/lostcancel
+golang.org/x/tools/go/analysis/passes/modernize
+golang.org/x/tools/go/analysis/passes/nilfunc
+golang.org/x/tools/go/analysis/passes/printf
+golang.org/x/tools/go/analysis/passes/scannererr
+golang.org/x/tools/go/analysis/passes/shift
+golang.org/x/tools/go/analysis/passes/sigchanyzer
+golang.org/x/tools/go/analysis/passes/slog
+golang.org/x/tools/go/analysis/passes/sqlrowserr
+golang.org/x/tools/go/analysis/passes/stdmethods
+golang.org/x/tools/go/analysis/passes/stdversion
+golang.org/x/tools/go/analysis/passes/stringintconv
+golang.org/x/tools/go/analysis/passes/structtag
+golang.org/x/tools/go/analysis/passes/testinggoroutine
+golang.org/x/tools/go/analysis/passes/tests
+golang.org/x/tools/go/analysis/passes/timeformat
+golang.org/x/tools/go/analysis/passes/unmarshal
+golang.org/x/tools/go/analysis/passes/unreachable
+golang.org/x/tools/go/analysis/passes/unsafeptr
+golang.org/x/tools/go/analysis/passes/unusedresult
+golang.org/x/tools/go/analysis/passes/waitgroup
+golang.org/x/tools/go/analysis/suite/fix
+golang.org/x/tools/go/analysis/suite/vet
+golang.org/x/tools/go/analysis/unitchecker
+golang.org/x/tools/go/ast/astutil
+golang.org/x/tools/go/ast/edge
+golang.org/x/tools/go/ast/inspector
+golang.org/x/tools/go/cfg
+golang.org/x/tools/go/gcexportdata
+golang.org/x/tools/go/types/objectpath
+golang.org/x/tools/go/types/typeutil
+golang.org/x/tools/internal/analysis/analyzerutil
+golang.org/x/tools/internal/analysis/driverutil
+golang.org/x/tools/internal/analysis/intconv
+golang.org/x/tools/internal/analysis/typeindex
+golang.org/x/tools/internal/astutil
+golang.org/x/tools/internal/astutil/free
+golang.org/x/tools/internal/cursorutil
+golang.org/x/tools/internal/diff
+golang.org/x/tools/internal/diff/lcs
+golang.org/x/tools/internal/facts
+golang.org/x/tools/internal/fmtstr
+golang.org/x/tools/internal/gcimporter
+golang.org/x/tools/internal/moreiters
+golang.org/x/tools/internal/moremaps
+golang.org/x/tools/internal/packagepath
+golang.org/x/tools/internal/pkgbits
+golang.org/x/tools/internal/refactor
+golang.org/x/tools/internal/refactor/inline
+golang.org/x/tools/internal/stdlib
+golang.org/x/tools/internal/typeparams
+golang.org/x/tools/internal/typesinternal
+golang.org/x/tools/internal/typesinternal/typeindex
+golang.org/x/tools/internal/versions
+golang.org/x/tools/refactor/satisfy

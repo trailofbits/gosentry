@@ -1,9 +1,69 @@
 !sum
 - go: Max
+  out:
+  - base: int|uint
   commutative: true
-  documentation: !string |-
+  documentation: &maxDoc !string |-
     // NAME computes the maximum of each pair of corresponding elements in x and y.
 - go: Min
+  out:
+  - base: int|uint
   commutative: true
-  documentation: !string |-
+  documentation: &minDoc !string |-
     // NAME computes the minimum of each pair of corresponding elements in x and y.
+
+# On AMD64, floating-point Min and Max select the second operand for NaNs
+# and equal zeros. Generic ops are shared across architectures, so their
+# operands must stay ordered even on targets with different semantics.
+- go: Max
+  out:
+  - base: float
+  commutative: false
+  documentation: *maxDoc
+- go: Min
+  out:
+  - base: float
+  commutative: false
+  documentation: *minDoc
+- go: ConcatMaxPairs
+  commutative: false
+  out:
+  - elemBits: 8|16
+  documentation: !string |-
+    // NAME horizontally computes the maximum of adjacent pairs of elements.
+    // For x = [x0, x1, x2, x3, ...] and y = [y0, y1, y2, y3, ...], the result is [max(x0,x1), max(x2,x3), ..., max(y0,y1), max(y2,y3), ...].
+- go: ConcatMaxPairs
+  commutative: false
+  out:
+  - elemBits: 32
+  documentation: !string |-
+    // NAME horizontally computes the maximum of adjacent pairs of elements.
+    // For x = [x0, x1, x2, x3] and y = [y0, y1, y2, y3], the result is [max(x0,x1), max(x2,x3), max(y0,y1), max(y2,y3)].
+- go: ConcatMaxPairs
+  commutative: false
+  out:
+  - elemBits: 64
+  documentation: !string |-
+    // NAME horizontally computes the maximum of adjacent pairs of elements.
+    // For x = [x0, x1] and y = [y0, y1], the result is [max(x0,x1), max(y0,y1)].
+- go: ConcatMinPairs
+  commutative: false
+  out:
+  - elemBits: 8|16
+  documentation: !string |-
+    // NAME horizontally computes the minimum of adjacent pairs of elements.
+    // For x = [x0, x1, x2, x3, ...] and y = [y0, y1, y2, y3, ...], the result is [min(x0,x1), min(x2,x3), ..., min(y0,y1), min(y2,y3), ...].
+- go: ConcatMinPairs
+  commutative: false
+  out:
+  - elemBits: 32
+  documentation: !string |-
+    // NAME horizontally computes the minimum of adjacent pairs of elements.
+    // For x = [x0, x1, x2, x3] and y = [y0, y1, y2, y3], the result is [min(x0,x1), min(x2,x3), min(y0,y1), min(y2,y3)].
+- go: ConcatMinPairs
+  commutative: false
+  out:
+  - elemBits: 64
+  documentation: !string |-
+    // NAME horizontally computes the minimum of adjacent pairs of elements.
+    // For x = [x0, x1] and y = [y0, y1], the result is [min(x0,x1), min(y0,y1)].

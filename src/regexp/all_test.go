@@ -6,6 +6,8 @@ package regexp
 
 import (
 	"bytes"
+	"internal/race"
+	"internal/testenv"
 	"reflect"
 	"regexp/syntax"
 	"slices"
@@ -510,7 +512,10 @@ var splitTests = []struct {
 	{"", ".*", -1, []string{""}},
 	{"", ".+", -1, []string{""}},
 	{"", "", -1, []string{}},
+	{"", "", 2, []string{}},
 	{"foobar", "", -1, []string{"f", "o", "o", "b", "a", "r"}},
+	{"foobar", "", 3, []string{"f", "o", "obar"}},
+	{"abc", "x*", 2, []string{"a", "bc"}},
 	{"abaabaccadaaae", "a*", 5, []string{"", "b", "b", "c", "cadaaae"}},
 	{":x:y:z:", ":", -1, []string{"", "x", "y", "z", ""}},
 }
@@ -524,6 +529,31 @@ func TestSplit(t *testing.T) {
 		}
 
 		split := re.Split(test.s, test.n)
+		if !slices.Equal(split, test.out) || (split == nil) != (test.out == nil) {
+			t.Errorf("#%d: %q: got %#v; want %#v", i, test.r, split, test.out)
+		}
+
+		if QuoteMeta(test.r) == test.r {
+			strsplit := strings.SplitN(test.s, test.r, test.n)
+			if !slices.Equal(split, strsplit) {
+				t.Errorf("#%d: Split(%q, %q, %d): regexp vs strings mismatch\nregexp=%q\nstrings=%q", i, test.s, test.r, test.n, split, strsplit)
+			}
+		}
+	}
+}
+
+func TestSplitAll(t *testing.T) {
+	for i, test := range splitTests {
+		re, err := Compile(test.r)
+		if err != nil {
+			t.Errorf("#%d: %q: compile error: %s", i, test.r, err.Error())
+			continue
+		}
+		if test.n >= 0 {
+			continue
+		}
+
+		split := slices.Collect(re.SplitSeq(test.s))
 		if !slices.Equal(split, test.out) {
 			t.Errorf("#%d: %q: got %q; want %q", i, test.r, split, test.out)
 		}
@@ -531,7 +561,7 @@ func TestSplit(t *testing.T) {
 		if QuoteMeta(test.r) == test.r {
 			strsplit := strings.SplitN(test.s, test.r, test.n)
 			if !slices.Equal(split, strsplit) {
-				t.Errorf("#%d: Split(%q, %q, %d): regexp vs strings mismatch\nregexp=%q\nstrings=%q", i, test.s, test.r, test.n, split, strsplit)
+				t.Errorf("#%d: SplitSeq(%q, %q): regexp vs strings mismatch\nregexp=%q\nstrings=%q", i, test.s, test.r, split, strsplit)
 			}
 		}
 	}
@@ -601,6 +631,40 @@ func BenchmarkFind(b *testing.B) {
 		if string(subs) != wantSubs {
 			b.Fatalf("Find(%q) = %q; want %q", s, subs, wantSubs)
 		}
+	}
+}
+
+func TestFindAllNoMatchAllocs(t *testing.T) {
+	if race.Enabled {
+		t.Skip("The race detector randomly drops pooled objects.")
+	}
+	if testenv.OptimizationOff() {
+		t.Skip("skipping test with optimizations disabled")
+	}
+	re := MustCompile("a+b+")
+	text := "acddee"
+	data := []byte(text)
+	for _, test := range []struct {
+		name string
+		find func() bool
+	}{
+		{"FindAll", func() bool { return re.FindAll(data, -1) == nil }},
+		{"FindAllString", func() bool { return re.FindAllString(text, -1) == nil }},
+		{"FindAllIndex", func() bool { return re.FindAllIndex(data, -1) == nil }},
+		{"FindAllStringIndex", func() bool { return re.FindAllStringIndex(text, -1) == nil }},
+		{"FindAllSubmatch", func() bool { return re.FindAllSubmatch(data, -1) == nil }},
+		{"FindAllStringSubmatch", func() bool { return re.FindAllStringSubmatch(text, -1) == nil }},
+		{"FindAllSubmatchIndex", func() bool { return re.FindAllSubmatchIndex(data, -1) == nil }},
+		{"FindAllStringSubmatchIndex", func() bool { return re.FindAllStringSubmatchIndex(text, -1) == nil }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if !test.find() {
+				t.Fatal("got non-nil result, want nil")
+			}
+			if n := testing.AllocsPerRun(100, func() { test.find() }); n != 0 {
+				t.Errorf("got %v allocs, want 0", n)
+			}
+		})
 	}
 }
 

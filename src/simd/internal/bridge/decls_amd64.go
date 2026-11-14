@@ -412,16 +412,16 @@ func BroadcastUint64x8(x uint64) Uint64x8 {
 	return Uint64x8(archsimd.BroadcastUint64x8(x))
 }
 
-func (x Int8x16) Abs() Int8x16 {
-	return Int8x16((archsimd.Int8x16(x)).Abs())
+func (x Int8x16) Abs() Uint8x16 {
+	return Uint8x16((archsimd.Int8x16(x)).Abs())
 }
 
-func (x Int8x32) Abs() Int8x32 {
-	return Int8x32((archsimd.Int8x32(x)).Abs())
+func (x Int8x32) Abs() Uint8x32 {
+	return Uint8x32((archsimd.Int8x32(x)).Abs())
 }
 
-func (x Int8x64) Abs() Int8x64 {
-	return Int8x64((archsimd.Int8x64(x)).Abs())
+func (x Int8x64) Abs() Uint8x64 {
+	return Uint8x64((archsimd.Int8x64(x)).Abs())
 }
 
 func (x Int8x16) Add(y Int8x16) Int8x16 {
@@ -496,6 +496,18 @@ func (x Int8x64) Equal(y Int8x64) Mask8x64 {
 	return Mask8x64((archsimd.Int8x64(x)).Equal(archsimd.Int8x64(y)))
 }
 
+func (x Int8x16) ExtendToInt16() Int16x8 {
+	return Int16x8((archsimd.Int8x16(x)).ExtendToInt16())
+}
+
+func (x Int8x32) ExtendToInt16() Int16x16 {
+	return Int16x16((archsimd.Int8x32(x)).ExtendToInt16())
+}
+
+func (x Int8x64) ExtendToInt16() Int16x32 {
+	return Int16x32((archsimd.Int8x64(x)).ExtendToInt16())
+}
+
 func (x Int8x16) Greater(y Int8x16) Mask8x16 {
 	return Mask8x16((archsimd.Int8x16(x)).Greater(archsimd.Int8x16(y)))
 }
@@ -518,6 +530,18 @@ func (x Int8x32) GreaterEqual(y Int8x32) Mask8x32 {
 
 func (x Int8x64) GreaterEqual(y Int8x64) Mask8x64 {
 	return Mask8x64((archsimd.Int8x64(x)).GreaterEqual(archsimd.Int8x64(y)))
+}
+
+func (x Int8x16) HiToLo() Int8x16 {
+	return Int8x16((archsimd.Int8x16(x)).HiToLo())
+}
+
+func (x Int8x32) HiToLo() Int8x32 {
+	return Int8x32((archsimd.Int8x32(x)).HiToLo())
+}
+
+func (x Int8x64) HiToLo() Int8x64 {
+	return Int8x64((archsimd.Int8x64(x)).HiToLo())
 }
 
 func (x Int8x16) IfElse(mask Mask8x16, y Int8x16) Int8x16 {
@@ -566,6 +590,18 @@ func (x Int8x32) LessEqual(y Int8x32) Mask8x32 {
 
 func (x Int8x64) LessEqual(y Int8x64) Mask8x64 {
 	return Mask8x64((archsimd.Int8x64(x)).LessEqual(archsimd.Int8x64(y)))
+}
+
+func (x Int8x16) LookupOrZero(indices Uint8x16) Int8x16 {
+	return Int8x16((archsimd.Int8x16(x)).LookupOrZero(archsimd.Uint8x16(indices)))
+}
+
+func (x Int8x32) LookupOrZero(indices Uint8x32) Int8x32 {
+	return Int8x32((archsimd.Int8x32(x)).LookupOrZero(archsimd.Uint8x32(indices)))
+}
+
+func (x Int8x64) LookupOrZero(indices Uint8x64) Int8x64 {
+	return Int8x64((archsimd.Int8x64(x)).LookupOrZero(archsimd.Uint8x64(indices)))
 }
 
 func (x Int8x16) Masked(mask Mask8x16) Int8x16 {
@@ -650,6 +686,18 @@ func (x Int8x32) NotEqual(y Int8x32) Mask8x32 {
 
 func (x Int8x64) NotEqual(y Int8x64) Mask8x64 {
 	return Mask8x64((archsimd.Int8x64(x)).NotEqual(archsimd.Int8x64(y)))
+}
+
+func (x Int8x16) OnesCount() Int8x16 {
+	return Int8x16((archsimd.Int8x16(x)).OnesCount())
+}
+
+func (x Int8x32) OnesCount() Int8x32 {
+	return Int8x32((archsimd.Int8x32(x)).OnesCount())
+}
+
+func (x Int8x64) OnesCount() Int8x64 {
+	return Int8x64((archsimd.Int8x64(x)).OnesCount())
 }
 
 func (x Int8x16) Or(y Int8x16) Int8x16 {
@@ -772,16 +820,16 @@ func (x Int8x64) Xor(y Int8x64) Int8x64 {
 	return Int8x64((archsimd.Int8x64(x)).Xor(archsimd.Int8x64(y)))
 }
 
-func (x Int16x8) Abs() Int16x8 {
-	return Int16x8((archsimd.Int16x8(x)).Abs())
+func (x Int16x8) Abs() Uint16x8 {
+	return Uint16x8((archsimd.Int16x8(x)).Abs())
 }
 
-func (x Int16x16) Abs() Int16x16 {
-	return Int16x16((archsimd.Int16x16(x)).Abs())
+func (x Int16x16) Abs() Uint16x16 {
+	return Uint16x16((archsimd.Int16x16(x)).Abs())
 }
 
-func (x Int16x32) Abs() Int16x32 {
-	return Int16x32((archsimd.Int16x32(x)).Abs())
+func (x Int16x32) Abs() Uint16x32 {
+	return Uint16x32((archsimd.Int16x32(x)).Abs())
 }
 
 func (x Int16x8) Add(y Int16x8) Int16x8 {
@@ -856,6 +904,18 @@ func (x Int16x32) Equal(y Int16x32) Mask16x32 {
 	return Mask16x32((archsimd.Int16x32(x)).Equal(archsimd.Int16x32(y)))
 }
 
+func (x Int16x8) ExtendToInt32() Int32x4 {
+	return Int32x4((archsimd.Int16x8(x)).ExtendToInt32())
+}
+
+func (x Int16x16) ExtendToInt32() Int32x8 {
+	return Int32x8((archsimd.Int16x16(x)).ExtendToInt32())
+}
+
+func (x Int16x32) ExtendToInt32() Int32x16 {
+	return Int32x16((archsimd.Int16x32(x)).ExtendToInt32())
+}
+
 func (x Int16x8) Greater(y Int16x8) Mask16x8 {
 	return Mask16x8((archsimd.Int16x8(x)).Greater(archsimd.Int16x8(y)))
 }
@@ -878,6 +938,18 @@ func (x Int16x16) GreaterEqual(y Int16x16) Mask16x16 {
 
 func (x Int16x32) GreaterEqual(y Int16x32) Mask16x32 {
 	return Mask16x32((archsimd.Int16x32(x)).GreaterEqual(archsimd.Int16x32(y)))
+}
+
+func (x Int16x8) HiToLo() Int16x8 {
+	return Int16x8((archsimd.Int16x8(x)).HiToLo())
+}
+
+func (x Int16x16) HiToLo() Int16x16 {
+	return Int16x16((archsimd.Int16x16(x)).HiToLo())
+}
+
+func (x Int16x32) HiToLo() Int16x32 {
+	return Int16x32((archsimd.Int16x32(x)).HiToLo())
 }
 
 func (x Int16x8) IfElse(mask Mask16x8, y Int16x8) Int16x8 {
@@ -1036,28 +1108,28 @@ func (x Int16x32) ReduceSum() int16 {
 	return (archsimd.Int16x32(x)).ReduceSum()
 }
 
-func (x Int16x8) RotateAllLeft(dist uint64) Int16x8 {
-	return Int16x8((archsimd.Int16x8(x)).RotateAllLeft(dist))
+func (x Int16x8) SaturateToInt8() Int8x16 {
+	return Int8x16((archsimd.Int16x8(x)).SaturateToInt8())
 }
 
-func (x Int16x16) RotateAllLeft(dist uint64) Int16x16 {
-	return Int16x16((archsimd.Int16x16(x)).RotateAllLeft(dist))
+func (x Int16x16) SaturateToInt8() Int8x32 {
+	return Int8x32((archsimd.Int16x16(x)).SaturateToInt8())
 }
 
-func (x Int16x32) RotateAllLeft(dist uint64) Int16x32 {
-	return Int16x32((archsimd.Int16x32(x)).RotateAllLeft(dist))
+func (x Int16x32) SaturateToInt8() Int8x64 {
+	return Int8x64((archsimd.Int16x32(x)).SaturateToInt8())
 }
 
-func (x Int16x8) RotateAllRight(dist uint64) Int16x8 {
-	return Int16x8((archsimd.Int16x8(x)).RotateAllRight(dist))
+func (x Int16x8) SaturateToUint8() Uint8x16 {
+	return Uint8x16((archsimd.Int16x8(x)).SaturateToUint8())
 }
 
-func (x Int16x16) RotateAllRight(dist uint64) Int16x16 {
-	return Int16x16((archsimd.Int16x16(x)).RotateAllRight(dist))
+func (x Int16x16) SaturateToUint8() Uint8x32 {
+	return Uint8x32((archsimd.Int16x16(x)).SaturateToUint8())
 }
 
-func (x Int16x32) RotateAllRight(dist uint64) Int16x32 {
-	return Int16x32((archsimd.Int16x32(x)).RotateAllRight(dist))
+func (x Int16x32) SaturateToUint8() Uint8x64 {
+	return Uint8x64((archsimd.Int16x32(x)).SaturateToUint8())
 }
 
 func (x Int16x8) ShiftAllLeft(shift uint64) Int16x8 {
@@ -1168,6 +1240,18 @@ func (x Int16x32) ToMask() Mask16x32 {
 	return Mask16x32((archsimd.Int16x32(x)).ToMask())
 }
 
+func (x Int16x8) TruncToInt8() Int8x16 {
+	return Int8x16((archsimd.Int16x8(x)).TruncToInt8())
+}
+
+func (x Int16x16) TruncToInt8() Int8x32 {
+	return Int8x32((archsimd.Int16x16(x)).TruncToInt8())
+}
+
+func (x Int16x32) TruncToInt8() Int8x64 {
+	return Int8x64((archsimd.Int16x32(x)).TruncToInt8())
+}
+
 func (x Int16x8) Xor(y Int16x8) Int16x8 {
 	return Int16x8((archsimd.Int16x8(x)).Xor(archsimd.Int16x8(y)))
 }
@@ -1180,16 +1264,16 @@ func (x Int16x32) Xor(y Int16x32) Int16x32 {
 	return Int16x32((archsimd.Int16x32(x)).Xor(archsimd.Int16x32(y)))
 }
 
-func (x Int32x4) Abs() Int32x4 {
-	return Int32x4((archsimd.Int32x4(x)).Abs())
+func (x Int32x4) Abs() Uint32x4 {
+	return Uint32x4((archsimd.Int32x4(x)).Abs())
 }
 
-func (x Int32x8) Abs() Int32x8 {
-	return Int32x8((archsimd.Int32x8(x)).Abs())
+func (x Int32x8) Abs() Uint32x8 {
+	return Uint32x8((archsimd.Int32x8(x)).Abs())
 }
 
-func (x Int32x16) Abs() Int32x16 {
-	return Int32x16((archsimd.Int32x16(x)).Abs())
+func (x Int32x16) Abs() Uint32x16 {
+	return Uint32x16((archsimd.Int32x16(x)).Abs())
 }
 
 func (x Int32x4) Add(y Int32x4) Int32x4 {
@@ -1264,6 +1348,18 @@ func (x Int32x16) Equal(y Int32x16) Mask32x16 {
 	return Mask32x16((archsimd.Int32x16(x)).Equal(archsimd.Int32x16(y)))
 }
 
+func (x Int32x4) ExtendToInt64() Int64x2 {
+	return Int64x2((archsimd.Int32x4(x)).ExtendToInt64())
+}
+
+func (x Int32x8) ExtendToInt64() Int64x4 {
+	return Int64x4((archsimd.Int32x8(x)).ExtendToInt64())
+}
+
+func (x Int32x16) ExtendToInt64() Int64x8 {
+	return Int64x8((archsimd.Int32x16(x)).ExtendToInt64())
+}
+
 func (x Int32x4) Greater(y Int32x4) Mask32x4 {
 	return Mask32x4((archsimd.Int32x4(x)).Greater(archsimd.Int32x4(y)))
 }
@@ -1286,6 +1382,18 @@ func (x Int32x8) GreaterEqual(y Int32x8) Mask32x8 {
 
 func (x Int32x16) GreaterEqual(y Int32x16) Mask32x16 {
 	return Mask32x16((archsimd.Int32x16(x)).GreaterEqual(archsimd.Int32x16(y)))
+}
+
+func (x Int32x4) HiToLo() Int32x4 {
+	return Int32x4((archsimd.Int32x4(x)).HiToLo())
+}
+
+func (x Int32x8) HiToLo() Int32x8 {
+	return Int32x8((archsimd.Int32x8(x)).HiToLo())
+}
+
+func (x Int32x16) HiToLo() Int32x16 {
+	return Int32x16((archsimd.Int32x16(x)).HiToLo())
 }
 
 func (x Int32x4) IfElse(mask Mask32x4, y Int32x4) Int32x4 {
@@ -1444,28 +1552,28 @@ func (x Int32x16) ReduceSum() int32 {
 	return (archsimd.Int32x16(x)).ReduceSum()
 }
 
-func (x Int32x4) RotateAllLeft(dist uint64) Int32x4 {
-	return Int32x4((archsimd.Int32x4(x)).RotateAllLeft(dist))
+func (x Int32x4) SaturateToInt16() Int16x8 {
+	return Int16x8((archsimd.Int32x4(x)).SaturateToInt16())
 }
 
-func (x Int32x8) RotateAllLeft(dist uint64) Int32x8 {
-	return Int32x8((archsimd.Int32x8(x)).RotateAllLeft(dist))
+func (x Int32x8) SaturateToInt16() Int16x16 {
+	return Int16x16((archsimd.Int32x8(x)).SaturateToInt16())
 }
 
-func (x Int32x16) RotateAllLeft(dist uint64) Int32x16 {
-	return Int32x16((archsimd.Int32x16(x)).RotateAllLeft(dist))
+func (x Int32x16) SaturateToInt16() Int16x32 {
+	return Int16x32((archsimd.Int32x16(x)).SaturateToInt16())
 }
 
-func (x Int32x4) RotateAllRight(dist uint64) Int32x4 {
-	return Int32x4((archsimd.Int32x4(x)).RotateAllRight(dist))
+func (x Int32x4) SaturateToUint16() Uint16x8 {
+	return Uint16x8((archsimd.Int32x4(x)).SaturateToUint16())
 }
 
-func (x Int32x8) RotateAllRight(dist uint64) Int32x8 {
-	return Int32x8((archsimd.Int32x8(x)).RotateAllRight(dist))
+func (x Int32x8) SaturateToUint16() Uint16x16 {
+	return Uint16x16((archsimd.Int32x8(x)).SaturateToUint16())
 }
 
-func (x Int32x16) RotateAllRight(dist uint64) Int32x16 {
-	return Int32x16((archsimd.Int32x16(x)).RotateAllRight(dist))
+func (x Int32x16) SaturateToUint16() Uint16x32 {
+	return Uint16x32((archsimd.Int32x16(x)).SaturateToUint16())
 }
 
 func (x Int32x4) ShiftAllLeft(shift uint64) Int32x4 {
@@ -1564,6 +1672,18 @@ func (x Int32x16) ToMask() Mask32x16 {
 	return Mask32x16((archsimd.Int32x16(x)).ToMask())
 }
 
+func (x Int32x4) TruncToInt16() Int16x8 {
+	return Int16x8((archsimd.Int32x4(x)).TruncToInt16())
+}
+
+func (x Int32x8) TruncToInt16() Int16x16 {
+	return Int16x16((archsimd.Int32x8(x)).TruncToInt16())
+}
+
+func (x Int32x16) TruncToInt16() Int16x32 {
+	return Int16x32((archsimd.Int32x16(x)).TruncToInt16())
+}
+
 func (x Int32x4) Xor(y Int32x4) Int32x4 {
 	return Int32x4((archsimd.Int32x4(x)).Xor(archsimd.Int32x4(y)))
 }
@@ -1574,6 +1694,18 @@ func (x Int32x8) Xor(y Int32x8) Int32x8 {
 
 func (x Int32x16) Xor(y Int32x16) Int32x16 {
 	return Int32x16((archsimd.Int32x16(x)).Xor(archsimd.Int32x16(y)))
+}
+
+func (x Int64x2) Abs() Uint64x2 {
+	return Uint64x2((archsimd.Int64x2(x)).Abs())
+}
+
+func (x Int64x4) Abs() Uint64x4 {
+	return Uint64x4((archsimd.Int64x4(x)).Abs())
+}
+
+func (x Int64x8) Abs() Uint64x8 {
+	return Uint64x8((archsimd.Int64x8(x)).Abs())
 }
 
 func (x Int64x2) Add(y Int64x2) Int64x2 {
@@ -1658,6 +1790,18 @@ func (x Int64x4) GreaterEqual(y Int64x4) Mask64x4 {
 
 func (x Int64x8) GreaterEqual(y Int64x8) Mask64x8 {
 	return Mask64x8((archsimd.Int64x8(x)).GreaterEqual(archsimd.Int64x8(y)))
+}
+
+func (x Int64x2) HiToLo() Int64x2 {
+	return Int64x2((archsimd.Int64x2(x)).HiToLo())
+}
+
+func (x Int64x4) HiToLo() Int64x4 {
+	return Int64x4((archsimd.Int64x4(x)).HiToLo())
+}
+
+func (x Int64x8) HiToLo() Int64x8 {
+	return Int64x8((archsimd.Int64x8(x)).HiToLo())
 }
 
 func (x Int64x2) IfElse(mask Mask64x2, y Int64x2) Int64x2 {
@@ -1768,28 +1912,28 @@ func (x Int64x8) Or(y Int64x8) Int64x8 {
 	return Int64x8((archsimd.Int64x8(x)).Or(archsimd.Int64x8(y)))
 }
 
-func (x Int64x2) RotateAllLeft(dist uint64) Int64x2 {
-	return Int64x2((archsimd.Int64x2(x)).RotateAllLeft(dist))
+func (x Int64x2) SaturateToInt32() Int32x4 {
+	return Int32x4((archsimd.Int64x2(x)).SaturateToInt32())
 }
 
-func (x Int64x4) RotateAllLeft(dist uint64) Int64x4 {
-	return Int64x4((archsimd.Int64x4(x)).RotateAllLeft(dist))
+func (x Int64x4) SaturateToInt32() Int32x8 {
+	return Int32x8((archsimd.Int64x4(x)).SaturateToInt32())
 }
 
-func (x Int64x8) RotateAllLeft(dist uint64) Int64x8 {
-	return Int64x8((archsimd.Int64x8(x)).RotateAllLeft(dist))
+func (x Int64x8) SaturateToInt32() Int32x16 {
+	return Int32x16((archsimd.Int64x8(x)).SaturateToInt32())
 }
 
-func (x Int64x2) RotateAllRight(dist uint64) Int64x2 {
-	return Int64x2((archsimd.Int64x2(x)).RotateAllRight(dist))
+func (x Int64x2) SaturateToUint32() Uint32x4 {
+	return Uint32x4((archsimd.Int64x2(x)).SaturateToUint32())
 }
 
-func (x Int64x4) RotateAllRight(dist uint64) Int64x4 {
-	return Int64x4((archsimd.Int64x4(x)).RotateAllRight(dist))
+func (x Int64x4) SaturateToUint32() Uint32x8 {
+	return Uint32x8((archsimd.Int64x4(x)).SaturateToUint32())
 }
 
-func (x Int64x8) RotateAllRight(dist uint64) Int64x8 {
-	return Int64x8((archsimd.Int64x8(x)).RotateAllRight(dist))
+func (x Int64x8) SaturateToUint32() Uint32x16 {
+	return Uint32x16((archsimd.Int64x8(x)).SaturateToUint32())
 }
 
 func (x Int64x2) ShiftAllLeft(shift uint64) Int64x2 {
@@ -1802,6 +1946,18 @@ func (x Int64x4) ShiftAllLeft(shift uint64) Int64x4 {
 
 func (x Int64x8) ShiftAllLeft(shift uint64) Int64x8 {
 	return Int64x8((archsimd.Int64x8(x)).ShiftAllLeft(shift))
+}
+
+func (x Int64x2) ShiftAllRight(shift uint64) Int64x2 {
+	return Int64x2((archsimd.Int64x2(x)).ShiftAllRight(shift))
+}
+
+func (x Int64x4) ShiftAllRight(shift uint64) Int64x4 {
+	return Int64x4((archsimd.Int64x4(x)).ShiftAllRight(shift))
+}
+
+func (x Int64x8) ShiftAllRight(shift uint64) Int64x8 {
+	return Int64x8((archsimd.Int64x8(x)).ShiftAllRight(shift))
 }
 
 func (x Int64x2) Store(s []int64) {
@@ -1874,6 +2030,18 @@ func (x Int64x4) ToMask() Mask64x4 {
 
 func (x Int64x8) ToMask() Mask64x8 {
 	return Mask64x8((archsimd.Int64x8(x)).ToMask())
+}
+
+func (x Int64x2) TruncToInt32() Int32x4 {
+	return Int32x4((archsimd.Int64x2(x)).TruncToInt32())
+}
+
+func (x Int64x4) TruncToInt32() Int32x8 {
+	return Int32x8((archsimd.Int64x4(x)).TruncToInt32())
+}
+
+func (x Int64x8) TruncToInt32() Int32x16 {
+	return Int32x16((archsimd.Int64x8(x)).TruncToInt32())
 }
 
 func (x Int64x2) Xor(y Int64x2) Int64x2 {
@@ -1984,6 +2152,54 @@ func (x Uint8x64) Equal(y Uint8x64) Mask8x64 {
 	return Mask8x64((archsimd.Uint8x64(x)).Equal(archsimd.Uint8x64(y)))
 }
 
+func (x Uint8x16) ExtendToUint16() Uint16x8 {
+	return Uint16x8((archsimd.Uint8x16(x)).ExtendToUint16())
+}
+
+func (x Uint8x32) ExtendToUint16() Uint16x16 {
+	return Uint16x16((archsimd.Uint8x32(x)).ExtendToUint16())
+}
+
+func (x Uint8x64) ExtendToUint16() Uint16x32 {
+	return Uint16x32((archsimd.Uint8x64(x)).ExtendToUint16())
+}
+
+func (x Uint8x16) Greater(y Uint8x16) Mask8x16 {
+	return Mask8x16((archsimd.Uint8x16(x)).Greater(archsimd.Uint8x16(y)))
+}
+
+func (x Uint8x32) Greater(y Uint8x32) Mask8x32 {
+	return Mask8x32((archsimd.Uint8x32(x)).Greater(archsimd.Uint8x32(y)))
+}
+
+func (x Uint8x64) Greater(y Uint8x64) Mask8x64 {
+	return Mask8x64((archsimd.Uint8x64(x)).Greater(archsimd.Uint8x64(y)))
+}
+
+func (x Uint8x16) GreaterEqual(y Uint8x16) Mask8x16 {
+	return Mask8x16((archsimd.Uint8x16(x)).GreaterEqual(archsimd.Uint8x16(y)))
+}
+
+func (x Uint8x32) GreaterEqual(y Uint8x32) Mask8x32 {
+	return Mask8x32((archsimd.Uint8x32(x)).GreaterEqual(archsimd.Uint8x32(y)))
+}
+
+func (x Uint8x64) GreaterEqual(y Uint8x64) Mask8x64 {
+	return Mask8x64((archsimd.Uint8x64(x)).GreaterEqual(archsimd.Uint8x64(y)))
+}
+
+func (x Uint8x16) HiToLo() Uint8x16 {
+	return Uint8x16((archsimd.Uint8x16(x)).HiToLo())
+}
+
+func (x Uint8x32) HiToLo() Uint8x32 {
+	return Uint8x32((archsimd.Uint8x32(x)).HiToLo())
+}
+
+func (x Uint8x64) HiToLo() Uint8x64 {
+	return Uint8x64((archsimd.Uint8x64(x)).HiToLo())
+}
+
 func (x Uint8x16) IfElse(mask Mask8x16, y Uint8x16) Uint8x16 {
 	return Uint8x16((archsimd.Uint8x16(x)).IfElse(archsimd.Mask8x16(mask), archsimd.Uint8x16(y)))
 }
@@ -2006,6 +2222,30 @@ func (x Uint8x32) Len() int {
 
 func (x Uint8x64) Len() int {
 	return (archsimd.Uint8x64(x)).Len()
+}
+
+func (x Uint8x16) Less(y Uint8x16) Mask8x16 {
+	return Mask8x16((archsimd.Uint8x16(x)).Less(archsimd.Uint8x16(y)))
+}
+
+func (x Uint8x32) Less(y Uint8x32) Mask8x32 {
+	return Mask8x32((archsimd.Uint8x32(x)).Less(archsimd.Uint8x32(y)))
+}
+
+func (x Uint8x64) Less(y Uint8x64) Mask8x64 {
+	return Mask8x64((archsimd.Uint8x64(x)).Less(archsimd.Uint8x64(y)))
+}
+
+func (x Uint8x16) LessEqual(y Uint8x16) Mask8x16 {
+	return Mask8x16((archsimd.Uint8x16(x)).LessEqual(archsimd.Uint8x16(y)))
+}
+
+func (x Uint8x32) LessEqual(y Uint8x32) Mask8x32 {
+	return Mask8x32((archsimd.Uint8x32(x)).LessEqual(archsimd.Uint8x32(y)))
+}
+
+func (x Uint8x64) LessEqual(y Uint8x64) Mask8x64 {
+	return Mask8x64((archsimd.Uint8x64(x)).LessEqual(archsimd.Uint8x64(y)))
 }
 
 func (x Uint8x16) Masked(mask Mask8x16) Uint8x16 {
@@ -2078,6 +2318,18 @@ func (x Uint8x32) NotEqual(y Uint8x32) Mask8x32 {
 
 func (x Uint8x64) NotEqual(y Uint8x64) Mask8x64 {
 	return Mask8x64((archsimd.Uint8x64(x)).NotEqual(archsimd.Uint8x64(y)))
+}
+
+func (x Uint8x16) OnesCount() Uint8x16 {
+	return Uint8x16((archsimd.Uint8x16(x)).OnesCount())
+}
+
+func (x Uint8x32) OnesCount() Uint8x32 {
+	return Uint8x32((archsimd.Uint8x32(x)).OnesCount())
+}
+
+func (x Uint8x64) OnesCount() Uint8x64 {
+	return Uint8x64((archsimd.Uint8x64(x)).OnesCount())
 }
 
 func (x Uint8x16) Or(y Uint8x16) Uint8x16 {
@@ -2308,6 +2560,18 @@ func (x Uint16x32) Equal(y Uint16x32) Mask16x32 {
 	return Mask16x32((archsimd.Uint16x32(x)).Equal(archsimd.Uint16x32(y)))
 }
 
+func (x Uint16x8) ExtendToUint32() Uint32x4 {
+	return Uint32x4((archsimd.Uint16x8(x)).ExtendToUint32())
+}
+
+func (x Uint16x16) ExtendToUint32() Uint32x8 {
+	return Uint32x8((archsimd.Uint16x16(x)).ExtendToUint32())
+}
+
+func (x Uint16x32) ExtendToUint32() Uint32x16 {
+	return Uint32x16((archsimd.Uint16x32(x)).ExtendToUint32())
+}
+
 func (x Uint16x8) Greater(y Uint16x8) Mask16x8 {
 	return Mask16x8((archsimd.Uint16x8(x)).Greater(archsimd.Uint16x8(y)))
 }
@@ -2330,6 +2594,18 @@ func (x Uint16x16) GreaterEqual(y Uint16x16) Mask16x16 {
 
 func (x Uint16x32) GreaterEqual(y Uint16x32) Mask16x32 {
 	return Mask16x32((archsimd.Uint16x32(x)).GreaterEqual(archsimd.Uint16x32(y)))
+}
+
+func (x Uint16x8) HiToLo() Uint16x8 {
+	return Uint16x8((archsimd.Uint16x8(x)).HiToLo())
+}
+
+func (x Uint16x16) HiToLo() Uint16x16 {
+	return Uint16x16((archsimd.Uint16x16(x)).HiToLo())
+}
+
+func (x Uint16x32) HiToLo() Uint16x32 {
+	return Uint16x32((archsimd.Uint16x32(x)).HiToLo())
 }
 
 func (x Uint16x8) IfElse(mask Mask16x8, y Uint16x8) Uint16x8 {
@@ -2512,28 +2788,40 @@ func (x Uint16x32) ReshapeToUint8s() Uint8x64 {
 	return Uint8x64((archsimd.Uint16x32(x)).ReshapeToUint8s())
 }
 
-func (x Uint16x8) RotateAllLeft(dist uint64) Uint16x8 {
-	return Uint16x8((archsimd.Uint16x8(x)).RotateAllLeft(dist))
+func (x Uint16x8) RotateAllLeft(shift uint64) Uint16x8 {
+	return Uint16x8((archsimd.Uint16x8(x)).RotateAllLeft(shift))
 }
 
-func (x Uint16x16) RotateAllLeft(dist uint64) Uint16x16 {
-	return Uint16x16((archsimd.Uint16x16(x)).RotateAllLeft(dist))
+func (x Uint16x16) RotateAllLeft(shift uint64) Uint16x16 {
+	return Uint16x16((archsimd.Uint16x16(x)).RotateAllLeft(shift))
 }
 
-func (x Uint16x32) RotateAllLeft(dist uint64) Uint16x32 {
-	return Uint16x32((archsimd.Uint16x32(x)).RotateAllLeft(dist))
+func (x Uint16x32) RotateAllLeft(shift uint64) Uint16x32 {
+	return Uint16x32((archsimd.Uint16x32(x)).RotateAllLeft(shift))
 }
 
-func (x Uint16x8) RotateAllRight(dist uint64) Uint16x8 {
-	return Uint16x8((archsimd.Uint16x8(x)).RotateAllRight(dist))
+func (x Uint16x8) RotateAllRight(shift uint64) Uint16x8 {
+	return Uint16x8((archsimd.Uint16x8(x)).RotateAllRight(shift))
 }
 
-func (x Uint16x16) RotateAllRight(dist uint64) Uint16x16 {
-	return Uint16x16((archsimd.Uint16x16(x)).RotateAllRight(dist))
+func (x Uint16x16) RotateAllRight(shift uint64) Uint16x16 {
+	return Uint16x16((archsimd.Uint16x16(x)).RotateAllRight(shift))
 }
 
-func (x Uint16x32) RotateAllRight(dist uint64) Uint16x32 {
-	return Uint16x32((archsimd.Uint16x32(x)).RotateAllRight(dist))
+func (x Uint16x32) RotateAllRight(shift uint64) Uint16x32 {
+	return Uint16x32((archsimd.Uint16x32(x)).RotateAllRight(shift))
+}
+
+func (x Uint16x8) SaturateToUint8() Uint8x16 {
+	return Uint8x16((archsimd.Uint16x8(x)).SaturateToUint8())
+}
+
+func (x Uint16x16) SaturateToUint8() Uint8x32 {
+	return Uint8x32((archsimd.Uint16x16(x)).SaturateToUint8())
+}
+
+func (x Uint16x32) SaturateToUint8() Uint8x64 {
+	return Uint8x64((archsimd.Uint16x32(x)).SaturateToUint8())
 }
 
 func (x Uint16x8) ShiftAllLeft(shift uint64) Uint16x8 {
@@ -2618,6 +2906,18 @@ func (x Uint16x16) SubSaturated(y Uint16x16) Uint16x16 {
 
 func (x Uint16x32) SubSaturated(y Uint16x32) Uint16x32 {
 	return Uint16x32((archsimd.Uint16x32(x)).SubSaturated(archsimd.Uint16x32(y)))
+}
+
+func (x Uint16x8) TruncToUint8() Uint8x16 {
+	return Uint8x16((archsimd.Uint16x8(x)).TruncToUint8())
+}
+
+func (x Uint16x16) TruncToUint8() Uint8x32 {
+	return Uint8x32((archsimd.Uint16x16(x)).TruncToUint8())
+}
+
+func (x Uint16x32) TruncToUint8() Uint8x64 {
+	return Uint8x64((archsimd.Uint16x32(x)).TruncToUint8())
 }
 
 func (x Uint16x8) Xor(y Uint16x8) Uint16x8 {
@@ -2716,6 +3016,18 @@ func (x Uint32x16) Equal(y Uint32x16) Mask32x16 {
 	return Mask32x16((archsimd.Uint32x16(x)).Equal(archsimd.Uint32x16(y)))
 }
 
+func (x Uint32x4) ExtendToUint64() Uint64x2 {
+	return Uint64x2((archsimd.Uint32x4(x)).ExtendToUint64())
+}
+
+func (x Uint32x8) ExtendToUint64() Uint64x4 {
+	return Uint64x4((archsimd.Uint32x8(x)).ExtendToUint64())
+}
+
+func (x Uint32x16) ExtendToUint64() Uint64x8 {
+	return Uint64x8((archsimd.Uint32x16(x)).ExtendToUint64())
+}
+
 func (x Uint32x4) Greater(y Uint32x4) Mask32x4 {
 	return Mask32x4((archsimd.Uint32x4(x)).Greater(archsimd.Uint32x4(y)))
 }
@@ -2738,6 +3050,18 @@ func (x Uint32x8) GreaterEqual(y Uint32x8) Mask32x8 {
 
 func (x Uint32x16) GreaterEqual(y Uint32x16) Mask32x16 {
 	return Mask32x16((archsimd.Uint32x16(x)).GreaterEqual(archsimd.Uint32x16(y)))
+}
+
+func (x Uint32x4) HiToLo() Uint32x4 {
+	return Uint32x4((archsimd.Uint32x4(x)).HiToLo())
+}
+
+func (x Uint32x8) HiToLo() Uint32x8 {
+	return Uint32x8((archsimd.Uint32x8(x)).HiToLo())
+}
+
+func (x Uint32x16) HiToLo() Uint32x16 {
+	return Uint32x16((archsimd.Uint32x16(x)).HiToLo())
 }
 
 func (x Uint32x4) IfElse(mask Mask32x4, y Uint32x4) Uint32x4 {
@@ -2920,28 +3244,40 @@ func (x Uint32x16) ReshapeToUint8s() Uint8x64 {
 	return Uint8x64((archsimd.Uint32x16(x)).ReshapeToUint8s())
 }
 
-func (x Uint32x4) RotateAllLeft(dist uint64) Uint32x4 {
-	return Uint32x4((archsimd.Uint32x4(x)).RotateAllLeft(dist))
+func (x Uint32x4) RotateAllLeft(shift uint64) Uint32x4 {
+	return Uint32x4((archsimd.Uint32x4(x)).RotateAllLeft(shift))
 }
 
-func (x Uint32x8) RotateAllLeft(dist uint64) Uint32x8 {
-	return Uint32x8((archsimd.Uint32x8(x)).RotateAllLeft(dist))
+func (x Uint32x8) RotateAllLeft(shift uint64) Uint32x8 {
+	return Uint32x8((archsimd.Uint32x8(x)).RotateAllLeft(shift))
 }
 
-func (x Uint32x16) RotateAllLeft(dist uint64) Uint32x16 {
-	return Uint32x16((archsimd.Uint32x16(x)).RotateAllLeft(dist))
+func (x Uint32x16) RotateAllLeft(shift uint64) Uint32x16 {
+	return Uint32x16((archsimd.Uint32x16(x)).RotateAllLeft(shift))
 }
 
-func (x Uint32x4) RotateAllRight(dist uint64) Uint32x4 {
-	return Uint32x4((archsimd.Uint32x4(x)).RotateAllRight(dist))
+func (x Uint32x4) RotateAllRight(shift uint64) Uint32x4 {
+	return Uint32x4((archsimd.Uint32x4(x)).RotateAllRight(shift))
 }
 
-func (x Uint32x8) RotateAllRight(dist uint64) Uint32x8 {
-	return Uint32x8((archsimd.Uint32x8(x)).RotateAllRight(dist))
+func (x Uint32x8) RotateAllRight(shift uint64) Uint32x8 {
+	return Uint32x8((archsimd.Uint32x8(x)).RotateAllRight(shift))
 }
 
-func (x Uint32x16) RotateAllRight(dist uint64) Uint32x16 {
-	return Uint32x16((archsimd.Uint32x16(x)).RotateAllRight(dist))
+func (x Uint32x16) RotateAllRight(shift uint64) Uint32x16 {
+	return Uint32x16((archsimd.Uint32x16(x)).RotateAllRight(shift))
+}
+
+func (x Uint32x4) SaturateToUint16() Uint16x8 {
+	return Uint16x8((archsimd.Uint32x4(x)).SaturateToUint16())
+}
+
+func (x Uint32x8) SaturateToUint16() Uint16x16 {
+	return Uint16x16((archsimd.Uint32x8(x)).SaturateToUint16())
+}
+
+func (x Uint32x16) SaturateToUint16() Uint16x32 {
+	return Uint16x32((archsimd.Uint32x16(x)).SaturateToUint16())
 }
 
 func (x Uint32x4) ShiftAllLeft(shift uint64) Uint32x4 {
@@ -3014,6 +3350,18 @@ func (x Uint32x8) Sub(y Uint32x8) Uint32x8 {
 
 func (x Uint32x16) Sub(y Uint32x16) Uint32x16 {
 	return Uint32x16((archsimd.Uint32x16(x)).Sub(archsimd.Uint32x16(y)))
+}
+
+func (x Uint32x4) TruncToUint16() Uint16x8 {
+	return Uint16x8((archsimd.Uint32x4(x)).TruncToUint16())
+}
+
+func (x Uint32x8) TruncToUint16() Uint16x16 {
+	return Uint16x16((archsimd.Uint32x8(x)).TruncToUint16())
+}
+
+func (x Uint32x16) TruncToUint16() Uint16x32 {
+	return Uint16x32((archsimd.Uint32x16(x)).TruncToUint16())
 }
 
 func (x Uint32x4) Xor(y Uint32x4) Uint32x4 {
@@ -3100,6 +3448,18 @@ func (x Uint64x8) CarrylessMultiplyEven(y Uint64x8) Uint64x8 {
 	return Uint64x8((archsimd.Uint64x8(x)).CarrylessMultiplyEven(archsimd.Uint64x8(y)))
 }
 
+func (x Uint64x2) CarrylessMultiplyEvenOdd(y Uint64x2) Uint64x2 {
+	return Uint64x2((archsimd.Uint64x2(x)).CarrylessMultiplyEvenOdd(archsimd.Uint64x2(y)))
+}
+
+func (x Uint64x4) CarrylessMultiplyEvenOdd(y Uint64x4) Uint64x4 {
+	return Uint64x4((archsimd.Uint64x4(x)).CarrylessMultiplyEvenOdd(archsimd.Uint64x4(y)))
+}
+
+func (x Uint64x8) CarrylessMultiplyEvenOdd(y Uint64x8) Uint64x8 {
+	return Uint64x8((archsimd.Uint64x8(x)).CarrylessMultiplyEvenOdd(archsimd.Uint64x8(y)))
+}
+
 func (x Uint64x2) CarrylessMultiplyOdd(y Uint64x2) Uint64x2 {
 	return Uint64x2((archsimd.Uint64x2(x)).CarrylessMultiplyOdd(archsimd.Uint64x2(y)))
 }
@@ -3110,6 +3470,18 @@ func (x Uint64x4) CarrylessMultiplyOdd(y Uint64x4) Uint64x4 {
 
 func (x Uint64x8) CarrylessMultiplyOdd(y Uint64x8) Uint64x8 {
 	return Uint64x8((archsimd.Uint64x8(x)).CarrylessMultiplyOdd(archsimd.Uint64x8(y)))
+}
+
+func (x Uint64x2) CarrylessMultiplyOddEven(y Uint64x2) Uint64x2 {
+	return Uint64x2((archsimd.Uint64x2(x)).CarrylessMultiplyOddEven(archsimd.Uint64x2(y)))
+}
+
+func (x Uint64x4) CarrylessMultiplyOddEven(y Uint64x4) Uint64x4 {
+	return Uint64x4((archsimd.Uint64x4(x)).CarrylessMultiplyOddEven(archsimd.Uint64x4(y)))
+}
+
+func (x Uint64x8) CarrylessMultiplyOddEven(y Uint64x8) Uint64x8 {
+	return Uint64x8((archsimd.Uint64x8(x)).CarrylessMultiplyOddEven(archsimd.Uint64x8(y)))
 }
 
 func (x Uint64x2) ConvertToInt64() Int64x2 {
@@ -3158,6 +3530,18 @@ func (x Uint64x4) GreaterEqual(y Uint64x4) Mask64x4 {
 
 func (x Uint64x8) GreaterEqual(y Uint64x8) Mask64x8 {
 	return Mask64x8((archsimd.Uint64x8(x)).GreaterEqual(archsimd.Uint64x8(y)))
+}
+
+func (x Uint64x2) HiToLo() Uint64x2 {
+	return Uint64x2((archsimd.Uint64x2(x)).HiToLo())
+}
+
+func (x Uint64x4) HiToLo() Uint64x4 {
+	return Uint64x4((archsimd.Uint64x4(x)).HiToLo())
+}
+
+func (x Uint64x8) HiToLo() Uint64x8 {
+	return Uint64x8((archsimd.Uint64x8(x)).HiToLo())
 }
 
 func (x Uint64x2) IfElse(mask Mask64x2, y Uint64x2) Uint64x2 {
@@ -3292,28 +3676,40 @@ func (x Uint64x8) ReshapeToUint8s() Uint8x64 {
 	return Uint8x64((archsimd.Uint64x8(x)).ReshapeToUint8s())
 }
 
-func (x Uint64x2) RotateAllLeft(dist uint64) Uint64x2 {
-	return Uint64x2((archsimd.Uint64x2(x)).RotateAllLeft(dist))
+func (x Uint64x2) RotateAllLeft(shift uint64) Uint64x2 {
+	return Uint64x2((archsimd.Uint64x2(x)).RotateAllLeft(shift))
 }
 
-func (x Uint64x4) RotateAllLeft(dist uint64) Uint64x4 {
-	return Uint64x4((archsimd.Uint64x4(x)).RotateAllLeft(dist))
+func (x Uint64x4) RotateAllLeft(shift uint64) Uint64x4 {
+	return Uint64x4((archsimd.Uint64x4(x)).RotateAllLeft(shift))
 }
 
-func (x Uint64x8) RotateAllLeft(dist uint64) Uint64x8 {
-	return Uint64x8((archsimd.Uint64x8(x)).RotateAllLeft(dist))
+func (x Uint64x8) RotateAllLeft(shift uint64) Uint64x8 {
+	return Uint64x8((archsimd.Uint64x8(x)).RotateAllLeft(shift))
 }
 
-func (x Uint64x2) RotateAllRight(dist uint64) Uint64x2 {
-	return Uint64x2((archsimd.Uint64x2(x)).RotateAllRight(dist))
+func (x Uint64x2) RotateAllRight(shift uint64) Uint64x2 {
+	return Uint64x2((archsimd.Uint64x2(x)).RotateAllRight(shift))
 }
 
-func (x Uint64x4) RotateAllRight(dist uint64) Uint64x4 {
-	return Uint64x4((archsimd.Uint64x4(x)).RotateAllRight(dist))
+func (x Uint64x4) RotateAllRight(shift uint64) Uint64x4 {
+	return Uint64x4((archsimd.Uint64x4(x)).RotateAllRight(shift))
 }
 
-func (x Uint64x8) RotateAllRight(dist uint64) Uint64x8 {
-	return Uint64x8((archsimd.Uint64x8(x)).RotateAllRight(dist))
+func (x Uint64x8) RotateAllRight(shift uint64) Uint64x8 {
+	return Uint64x8((archsimd.Uint64x8(x)).RotateAllRight(shift))
+}
+
+func (x Uint64x2) SaturateToUint32() Uint32x4 {
+	return Uint32x4((archsimd.Uint64x2(x)).SaturateToUint32())
+}
+
+func (x Uint64x4) SaturateToUint32() Uint32x8 {
+	return Uint32x8((archsimd.Uint64x4(x)).SaturateToUint32())
+}
+
+func (x Uint64x8) SaturateToUint32() Uint32x16 {
+	return Uint32x16((archsimd.Uint64x8(x)).SaturateToUint32())
 }
 
 func (x Uint64x2) ShiftAllLeft(shift uint64) Uint64x2 {
@@ -3388,6 +3784,18 @@ func (x Uint64x8) Sub(y Uint64x8) Uint64x8 {
 	return Uint64x8((archsimd.Uint64x8(x)).Sub(archsimd.Uint64x8(y)))
 }
 
+func (x Uint64x2) TruncToUint32() Uint32x4 {
+	return Uint32x4((archsimd.Uint64x2(x)).TruncToUint32())
+}
+
+func (x Uint64x4) TruncToUint32() Uint32x8 {
+	return Uint32x8((archsimd.Uint64x4(x)).TruncToUint32())
+}
+
+func (x Uint64x8) TruncToUint32() Uint32x16 {
+	return Uint32x16((archsimd.Uint64x8(x)).TruncToUint32())
+}
+
 func (x Uint64x2) Xor(y Uint64x2) Uint64x2 {
 	return Uint64x2((archsimd.Uint64x2(x)).Xor(archsimd.Uint64x2(y)))
 }
@@ -3422,6 +3830,30 @@ func (x Float32x8) Add(y Float32x8) Float32x8 {
 
 func (x Float32x16) Add(y Float32x16) Float32x16 {
 	return Float32x16((archsimd.Float32x16(x)).Add(archsimd.Float32x16(y)))
+}
+
+func (x Float32x4) Ceil() Float32x4 {
+	return Float32x4((archsimd.Float32x4(x)).Ceil())
+}
+
+func (x Float32x8) Ceil() Float32x8 {
+	return Float32x8((archsimd.Float32x8(x)).Ceil())
+}
+
+func (x Float32x16) Ceil() Float32x16 {
+	return Float32x16((archsimd.Float32x16(x)).Ceil())
+}
+
+func (x Float32x4) ConvertToFloat64() Float64x2 {
+	return Float64x2((archsimd.Float32x4(x)).ConvertToFloat64())
+}
+
+func (x Float32x8) ConvertToFloat64() Float64x4 {
+	return Float64x4((archsimd.Float32x8(x)).ConvertToFloat64())
+}
+
+func (x Float32x16) ConvertToFloat64() Float64x8 {
+	return Float64x8((archsimd.Float32x16(x)).ConvertToFloat64())
 }
 
 func (x Float32x4) ConvertToInt32() Int32x4 {
@@ -3460,6 +3892,18 @@ func (x Float32x16) Equal(y Float32x16) Mask32x16 {
 	return Mask32x16((archsimd.Float32x16(x)).Equal(archsimd.Float32x16(y)))
 }
 
+func (x Float32x4) Floor() Float32x4 {
+	return Float32x4((archsimd.Float32x4(x)).Floor())
+}
+
+func (x Float32x8) Floor() Float32x8 {
+	return Float32x8((archsimd.Float32x8(x)).Floor())
+}
+
+func (x Float32x16) Floor() Float32x16 {
+	return Float32x16((archsimd.Float32x16(x)).Floor())
+}
+
 func (x Float32x4) Greater(y Float32x4) Mask32x4 {
 	return Mask32x4((archsimd.Float32x4(x)).Greater(archsimd.Float32x4(y)))
 }
@@ -3482,6 +3926,18 @@ func (x Float32x8) GreaterEqual(y Float32x8) Mask32x8 {
 
 func (x Float32x16) GreaterEqual(y Float32x16) Mask32x16 {
 	return Mask32x16((archsimd.Float32x16(x)).GreaterEqual(archsimd.Float32x16(y)))
+}
+
+func (x Float32x4) HiToLo() Float32x4 {
+	return Float32x4((archsimd.Float32x4(x)).HiToLo())
+}
+
+func (x Float32x8) HiToLo() Float32x8 {
+	return Float32x8((archsimd.Float32x8(x)).HiToLo())
+}
+
+func (x Float32x16) HiToLo() Float32x16 {
+	return Float32x16((archsimd.Float32x16(x)).HiToLo())
 }
 
 func (x Float32x4) IfElse(mask Mask32x4, y Float32x4) Float32x4 {
@@ -3628,6 +4084,18 @@ func (x Float32x16) ReduceSum() float32 {
 	return (archsimd.Float32x16(x)).ReduceSum()
 }
 
+func (x Float32x4) Round() Float32x4 {
+	return Float32x4((archsimd.Float32x4(x)).Round())
+}
+
+func (x Float32x8) Round() Float32x8 {
+	return Float32x8((archsimd.Float32x8(x)).Round())
+}
+
+func (x Float32x16) Round() Float32x16 {
+	return Float32x16((archsimd.Float32x16(x)).Round())
+}
+
 func (x Float32x4) Sqrt() Float32x4 {
 	return Float32x4((archsimd.Float32x4(x)).Sqrt())
 }
@@ -3700,6 +4168,18 @@ func (x Float32x16) ToBits() Uint32x16 {
 	return Uint32x16((archsimd.Float32x16(x)).ToBits())
 }
 
+func (x Float32x4) Trunc() Float32x4 {
+	return Float32x4((archsimd.Float32x4(x)).Trunc())
+}
+
+func (x Float32x8) Trunc() Float32x8 {
+	return Float32x8((archsimd.Float32x8(x)).Trunc())
+}
+
+func (x Float32x16) Trunc() Float32x16 {
+	return Float32x16((archsimd.Float32x16(x)).Trunc())
+}
+
 func (x Float64x2) Abs() Float64x2 {
 	return Float64x2((archsimd.Float64x2(x)).Abs())
 }
@@ -3722,6 +4202,30 @@ func (x Float64x4) Add(y Float64x4) Float64x4 {
 
 func (x Float64x8) Add(y Float64x8) Float64x8 {
 	return Float64x8((archsimd.Float64x8(x)).Add(archsimd.Float64x8(y)))
+}
+
+func (x Float64x2) Ceil() Float64x2 {
+	return Float64x2((archsimd.Float64x2(x)).Ceil())
+}
+
+func (x Float64x4) Ceil() Float64x4 {
+	return Float64x4((archsimd.Float64x4(x)).Ceil())
+}
+
+func (x Float64x8) Ceil() Float64x8 {
+	return Float64x8((archsimd.Float64x8(x)).Ceil())
+}
+
+func (x Float64x2) ConvertToFloat32() Float32x4 {
+	return Float32x4((archsimd.Float64x2(x)).ConvertToFloat32())
+}
+
+func (x Float64x4) ConvertToFloat32() Float32x8 {
+	return Float32x8((archsimd.Float64x4(x)).ConvertToFloat32())
+}
+
+func (x Float64x8) ConvertToFloat32() Float32x16 {
+	return Float32x16((archsimd.Float64x8(x)).ConvertToFloat32())
 }
 
 func (x Float64x2) Div(y Float64x2) Float64x2 {
@@ -3748,6 +4252,18 @@ func (x Float64x8) Equal(y Float64x8) Mask64x8 {
 	return Mask64x8((archsimd.Float64x8(x)).Equal(archsimd.Float64x8(y)))
 }
 
+func (x Float64x2) Floor() Float64x2 {
+	return Float64x2((archsimd.Float64x2(x)).Floor())
+}
+
+func (x Float64x4) Floor() Float64x4 {
+	return Float64x4((archsimd.Float64x4(x)).Floor())
+}
+
+func (x Float64x8) Floor() Float64x8 {
+	return Float64x8((archsimd.Float64x8(x)).Floor())
+}
+
 func (x Float64x2) Greater(y Float64x2) Mask64x2 {
 	return Mask64x2((archsimd.Float64x2(x)).Greater(archsimd.Float64x2(y)))
 }
@@ -3770,6 +4286,18 @@ func (x Float64x4) GreaterEqual(y Float64x4) Mask64x4 {
 
 func (x Float64x8) GreaterEqual(y Float64x8) Mask64x8 {
 	return Mask64x8((archsimd.Float64x8(x)).GreaterEqual(archsimd.Float64x8(y)))
+}
+
+func (x Float64x2) HiToLo() Float64x2 {
+	return Float64x2((archsimd.Float64x2(x)).HiToLo())
+}
+
+func (x Float64x4) HiToLo() Float64x4 {
+	return Float64x4((archsimd.Float64x4(x)).HiToLo())
+}
+
+func (x Float64x8) HiToLo() Float64x8 {
+	return Float64x8((archsimd.Float64x8(x)).HiToLo())
 }
 
 func (x Float64x2) IfElse(mask Mask64x2, y Float64x2) Float64x2 {
@@ -3916,6 +4444,18 @@ func (x Float64x8) ReduceSum() float64 {
 	return (archsimd.Float64x8(x)).ReduceSum()
 }
 
+func (x Float64x2) Round() Float64x2 {
+	return Float64x2((archsimd.Float64x2(x)).Round())
+}
+
+func (x Float64x4) Round() Float64x4 {
+	return Float64x4((archsimd.Float64x4(x)).Round())
+}
+
+func (x Float64x8) Round() Float64x8 {
+	return Float64x8((archsimd.Float64x8(x)).Round())
+}
+
 func (x Float64x2) Sqrt() Float64x2 {
 	return Float64x2((archsimd.Float64x2(x)).Sqrt())
 }
@@ -3988,6 +4528,30 @@ func (x Float64x8) ToBits() Uint64x8 {
 	return Uint64x8((archsimd.Float64x8(x)).ToBits())
 }
 
+func (x Float64x2) Trunc() Float64x2 {
+	return Float64x2((archsimd.Float64x2(x)).Trunc())
+}
+
+func (x Float64x4) Trunc() Float64x4 {
+	return Float64x4((archsimd.Float64x4(x)).Trunc())
+}
+
+func (x Float64x8) Trunc() Float64x8 {
+	return Float64x8((archsimd.Float64x8(x)).Trunc())
+}
+
+func (x Mask8x16) All() bool {
+	return (archsimd.Mask8x16(x)).All()
+}
+
+func (x Mask8x32) All() bool {
+	return (archsimd.Mask8x32(x)).All()
+}
+
+func (x Mask8x64) All() bool {
+	return (archsimd.Mask8x64(x)).All()
+}
+
 func (x Mask8x16) And(y Mask8x16) Mask8x16 {
 	return Mask8x16((archsimd.Mask8x16(x)).And(archsimd.Mask8x16(y)))
 }
@@ -3998,6 +4562,54 @@ func (x Mask8x32) And(y Mask8x32) Mask8x32 {
 
 func (x Mask8x64) And(y Mask8x64) Mask8x64 {
 	return Mask8x64((archsimd.Mask8x64(x)).And(archsimd.Mask8x64(y)))
+}
+
+func (x Mask8x16) AndNot(y Mask8x16) Mask8x16 {
+	return Mask8x16((archsimd.Mask8x16(x)).AndNot(archsimd.Mask8x16(y)))
+}
+
+func (x Mask8x32) AndNot(y Mask8x32) Mask8x32 {
+	return Mask8x32((archsimd.Mask8x32(x)).AndNot(archsimd.Mask8x32(y)))
+}
+
+func (x Mask8x64) AndNot(y Mask8x64) Mask8x64 {
+	return Mask8x64((archsimd.Mask8x64(x)).AndNot(archsimd.Mask8x64(y)))
+}
+
+func (x Mask8x16) Any() bool {
+	return (archsimd.Mask8x16(x)).Any()
+}
+
+func (x Mask8x32) Any() bool {
+	return (archsimd.Mask8x32(x)).Any()
+}
+
+func (x Mask8x64) Any() bool {
+	return (archsimd.Mask8x64(x)).Any()
+}
+
+func (x Mask8x16) None() bool {
+	return (archsimd.Mask8x16(x)).None()
+}
+
+func (x Mask8x32) None() bool {
+	return (archsimd.Mask8x32(x)).None()
+}
+
+func (x Mask8x64) None() bool {
+	return (archsimd.Mask8x64(x)).None()
+}
+
+func (x Mask8x16) Not() Mask8x16 {
+	return Mask8x16((archsimd.Mask8x16(x)).Not())
+}
+
+func (x Mask8x32) Not() Mask8x32 {
+	return Mask8x32((archsimd.Mask8x32(x)).Not())
+}
+
+func (x Mask8x64) Not() Mask8x64 {
+	return Mask8x64((archsimd.Mask8x64(x)).Not())
 }
 
 func (x Mask8x16) Or(y Mask8x16) Mask8x16 {
@@ -4036,6 +4648,42 @@ func (x Mask8x64) ToInt8s() Int8x64 {
 	return Int8x64((archsimd.Mask8x64(x)).ToInt8x64())
 }
 
+func (x Mask8x16) TrailingZeros() int {
+	return (archsimd.Mask8x16(x)).TrailingZeros()
+}
+
+func (x Mask8x32) TrailingZeros() int {
+	return (archsimd.Mask8x32(x)).TrailingZeros()
+}
+
+func (x Mask8x64) TrailingZeros() int {
+	return (archsimd.Mask8x64(x)).TrailingZeros()
+}
+
+func (x Mask8x16) Xor(y Mask8x16) Mask8x16 {
+	return Mask8x16((archsimd.Mask8x16(x)).Xor(archsimd.Mask8x16(y)))
+}
+
+func (x Mask8x32) Xor(y Mask8x32) Mask8x32 {
+	return Mask8x32((archsimd.Mask8x32(x)).Xor(archsimd.Mask8x32(y)))
+}
+
+func (x Mask8x64) Xor(y Mask8x64) Mask8x64 {
+	return Mask8x64((archsimd.Mask8x64(x)).Xor(archsimd.Mask8x64(y)))
+}
+
+func (x Mask16x8) All() bool {
+	return (archsimd.Mask16x8(x)).All()
+}
+
+func (x Mask16x16) All() bool {
+	return (archsimd.Mask16x16(x)).All()
+}
+
+func (x Mask16x32) All() bool {
+	return (archsimd.Mask16x32(x)).All()
+}
+
 func (x Mask16x8) And(y Mask16x8) Mask16x8 {
 	return Mask16x8((archsimd.Mask16x8(x)).And(archsimd.Mask16x8(y)))
 }
@@ -4046,6 +4694,54 @@ func (x Mask16x16) And(y Mask16x16) Mask16x16 {
 
 func (x Mask16x32) And(y Mask16x32) Mask16x32 {
 	return Mask16x32((archsimd.Mask16x32(x)).And(archsimd.Mask16x32(y)))
+}
+
+func (x Mask16x8) AndNot(y Mask16x8) Mask16x8 {
+	return Mask16x8((archsimd.Mask16x8(x)).AndNot(archsimd.Mask16x8(y)))
+}
+
+func (x Mask16x16) AndNot(y Mask16x16) Mask16x16 {
+	return Mask16x16((archsimd.Mask16x16(x)).AndNot(archsimd.Mask16x16(y)))
+}
+
+func (x Mask16x32) AndNot(y Mask16x32) Mask16x32 {
+	return Mask16x32((archsimd.Mask16x32(x)).AndNot(archsimd.Mask16x32(y)))
+}
+
+func (x Mask16x8) Any() bool {
+	return (archsimd.Mask16x8(x)).Any()
+}
+
+func (x Mask16x16) Any() bool {
+	return (archsimd.Mask16x16(x)).Any()
+}
+
+func (x Mask16x32) Any() bool {
+	return (archsimd.Mask16x32(x)).Any()
+}
+
+func (x Mask16x8) None() bool {
+	return (archsimd.Mask16x8(x)).None()
+}
+
+func (x Mask16x16) None() bool {
+	return (archsimd.Mask16x16(x)).None()
+}
+
+func (x Mask16x32) None() bool {
+	return (archsimd.Mask16x32(x)).None()
+}
+
+func (x Mask16x8) Not() Mask16x8 {
+	return Mask16x8((archsimd.Mask16x8(x)).Not())
+}
+
+func (x Mask16x16) Not() Mask16x16 {
+	return Mask16x16((archsimd.Mask16x16(x)).Not())
+}
+
+func (x Mask16x32) Not() Mask16x32 {
+	return Mask16x32((archsimd.Mask16x32(x)).Not())
 }
 
 func (x Mask16x8) Or(y Mask16x8) Mask16x8 {
@@ -4084,6 +4780,42 @@ func (x Mask16x32) ToInt16s() Int16x32 {
 	return Int16x32((archsimd.Mask16x32(x)).ToInt16x32())
 }
 
+func (x Mask16x8) TrailingZeros() int {
+	return (archsimd.Mask16x8(x)).TrailingZeros()
+}
+
+func (x Mask16x16) TrailingZeros() int {
+	return (archsimd.Mask16x16(x)).TrailingZeros()
+}
+
+func (x Mask16x32) TrailingZeros() int {
+	return (archsimd.Mask16x32(x)).TrailingZeros()
+}
+
+func (x Mask16x8) Xor(y Mask16x8) Mask16x8 {
+	return Mask16x8((archsimd.Mask16x8(x)).Xor(archsimd.Mask16x8(y)))
+}
+
+func (x Mask16x16) Xor(y Mask16x16) Mask16x16 {
+	return Mask16x16((archsimd.Mask16x16(x)).Xor(archsimd.Mask16x16(y)))
+}
+
+func (x Mask16x32) Xor(y Mask16x32) Mask16x32 {
+	return Mask16x32((archsimd.Mask16x32(x)).Xor(archsimd.Mask16x32(y)))
+}
+
+func (x Mask32x4) All() bool {
+	return (archsimd.Mask32x4(x)).All()
+}
+
+func (x Mask32x8) All() bool {
+	return (archsimd.Mask32x8(x)).All()
+}
+
+func (x Mask32x16) All() bool {
+	return (archsimd.Mask32x16(x)).All()
+}
+
 func (x Mask32x4) And(y Mask32x4) Mask32x4 {
 	return Mask32x4((archsimd.Mask32x4(x)).And(archsimd.Mask32x4(y)))
 }
@@ -4094,6 +4826,54 @@ func (x Mask32x8) And(y Mask32x8) Mask32x8 {
 
 func (x Mask32x16) And(y Mask32x16) Mask32x16 {
 	return Mask32x16((archsimd.Mask32x16(x)).And(archsimd.Mask32x16(y)))
+}
+
+func (x Mask32x4) AndNot(y Mask32x4) Mask32x4 {
+	return Mask32x4((archsimd.Mask32x4(x)).AndNot(archsimd.Mask32x4(y)))
+}
+
+func (x Mask32x8) AndNot(y Mask32x8) Mask32x8 {
+	return Mask32x8((archsimd.Mask32x8(x)).AndNot(archsimd.Mask32x8(y)))
+}
+
+func (x Mask32x16) AndNot(y Mask32x16) Mask32x16 {
+	return Mask32x16((archsimd.Mask32x16(x)).AndNot(archsimd.Mask32x16(y)))
+}
+
+func (x Mask32x4) Any() bool {
+	return (archsimd.Mask32x4(x)).Any()
+}
+
+func (x Mask32x8) Any() bool {
+	return (archsimd.Mask32x8(x)).Any()
+}
+
+func (x Mask32x16) Any() bool {
+	return (archsimd.Mask32x16(x)).Any()
+}
+
+func (x Mask32x4) None() bool {
+	return (archsimd.Mask32x4(x)).None()
+}
+
+func (x Mask32x8) None() bool {
+	return (archsimd.Mask32x8(x)).None()
+}
+
+func (x Mask32x16) None() bool {
+	return (archsimd.Mask32x16(x)).None()
+}
+
+func (x Mask32x4) Not() Mask32x4 {
+	return Mask32x4((archsimd.Mask32x4(x)).Not())
+}
+
+func (x Mask32x8) Not() Mask32x8 {
+	return Mask32x8((archsimd.Mask32x8(x)).Not())
+}
+
+func (x Mask32x16) Not() Mask32x16 {
+	return Mask32x16((archsimd.Mask32x16(x)).Not())
 }
 
 func (x Mask32x4) Or(y Mask32x4) Mask32x4 {
@@ -4132,6 +4912,42 @@ func (x Mask32x16) ToInt32s() Int32x16 {
 	return Int32x16((archsimd.Mask32x16(x)).ToInt32x16())
 }
 
+func (x Mask32x4) TrailingZeros() int {
+	return (archsimd.Mask32x4(x)).TrailingZeros()
+}
+
+func (x Mask32x8) TrailingZeros() int {
+	return (archsimd.Mask32x8(x)).TrailingZeros()
+}
+
+func (x Mask32x16) TrailingZeros() int {
+	return (archsimd.Mask32x16(x)).TrailingZeros()
+}
+
+func (x Mask32x4) Xor(y Mask32x4) Mask32x4 {
+	return Mask32x4((archsimd.Mask32x4(x)).Xor(archsimd.Mask32x4(y)))
+}
+
+func (x Mask32x8) Xor(y Mask32x8) Mask32x8 {
+	return Mask32x8((archsimd.Mask32x8(x)).Xor(archsimd.Mask32x8(y)))
+}
+
+func (x Mask32x16) Xor(y Mask32x16) Mask32x16 {
+	return Mask32x16((archsimd.Mask32x16(x)).Xor(archsimd.Mask32x16(y)))
+}
+
+func (x Mask64x2) All() bool {
+	return (archsimd.Mask64x2(x)).All()
+}
+
+func (x Mask64x4) All() bool {
+	return (archsimd.Mask64x4(x)).All()
+}
+
+func (x Mask64x8) All() bool {
+	return (archsimd.Mask64x8(x)).All()
+}
+
 func (x Mask64x2) And(y Mask64x2) Mask64x2 {
 	return Mask64x2((archsimd.Mask64x2(x)).And(archsimd.Mask64x2(y)))
 }
@@ -4142,6 +4958,54 @@ func (x Mask64x4) And(y Mask64x4) Mask64x4 {
 
 func (x Mask64x8) And(y Mask64x8) Mask64x8 {
 	return Mask64x8((archsimd.Mask64x8(x)).And(archsimd.Mask64x8(y)))
+}
+
+func (x Mask64x2) AndNot(y Mask64x2) Mask64x2 {
+	return Mask64x2((archsimd.Mask64x2(x)).AndNot(archsimd.Mask64x2(y)))
+}
+
+func (x Mask64x4) AndNot(y Mask64x4) Mask64x4 {
+	return Mask64x4((archsimd.Mask64x4(x)).AndNot(archsimd.Mask64x4(y)))
+}
+
+func (x Mask64x8) AndNot(y Mask64x8) Mask64x8 {
+	return Mask64x8((archsimd.Mask64x8(x)).AndNot(archsimd.Mask64x8(y)))
+}
+
+func (x Mask64x2) Any() bool {
+	return (archsimd.Mask64x2(x)).Any()
+}
+
+func (x Mask64x4) Any() bool {
+	return (archsimd.Mask64x4(x)).Any()
+}
+
+func (x Mask64x8) Any() bool {
+	return (archsimd.Mask64x8(x)).Any()
+}
+
+func (x Mask64x2) None() bool {
+	return (archsimd.Mask64x2(x)).None()
+}
+
+func (x Mask64x4) None() bool {
+	return (archsimd.Mask64x4(x)).None()
+}
+
+func (x Mask64x8) None() bool {
+	return (archsimd.Mask64x8(x)).None()
+}
+
+func (x Mask64x2) Not() Mask64x2 {
+	return Mask64x2((archsimd.Mask64x2(x)).Not())
+}
+
+func (x Mask64x4) Not() Mask64x4 {
+	return Mask64x4((archsimd.Mask64x4(x)).Not())
+}
+
+func (x Mask64x8) Not() Mask64x8 {
+	return Mask64x8((archsimd.Mask64x8(x)).Not())
 }
 
 func (x Mask64x2) Or(y Mask64x2) Mask64x2 {
@@ -4178,4 +5042,28 @@ func (x Mask64x4) ToInt64s() Int64x4 {
 
 func (x Mask64x8) ToInt64s() Int64x8 {
 	return Int64x8((archsimd.Mask64x8(x)).ToInt64x8())
+}
+
+func (x Mask64x2) TrailingZeros() int {
+	return (archsimd.Mask64x2(x)).TrailingZeros()
+}
+
+func (x Mask64x4) TrailingZeros() int {
+	return (archsimd.Mask64x4(x)).TrailingZeros()
+}
+
+func (x Mask64x8) TrailingZeros() int {
+	return (archsimd.Mask64x8(x)).TrailingZeros()
+}
+
+func (x Mask64x2) Xor(y Mask64x2) Mask64x2 {
+	return Mask64x2((archsimd.Mask64x2(x)).Xor(archsimd.Mask64x2(y)))
+}
+
+func (x Mask64x4) Xor(y Mask64x4) Mask64x4 {
+	return Mask64x4((archsimd.Mask64x4(x)).Xor(archsimd.Mask64x4(y)))
+}
+
+func (x Mask64x8) Xor(y Mask64x8) Mask64x8 {
+	return Mask64x8((archsimd.Mask64x8(x)).Xor(archsimd.Mask64x8(y)))
 }

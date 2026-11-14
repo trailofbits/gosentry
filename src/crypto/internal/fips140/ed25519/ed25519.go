@@ -66,6 +66,7 @@ func GenerateKey() (*PrivateKey, error) {
 }
 
 func generateKey(priv *PrivateKey) (*PrivateKey, error) {
+	fipsSelfTest()
 	fips140.RecordApproved()
 	drbg.Read(priv.seed[:])
 	precomputePrivateKey(priv)
@@ -79,6 +80,7 @@ func NewPrivateKeyFromSeed(seed []byte) (*PrivateKey, error) {
 }
 
 func newPrivateKeyFromSeed(priv *PrivateKey, seed []byte) (*PrivateKey, error) {
+	fipsSelfTest()
 	fips140.RecordApproved()
 	if l := len(seed); l != seedSize {
 		return nil, errors.New("ed25519: bad seed length: " + strconv.Itoa(l))
@@ -109,6 +111,7 @@ func NewPrivateKey(priv []byte) (*PrivateKey, error) {
 }
 
 func newPrivateKey(priv *PrivateKey, privBytes []byte) (*PrivateKey, error) {
+	fipsSelfTest()
 	fips140.RecordApproved()
 	if l := len(privBytes); l != privateKeySize {
 		return nil, errors.New("ed25519: bad private key length: " + strconv.Itoa(l))
@@ -230,6 +233,7 @@ func signWithDom(signature []byte, priv *PrivateKey, message []byte, domPrefix, 
 	}
 
 	R := (&edwards25519.Point{}).ScalarBaseMult(r)
+	encodedR := R.Bytes()
 
 	kh := sha512.New()
 	if domPrefix != domPrefixPure {
@@ -237,7 +241,7 @@ func signWithDom(signature []byte, priv *PrivateKey, message []byte, domPrefix, 
 		kh.Write([]byte{byte(len(context))})
 		kh.Write([]byte(context))
 	}
-	kh.Write(R.Bytes())
+	kh.Write(encodedR)
 	kh.Write(priv.pub[:])
 	kh.Write(message)
 	hramDigest := make([]byte, 0, sha512Size)
@@ -249,7 +253,7 @@ func signWithDom(signature []byte, priv *PrivateKey, message []byte, domPrefix, 
 
 	S := edwards25519.NewScalar().MultiplyAdd(k, &priv.s, r)
 
-	copy(signature[:32], R.Bytes())
+	copy(signature[:32], encodedR)
 	copy(signature[32:], S.Bytes())
 
 	return signature

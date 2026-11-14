@@ -24,7 +24,7 @@ func (w *walkState) walkCompLit(n ir.Node, init *ir.Nodes) ir.Node {
 		// Make direct reference to the static data. See issue 12841.
 		vstat := readonlystaticname(n.Type())
 		w.fixedlit(initKindStatic, n, vstat, init)
-		return typecheck.Expr(vstat)
+		return typecheck.Expr(w.curfunc, vstat)
 	}
 	var_ := typecheck.TempAt(base.Pos, w.curfunc, n.Type())
 	w.anylit(n, var_, init)
@@ -214,7 +214,7 @@ func (w *walkState) fixedlit(kind initKind, n *ir.CompLitExpr, var_ ir.Node, ini
 
 	for _, r := range n.List {
 		a, value := splitnode(r)
-		if a == ir.BlankNode && !staticinit.AnySideEffects(value) {
+		if a == ir.BlankNode && !ir.AnySideEffects(value) {
 			// Discard.
 			continue
 		}
@@ -241,7 +241,7 @@ func (w *walkState) fixedlit(kind initKind, n *ir.CompLitExpr, var_ ir.Node, ini
 		// build list of assignments: var[index] = expr
 		ir.SetPos(a)
 		as := ir.NewAssignStmt(base.Pos, a, value)
-		as = typecheck.Stmt(as).(*ir.AssignStmt)
+		as = typecheck.Stmt(w.curfunc, as).(*ir.AssignStmt)
 		switch kind {
 		case initKindStatic:
 			genAsStatic(as)
@@ -265,6 +265,7 @@ func isSmallSliceLit(n *ir.CompLitExpr) bool {
 func (w *walkState) slicelit(n *ir.CompLitExpr, var_ ir.Node, init *ir.Nodes) {
 	// make an array type corresponding the number of elements we have
 	t := types.NewArray(n.Type().Elem(), n.Len)
+	t.SetNoalg(true)
 	types.CalcSize(t)
 
 	// recipe for var = []t{...}
@@ -324,6 +325,8 @@ func (w *walkState) slicelit(n *ir.CompLitExpr, var_ ir.Node, init *ir.Nodes) {
 
 	// put dynamics into array (5)
 	var index int64
+	lno := base.Pos
+	defer func() { base.Pos = lno }()
 	for _, value := range n.List {
 		if value.Op() == ir.OKEY {
 			kv := value.(*ir.KeyExpr)
@@ -359,18 +362,18 @@ func (w *walkState) slicelit(n *ir.CompLitExpr, var_ ir.Node, init *ir.Nodes) {
 		// build list of vauto[c] = expr
 		ir.SetPos(value)
 		as := ir.NewAssignStmt(base.Pos, a, value)
-		w.appendWalkStmt(init, w.orderStmtInPlace(typecheck.Stmt(as), map[string][]*ir.Name{}))
+		w.appendWalkStmt(init, w.orderStmtInPlace(typecheck.Stmt(w.curfunc, as), map[string][]*ir.Name{}))
 	}
 
 	// make slice out of heap (6)
 	a = ir.NewAssignStmt(base.Pos, var_, ir.NewSliceExpr(base.Pos, ir.OSLICE, vauto, nil, nil, nil))
-	w.appendWalkStmt(init, w.orderStmtInPlace(typecheck.Stmt(a), map[string][]*ir.Name{}))
+	w.appendWalkStmt(init, w.orderStmtInPlace(typecheck.Stmt(w.curfunc, a), map[string][]*ir.Name{}))
 }
 
 func (w *walkState) maplit(n *ir.CompLitExpr, m ir.Node, init *ir.Nodes) {
 	// make the map var
 	args := []ir.Node{ir.TypeNode(n.Type()), ir.NewInt(base.Pos, n.Len+int64(len(n.List)))}
-	a := typecheck.Expr(ir.NewCallExpr(base.Pos, ir.OMAKE, nil, args)).(*ir.MakeExpr)
+	a := typecheck.Expr(w.curfunc, ir.NewCallExpr(base.Pos, ir.OMAKE, nil, args)).(*ir.MakeExpr)
 	a.RType = n.RType
 	a.SetEsc(n.Esc())
 	w.appendWalkStmt(init, ir.NewAssignStmt(base.Pos, m, a))
@@ -379,6 +382,8 @@ func (w *walkState) maplit(n *ir.CompLitExpr, m ir.Node, init *ir.Nodes) {
 
 	// The order pass already removed any dynamic (runtime-computed) entries.
 	// All remaining entries are static. Double-check that.
+	lno := base.Pos
+	defer func() { base.Pos = lno }()
 	for _, r := range entries {
 		r := r.(*ir.KeyExpr)
 		if !isStaticCompositeLiteral(r.Key) || !isStaticCompositeLiteral(r.Value) {
@@ -391,10 +396,9 @@ func (w *walkState) maplit(n *ir.CompLitExpr, m ir.Node, init *ir.Nodes) {
 
 		// build types [count]Tindex and [count]Tvalue
 		tk := types.NewArray(n.Type().Key(), int64(len(entries)))
+		tk.SetNoalg(true)
 		te := types.NewArray(n.Type().Elem(), int64(len(entries)))
-
-		// TODO(#47904): mark tk and te NoAlg here once the
-		// compiler/linker can handle NoAlg types correctly.
+		te.SetNoalg(true)
 
 		types.CalcSize(tk)
 		types.CalcSize(te)
@@ -425,7 +429,7 @@ func (w *walkState) maplit(n *ir.CompLitExpr, m ir.Node, init *ir.Nodes) {
 		kidx.SetBounded(true)
 
 		// typechecker rewrites OINDEX to OINDEXMAP
-		lhs := typecheck.AssignExpr(ir.NewIndexExpr(base.Pos, m, kidx)).(*ir.IndexExpr)
+		lhs := typecheck.AssignExpr(w.curfunc, ir.NewIndexExpr(base.Pos, m, kidx)).(*ir.IndexExpr)
 		base.AssertfAt(lhs.Op() == ir.OINDEXMAP, lhs.Pos(), "want OINDEXMAP, have %+v", lhs)
 		lhs.RType = n.RType
 
@@ -434,7 +438,7 @@ func (w *walkState) maplit(n *ir.CompLitExpr, m ir.Node, init *ir.Nodes) {
 		incr := ir.NewAssignStmt(base.Pos, i, ir.NewBinaryExpr(base.Pos, ir.OADD, i, ir.NewInt(base.Pos, 1)))
 
 		var body ir.Node = ir.NewAssignStmt(base.Pos, lhs, rhs)
-		body = typecheck.Stmt(body)
+		body = typecheck.Stmt(w.curfunc, body)
 		body = w.orderStmtInPlace(body, map[string][]*ir.Name{})
 
 		loop := ir.NewForStmt(base.Pos, nil, cond, incr, nil, false)
@@ -466,12 +470,12 @@ func (w *walkState) maplit(n *ir.CompLitExpr, m ir.Node, init *ir.Nodes) {
 		ir.SetPos(tmpelem)
 
 		// typechecker rewrites OINDEX to OINDEXMAP
-		lhs := typecheck.AssignExpr(ir.NewIndexExpr(base.Pos, m, tmpkey)).(*ir.IndexExpr)
+		lhs := typecheck.AssignExpr(w.curfunc, ir.NewIndexExpr(base.Pos, m, tmpkey)).(*ir.IndexExpr)
 		base.AssertfAt(lhs.Op() == ir.OINDEXMAP, lhs.Pos(), "want OINDEXMAP, have %+v", lhs)
 		lhs.RType = n.RType
 
 		var a ir.Node = ir.NewAssignStmt(base.Pos, lhs, tmpelem)
-		a = typecheck.Stmt(a)
+		a = typecheck.Stmt(w.curfunc, a)
 		a = w.orderStmtInPlace(a, map[string][]*ir.Name{})
 		w.appendWalkStmt(init, a)
 	}
@@ -508,7 +512,7 @@ func (w *walkState) anylit(n ir.Node, var_ ir.Node, init *ir.Nodes) {
 		w.appendWalkStmt(init, ir.NewAssignStmt(base.Pos, var_, r))
 
 		var_ = ir.NewStarExpr(base.Pos, var_)
-		var_ = typecheck.AssignExpr(var_)
+		var_ = typecheck.AssignExpr(w.curfunc, var_)
 		w.anylit(n.X, var_, init)
 
 	case ir.OSTRUCTLIT, ir.OARRAYLIT:

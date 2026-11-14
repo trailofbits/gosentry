@@ -28,7 +28,13 @@ var (
 	LOONG64HasLSX  = cpu.Loong64.HasLSX
 	LOONG64HasLASX = cpu.Loong64.HasLASX
 
-	RISCV64HasV = cpu.RISCV64.HasV
+	RISCV64HasV      = cpu.RISCV64.HasV
+	RISCV64HasZbb    = cpu.RISCV64.HasZbb
+	RISCV64HasZvbb   = cpu.RISCV64.HasZvbb
+	RISCV64HasZvkned = cpu.RISCV64.HasZvkned
+	RISCV64HasZvknha = cpu.RISCV64.HasZvknha
+	RISCV64HasZvknhb = cpu.RISCV64.HasZvknhb
+	RISCV64VLENB     = cpu.RISCV64.VLENB
 
 	S390XHasAES    = cpu.S390X.HasAES
 	S390XHasAESCBC = cpu.S390X.HasAESCBC

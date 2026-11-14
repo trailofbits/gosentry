@@ -157,6 +157,25 @@ func countRegs(r ssaop.RegMask) int {
 	return bits.OnesCount64(r.V1) + bits.OnesCount64(r.V2)
 }
 
+// costlyRemat reports whether rematerializing v takes more than one
+// instruction.
+// TODO: logical immediates (bitcon) are also one instruction on arm64.
+func costlyRemat(v *ssa.Value) bool {
+	if v.Op != ssaop.OpARM64MOVDconst {
+		return false
+	}
+	zeros, ones := 0, 0
+	for i := 0; i < 64; i += 16 {
+		switch uint16(v.AuxInt >> i) {
+		case 0:
+			zeros++
+		case 0xffff:
+			ones++
+		}
+	}
+	return zeros < 3 && ones < 3
+}
+
 // pickReg picks a register from the register mask.
 func (s *regAllocState) pickReg(rm ssaop.RegMask) ssaop.Register {
 	if s.f.Config.Ctxt.Arch.Arch == sys.ArchRISCV64 {
@@ -648,7 +667,7 @@ func (s *regAllocState) init(f *ssa.Func) {
 	}
 
 	// Figure out which registers we're allowed to use.
-	s.allocatable = s.f.Config.GpRegMask.Union(s.f.Config.FpRegMask).Union(s.f.Config.SpecialRegMask).Union(s.f.Config.SimdRegMask)
+	s.allocatable = s.f.Config.GpRegMask.Union(s.f.Config.FpRegMask).Union(s.f.Config.SpecialRegMask).Union(s.f.Config.SimdRegMask).Union(s.f.Config.SimdMaskReg)
 	s.allocatable = s.allocatable.RemoveReg(s.SPReg)
 	s.allocatable = s.allocatable.RemoveReg(s.SBReg)
 	if s.f.Config.HasGReg {
@@ -863,6 +882,7 @@ func (s *regAllocState) setState(regs []endReg) {
 }
 
 // compatRegs returns the set of registers which can store a type t.
+// It must never return Config.SpecialRegMask; see its documentation.
 func (s *regAllocState) compatRegs(t *types.Type) ssaop.RegMask {
 	var m ssaop.RegMask
 	if t.IsTuple() || t.IsFlags() {
@@ -872,10 +892,10 @@ func (s *regAllocState) compatRegs(t *types.Type) ssaop.RegMask {
 		if t.Size() > 8 {
 			return s.f.Config.SimdRegMask.Intersect(s.allocatable)
 		} else {
-			if !s.f.Config.SpecialRegMask.Empty() {
+			if !s.f.Config.SimdMaskReg.Empty() {
 				// P predicates
 				// No instructions can move P <-> GP.
-				return s.f.Config.SpecialRegMask.Intersect(s.allocatable)
+				return s.f.Config.SimdMaskReg.Intersect(s.allocatable)
 			}
 			// K mask
 			// We can move GP <-> K.
@@ -2013,14 +2033,15 @@ func (s *regAllocState) regalloc(f *ssa.Func) {
 					if !vi.Regs.Empty() {
 						continue
 					}
-					if vi.Rematerializeable {
-						// TODO: maybe we should not skip rematerializeable
-						// values here. One rematerialization outside the loop
-						// is better than N in the loop. But rematerializations
-						// are cheap, and spilling another value may not be.
-						// And we don't want to materialize the zero register
-						// into a different register when it is just the
-						// argument to a store.
+					if vi.Rematerializeable && !costlyRemat(v) {
+						// Most rematerializations are a single instruction,
+						// and spilling another value to make room is not
+						// worth it. Nor do we want to materialize the zero
+						// register into a different register when it is just
+						// the argument to a store. Multi-instruction
+						// constants are worth building once outside the loop
+						// if a register is free (m below excludes registers
+						// holding likely-used values).
 						continue
 					}
 				}
@@ -2502,15 +2523,15 @@ func (e *edgeState) reestablishSSA(exposedDownwards []contentRecord) {
 	// downwardDef is the downward exposed value for a given block.
 	// Because we do this operation one homed value at a time,
 	// there is only ever one per block
-	downwardDef := f.Cache.AllocValueSlice(f.NumBlocks())
-	defer f.Cache.FreeValueSlice(downwardDef)
+	downwardDef := f.Cache.AllocSparseMapValue(f.NumBlocks())
+	defer f.Cache.FreeSparseMapValue(downwardDef)
 
 	// topDef is the definition that is available within a block.
 	// Because the previous passes make sure that intra-block
 	// references are valid, this will only contain a value
 	// if we break this assumption by inserting a phi value.
-	topDef := f.Cache.AllocValueSlice(f.NumBlocks())
-	defer f.Cache.FreeValueSlice(topDef)
+	topDef := f.Cache.AllocSparseMapValue(f.NumBlocks())
+	defer f.Cache.FreeSparseMapValue(topDef)
 
 	varDF := f.NewSparseSet(f.NumBlocks())
 	defer f.RetSparseSet(varDF)
@@ -2530,24 +2551,29 @@ func (e *edgeState) reestablishSSA(exposedDownwards []contentRecord) {
 			}
 			fmt.Printf("variable: %v(%s) defs: %v uses: %v\n", homed.orig, homed.loc, defv, homed.uses)
 		}
-		clear(downwardDef)
-		clear(topDef)
+		downwardDef.Clear()
+		topDef.Clear()
 		for _, d := range homed.defs {
-			if downwardDef[d.Block.ID] != nil {
-				f.Fatalf("already set a downward def for b%d\nprev: %s\nreplace: %s", d.Block.ID, downwardDef[d.Block.ID].LongString(), d.LongString())
+			if ddef, ok := downwardDef.Get(d.Block.ID); ok {
+				f.Fatalf("already set a downward def for b%d\nprev: %s\nreplace: %s", d.Block.ID, ddef.LongString(), d.LongString())
 			}
-			downwardDef[d.Block.ID] = d
+			downwardDef.Set(d.Block.ID, d)
 		}
+		// collect iterated dominance frontier of all definitions
 		varDF.Clear()
-		pluckBlocks := func(yield func(*ssa.Block) bool) {
-			for _, d := range homed.defs {
-				if !yield(d.Block) {
-					return
+		if b := commonMergeBlock(sdom, homed.uses, homed.defs); b != nil {
+			varDF.Add(b.ID)
+		} else {
+			pluckBlocks := func(yield func(*ssa.Block) bool) {
+				for _, d := range homed.defs {
+					if !yield(d.Block) {
+						return
+					}
 				}
 			}
-		}
-		for d := range f.IterDomFrontierPlus(pluckBlocks) {
-			varDF.Add(d.ID)
+			for d := range f.IterDomFrontierPlus(pluckBlocks) {
+				varDF.Add(d.ID)
+			}
 		}
 		// We append to homed.uses, so we use C-style loops here
 		for i := 0; i < len(homed.uses); i++ {
@@ -2556,12 +2582,12 @@ func (e *edgeState) reestablishSSA(exposedDownwards []contentRecord) {
 			search := use.block()
 			if use.op() == ssaop.OpPhi {
 				search = search.Preds[use.index].B
-				if downwardDef[search.ID] != nil {
-					use.replace(downwardDef[search.ID])
+				if ddef, _ := downwardDef.Get(search.ID); ddef != nil {
+					use.replace(ddef)
 					continue
 				}
-			} else if topDef[search.ID] != nil {
-				use.replace(topDef[search.ID])
+			} else if tdef, _ := topDef.Get(search.ID); tdef != nil {
+				use.replace(tdef)
 				continue
 			}
 
@@ -2569,13 +2595,13 @@ func (e *edgeState) reestablishSSA(exposedDownwards []contentRecord) {
 				if varDF.Contains(search.ID) {
 					phi := search.NewValue0(homed.orig.Pos, ssaop.OpPhi, homed.orig.Type)
 					f.SetHome(phi, homed.loc)
-					if downwardDef[search.ID] == nil {
-						downwardDef[search.ID] = phi
+					if ddef, _ := downwardDef.Get(search.ID); ddef == nil {
+						downwardDef.Set(search.ID, phi)
 					}
-					if topDef[search.ID] != nil {
+					if _, ok := topDef.Get(search.ID); ok {
 						f.Fatalf("double insert of phi")
 					}
-					topDef[search.ID] = phi
+					topDef.Set(search.ID, phi)
 					if f.Pass.Debug > ssa.RegDebug {
 						fmt.Printf("inserting phi v%d in b%d for %v use\n", phi.ID, search.ID, use)
 					}
@@ -2595,14 +2621,15 @@ func (e *edgeState) reestablishSSA(exposedDownwards []contentRecord) {
 				if search == nil {
 					f.Fatalf("did not find reaching definition for %v in b%d", use, use.block().ID)
 				}
-				if downwardDef[search.ID] != nil {
+				if _, ok := downwardDef.Get(search.ID); ok {
 					break
 				}
 			}
-			if f.Pass.Debug > ssa.RegDebug && downwardDef[search.ID] != use.value() {
-				fmt.Printf("replacing v%d with v%d in %#s\n", use.value().ID, downwardDef[search.ID].ID, use)
+			ddef, _ := downwardDef.Get(search.ID)
+			if f.Pass.Debug > ssa.RegDebug && ddef != use.value() {
+				fmt.Printf("replacing v%d with v%d in %#s\n", use.value().ID, ddef.ID, use)
 			}
-			use.replace(downwardDef[search.ID])
+			use.replace(ddef)
 		}
 	}
 
@@ -2626,6 +2653,37 @@ func (e *edgeState) reestablishSSA(exposedDownwards []contentRecord) {
 			})
 		}
 	}
+}
+
+// commonMergeBlock returns the singular dominance frontier block for simple
+// cases. This avoids running the full dominance frontier algorithm over the CFG
+// when re-establishing SSA form. These simple cases are quite common at write
+// barriers and when paired with large map initialization, can bloat the runtime
+// of re-establish (see https://go.dev/issue/81663 )
+func commonMergeBlock(sdom ssa.SparseTree, uses []useSpec, defs []*ssa.Value) *ssa.Block {
+	if len(uses) != 1 {
+		return nil
+	}
+	use := uses[0]
+	if len(defs) != 2 {
+		return nil
+	}
+	b := use.block()
+	if len(b.Preds) != 2 {
+		return nil
+	}
+	x, y := b.Preds[0].B, b.Preds[1].B
+	// don't know if this is possible, but be conservative.
+	if x == y {
+		return nil
+	}
+	match := func(a, b *ssa.Block) bool {
+		return defs[0].Block == a && defs[1].Block == b
+	}
+	if match(x, y) || match(y, x) {
+		return b
+	}
+	return nil
 }
 
 // useSpec represents a use of a value. We represent it this way so that the
@@ -3046,13 +3104,15 @@ func (e *edgeState) set(loc ssa.Location, vid ssa.ID, c *ssa.Value, final bool, 
 		if len(a) == 1 {
 			e.uniqueRegs = e.uniqueRegs.AddReg(ssaop.Register(r.Num))
 		}
-		if len(a) == 2 {
-			if t, ok := e.s.f.GetHome(a[0].ID).(*ssabase.Register); ok {
-				e.uniqueRegs = e.uniqueRegs.RemoveReg(ssaop.Register(t.Num))
-			}
-		}
 		if e.s.values[vid].Rematerializeable {
 			e.rematerializeableRegs = e.rematerializeableRegs.AddReg(ssaop.Register(r.Num))
+		}
+	}
+	if len(a) == 2 {
+		// The first copy is no longer the only one, wherever the
+		// second one landed (a spill to a stack slot included).
+		if t, ok := e.s.f.GetHome(a[0].ID).(*ssabase.Register); ok {
+			e.uniqueRegs = e.uniqueRegs.RemoveReg(ssaop.Register(t.Num))
 		}
 	}
 	if e.s.f.Pass.Debug > ssa.RegDebug {
@@ -3104,6 +3164,7 @@ func (e *edgeState) erase(loc ssa.Location) {
 		if cr.final {
 			e.finalRegs = e.finalRegs.RemoveReg(ssaop.Register(r.Num))
 		}
+		e.uniqueRegs = e.uniqueRegs.RemoveReg(ssaop.Register(r.Num)) // it holds nothing now
 		e.rematerializeableRegs = e.rematerializeableRegs.RemoveReg(ssaop.Register(r.Num))
 	}
 	if len(a) == 1 {

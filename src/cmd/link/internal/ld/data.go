@@ -252,7 +252,8 @@ func (st *relocSymState) relocsym(s loader.Sym, P []byte) {
 
 		// We need to be able to reference dynimport symbols when linking against
 		// shared libraries, and AIX, Darwin, OpenBSD and Solaris always need it.
-		if !target.IsAIX() && !target.IsDarwin() && !target.IsSolaris() && !target.IsOpenbsd() && rs != 0 && rst == sym.SDYNIMPORT && !target.IsDynlinkingGo() && !ldr.AttrSubSymbol(rs) {
+		// Linux needs it when linking against shared libraries without a C toolchain.
+		if !target.IsAIX() && !target.IsDarwin() && !target.IsLinux() && !target.IsSolaris() && !target.IsOpenbsd() && rs != 0 && rst == sym.SDYNIMPORT && !target.IsDynlinkingGo() && !ldr.AttrSubSymbol(rs) {
 			if !(target.IsPPC64() && target.IsExternal() && ldr.SymName(rs) == ".TOC.") {
 				st.err.Errorf(s, "unhandled relocation for %s (type %d (%s) rtype %d (%s))", ldr.SymName(rs), rst, rst, rt, sym.RelocName(target.Arch, rt))
 			}
@@ -339,7 +340,7 @@ func (st *relocSymState) relocsym(s loader.Sym, P []byte) {
 				}
 				break
 			}
-			if target.IsPIE() && target.IsElf() {
+			if (target.IsPIE() || target.IsExe()) && target.IsElf() {
 				// We are linking the final executable, so we
 				// can optimize any TLS IE relocation to LE.
 				if thearch.TLSIEtoLE == nil {
@@ -479,6 +480,11 @@ func (st *relocSymState) relocsym(s loader.Sym, P []byte) {
 		case objabi.R_ADDROFF:
 			if weak && !ldr.AttrReachable(rs) {
 				continue
+			}
+			if target.IsWindows() && target.IsExternal() && rst == sym.STLSBSS {
+				nExtReloc++
+				o = 0
+				break
 			}
 			sect := ldr.SymSect(rs)
 			if sect == nil {
@@ -688,6 +694,14 @@ func extreloc(ctxt *Link, ldr *loader.Loader, s loader.Sym, r loader.Reloc) (loa
 		rr.Xadd = r.Add() + off
 		rr.Xsym = rs
 
+	case objabi.R_ADDROFF:
+		if target.IsWindows() && ldr.SymType(r.Sym()) == sym.STLSBSS {
+			rr.Xsym = r.Sym()
+			rr.Xadd = r.Add()
+			break
+		}
+		return rr, false
+
 	case objabi.R_DWARFSECREF:
 		// On most platforms, the external linker needs to adjust DWARF references
 		// as it combines DWARF sections. However, on Darwin, dsymutil does the
@@ -734,7 +748,7 @@ func extreloc(ctxt *Link, ldr *loader.Loader, s loader.Sym, r loader.Reloc) (loa
 		return ExtrelocSimple(ldr, r), true
 
 	// These reloc types don't need external relocations.
-	case objabi.R_ADDROFF, objabi.R_METHODOFF, objabi.R_ADDRCUOFF,
+	case objabi.R_METHODOFF, objabi.R_ADDRCUOFF,
 		objabi.R_SIZE, objabi.R_CONST, objabi.R_GOTOFF,
 		objabi.R_DWTXTADDR_U1, objabi.R_DWTXTADDR_U2,
 		objabi.R_DWTXTADDR_U3, objabi.R_DWTXTADDR_U4:
@@ -1089,7 +1103,7 @@ func writeBlocks(ctxt *Link, out *OutBuf, sem chan int, ldr *loader.Loader, syms
 		}
 
 		// Start the block output operator.
-		if ctxt.Out.isMmapped() {
+		if out.isMmapped() {
 			o := out.View(uint64(out.Offset() + written))
 			sem <- 1
 			wg.Add(1)
@@ -1168,17 +1182,17 @@ func writeBlock(ctxt *Link, out *OutBuf, ldr *loader.Loader, syms []loader.Sym, 
 type writeFn func(*Link, *OutBuf, int64, int64)
 
 // writeParallel handles scheduling parallel execution of data write functions.
-func writeParallel(wg *sync.WaitGroup, fn writeFn, ctxt *Link, seek, vaddr, length uint64) {
-	if ctxt.Out.isMmapped() {
-		out := ctxt.Out.View(seek)
+func writeParallel(wg *sync.WaitGroup, fn writeFn, ctxt *Link, out *OutBuf, seek, vaddr, length uint64) {
+	if out.isMmapped() {
+		out := out.View(seek)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			fn(ctxt, out, int64(vaddr), int64(length))
 		}()
 	} else {
-		ctxt.Out.SeekSet(int64(seek))
-		fn(ctxt, ctxt.Out, int64(vaddr), int64(length))
+		out.SeekSet(int64(seek))
+		fn(ctxt, out, int64(vaddr), int64(length))
 	}
 }
 
@@ -2755,7 +2769,7 @@ func (ctxt *Link) textaddress() {
 	// not require trampoline generation.
 	big := false
 	for _, s := range ctxt.Textp {
-		sect, n, va = assignAddress(ctxt, sect, n, s, va, false, big)
+		sect, n, va = assignAddress(ctxt, sect, n, s, va, false, big, 0)
 		if va-start >= limit {
 			big = true
 			break
@@ -2772,6 +2786,15 @@ func (ctxt *Link) textaddress() {
 			}
 		}
 		va = start
+
+		// Split text sections start at the largest alignment of any
+		// text symbol; see assignAddress.
+		var maxAlign int32
+		if splitTextSections(ctxt) {
+			for _, s := range ctxt.Textp {
+				maxAlign = max(maxAlign, ldr.SymAlign(s))
+			}
+		}
 
 		ntramps := 0
 		var curPkg string
@@ -2791,7 +2814,7 @@ func (ctxt *Link) textaddress() {
 					}
 					// We do not pass big to assignAddress here, as this
 					// can result in side effects such as section splitting.
-					sect, n, vaTmp = assignAddress(ctxt, sect, n, curSym, vaTmp, false, false)
+					sect, n, vaTmp = assignAddress(ctxt, sect, n, curSym, vaTmp, false, false, 0)
 					vaTmp += maxSizeTrampolines(ctxt, ldr, curSym, false)
 				}
 			}
@@ -2802,7 +2825,7 @@ func (ctxt *Link) textaddress() {
 			}
 
 			// Assign actual address for current symbol.
-			sect, n, va = assignAddress(ctxt, sect, n, s, va, false, big)
+			sect, n, va = assignAddress(ctxt, sect, n, s, va, false, big, maxAlign)
 
 			// Resolve jumps, adding trampolines if they are needed.
 			trampoline(ctxt, s)
@@ -2814,7 +2837,7 @@ func (ctxt *Link) textaddress() {
 					// Already set in assignAddress
 					continue
 				}
-				sect, n, va = assignAddress(ctxt, sect, n, tramp, va, true, big)
+				sect, n, va = assignAddress(ctxt, sect, n, tramp, va, true, big, maxAlign)
 			}
 		}
 
@@ -2852,7 +2875,9 @@ func (ctxt *Link) textaddress() {
 }
 
 // assigns address for a text symbol, returns (possibly new) section, its number, and the address.
-func assignAddress(ctxt *Link, sect *sym.Section, n int, s loader.Sym, va uint64, isTramp, big bool) (*sym.Section, int, uint64) {
+// maxAlign is the largest alignment of any text symbol, used when a new
+// text section is split off.
+func assignAddress(ctxt *Link, sect *sym.Section, n int, s loader.Sym, va uint64, isTramp, big bool, maxAlign int32) (*sym.Section, int, uint64) {
 	ldr := ctxt.loader
 	if thearch.AssignAddress != nil {
 		return thearch.AssignAddress(ldr, sect, n, s, va, isTramp)
@@ -2894,18 +2919,19 @@ func assignAddress(ctxt *Link, sect *sym.Section, n int, s loader.Sym, va uint64
 		}
 
 		if va-sect.Vaddr+funcsize+maxSizeTrampolines(ctxt, ldr, s, isTramp) > textSizelimit {
-			sectAlign := int32(thearch.Funcalign)
+			// Align the next text section to the largest alignment of any
+			// function it may hold. (*Link).address later rounds the section
+			// start up to its final alignment, and symbol addresses assigned
+			// here would no longer match their section if that moved it. This
+			// happens with PCALIGN directives larger than Funcalign.
+			sectAlign := max(int32(thearch.Funcalign), maxAlign)
 			if ctxt.IsPPC64() {
-				// Align the next text section to the worst case function alignment likely
-				// to be encountered when processing function symbols. The start address
-				// is rounded against the final alignment of the text section later on in
-				// (*Link).address. This may happen due to usage of PCALIGN directives
-				// larger than Funcalign, or usage of ISA 3.1 prefixed instructions
-				// (see ISA 3.1 Book I 1.9).
+				// ISA 3.1 prefixed instructions can also raise the
+				// alignment (see ISA 3.1 Book I 1.9).
 				const ppc64maxFuncalign = 64
-				sectAlign = ppc64maxFuncalign
-				va = uint64(Rnd(int64(va), ppc64maxFuncalign))
+				sectAlign = max(sectAlign, ppc64maxFuncalign)
 			}
+			va = uint64(Rnd(int64(va), int64(sectAlign)))
 
 			// Set the length for the previous text section
 			sect.Length = va - sect.Vaddr
@@ -3312,6 +3338,28 @@ func (ctxt *Link) address() []*sym.Segment {
 		}
 	}
 
+	if ctxt.IsDarwin() {
+		// Now that we have symbol addresses, write the Mach-O symbol table.
+		// This goes to the LINKEDIT segment, which is before the DWARF segment
+		// when split DWARF is used. See also asmbMacho in macho.go.
+		machosymtab(ctxt)
+		if *FlagSplitDWARF && ctxt.IsInternal() {
+			// Shift the DWARF segment's Vaddr to after the LINKEDIT segment.
+			symtabSz := ldr.SymSize(ldr.Lookup(".machosymtab", 0))
+			symstrSz := ldr.SymSize(ldr.Lookup(".machosymstr", 0))
+			off := Rnd(symtabSz+symstrSz, *FlagRound)
+			Segdwarf.Vaddr += uint64(off)
+			for _, s := range Segdwarf.Sections {
+				s.Vaddr += uint64(off)
+			}
+			for _, si := range dwarfp {
+				for _, s := range si.syms {
+					ldr.AddToSymValue(s, off)
+				}
+			}
+		}
+	}
+
 	return order
 }
 
@@ -3320,6 +3368,17 @@ func (ctxt *Link) address() []*sym.Segment {
 func (ctxt *Link) layout(order []*sym.Segment) uint64 {
 	var prev *sym.Segment
 	for _, seg := range order {
+		if seg == &Segdwarf && *FlagSplitDWARF && ctxt.IsInternal() {
+			// Segdwarf is written to a separate file, starting after the Mach-O header
+			// and the __LINKEDIT segment (symbol table).
+			ldr := ctxt.loader
+			symtabSz := ldr.SymSize(ldr.Lookup(".machosymtab", 0))
+			symstrSz := ldr.SymSize(ldr.Lookup(".machosymstr", 0))
+			off := Rnd(int64(HEADR), *FlagRound)
+			seg.Fileoff = uint64(Rnd(off+symtabSz+symstrSz, *FlagRound))
+			seg.Filelen = seg.Length
+			continue
+		}
 		if prev == nil {
 			seg.Fileoff = uint64(HEADR)
 		} else {
@@ -3358,6 +3417,33 @@ func (ctxt *Link) AddTramp(s *loader.SymbolBuilder, typ sym.SymKind) {
 	if *FlagDebugTramp > 0 && ctxt.Debugvlog > 0 {
 		ctxt.Logf("trampoline %s inserted\n", s.Name())
 	}
+}
+
+// AddDwarfDirectTrampoline records a direct trampoline whose static target can
+// be described by an address-valued DW_AT_trampoline.
+func (ctxt *Link) AddDwarfDirectTrampoline(s, target loader.Sym, addend int64, ownerCU *sym.CompilationUnit) {
+	if ownerCU == nil {
+		// TODO: Use a synthetic linker CU for trampolines created by host
+		// object or linker-generated callers.
+		return
+	}
+	if ownerCU.DWInfo == nil {
+		// dwarfGenerateDebugInfo runs before architectures create trampolines,
+		// so a nil DWInfo means DWARF generation is disabled.
+		return
+	}
+	switch ctxt.loader.SymType(target) {
+	case sym.SDYNIMPORT, sym.SUNDEFEXT:
+		// The final destination of a dynamically resolved target is not a
+		// link-time symbol address.
+		return
+	}
+	ctxt.dwarfTrampolines = append(ctxt.dwarfTrampolines, dwarfTrampoline{
+		sym:     s,
+		target:  target,
+		addend:  addend,
+		ownerCU: ownerCU,
+	})
 }
 
 // compressSyms compresses syms and returns the contents of the

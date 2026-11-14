@@ -61,6 +61,10 @@ Search:
 			continue
 		}
 
+		if !validEncoding(f.op, x) {
+			continue Search
+		}
+
 		// Decode args.
 		var args Args
 		k := 0
@@ -354,7 +358,7 @@ func decodeArg(aop argType, x uint32, index int) Arg {
 		return Uimm{imm, false}
 
 	case arg_c_imm12:
-		imm := (x<<29)>>31<<5 | (x<<26)>>28<<1 | (x<<25)>>31<<7 | (x<<24)>>31<<6 | (x<<23)>>31<<10 | (x<<21)>>30<<8 | (x<<20)>>31<<4 | (x<<19)>>31<<11
+		imm := (x<<29)>>31<<5 | (x<<26)>>29<<1 | (x<<25)>>31<<7 | (x<<24)>>31<<6 | (x<<23)>>31<<10 | (x<<21)>>30<<8 | (x<<20)>>31<<4 | (x<<19)>>31<<11
 		// Sign-extend
 		if imm>>uint32(12-1) == 1 {
 			imm |= 0xfffff << 12
@@ -593,4 +597,18 @@ func convertCompressedIns(f *instFormat, args Args) Args {
 		newargs[2] = Reg(X0)
 	}
 	return newargs
+}
+
+func validEncoding(op Op, x uint32) bool {
+	switch op {
+	// The AMOCAS_Q requires the first register in the pair to be even numbered;
+	// encodings with odd numbered registers specified in rs2 and rd are reserved.
+	case AMOCAS_Q, AMOCAS_Q_AQ, AMOCAS_Q_AQRL, AMOCAS_Q_RL:
+		rd := (x >> 7) & 0x1f
+		rs2 := (x >> 20) & 0x1f
+		if (rd&1) != 0 || (rs2&1) != 0 {
+			return false
+		}
+	}
+	return true
 }

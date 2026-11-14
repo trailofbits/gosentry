@@ -125,6 +125,7 @@ type CmdFlags struct {
 	Shared             *bool        "help:\"generate code that can be linked into a shared library\"" // &Ctxt.Flag_shared, set below
 	SmallFrames        bool         "help:\"reduce the size limit for stack allocated objects\""      // small stacks, to diagnose GC latency; see golang.org/issue/27732
 	Spectre            string       "help:\"enable spectre mitigations in `list` (all, index, ret)\""
+	Stats              bool         "help:\"print compiler statistics\""
 	Std                bool         "help:\"compiling standard library\""
 	SymABIs            string       "help:\"read symbol ABIs from `file`\""
 	TraceProfile       string       "help:\"write an execution trace to `file`\""
@@ -532,8 +533,8 @@ func concurrentBackendAllowed() bool {
 	if buildcfg.Experiment.FieldTrack {
 		return false
 	}
-	// TODO: fix races and enable the following flags
-	if Ctxt.Flag_dynlink || Flag.Race {
+	// TODO: fix races and enable the following flag
+	if Ctxt.Flag_dynlink {
 		return false
 	}
 	return true

@@ -71,21 +71,30 @@ func isExported(name string) bool {
 // Id returns name if it is exported, otherwise it
 // returns the name qualified with the package path.
 func Id(pkg *Package, name string) string {
-	if isExported(name) {
+	path := idPath(pkg, name)
+	if path == "" {
 		return name
+	}
+	return path + "." + name
+}
+
+// idPath returns the qualifier of Id(pkg, name): "" if name is
+// exported, and otherwise the package path, or "_" if there is none.
+func idPath(pkg *Package, name string) string {
+	if isExported(name) {
+		return ""
 	}
 	// unexported names need the package path for differentiation
 	// (if there's no package, make sure we don't start with '.'
 	// as that may change the order of methods between a setup
 	// inside a package and outside a package - which breaks some
 	// tests)
-	path := "_"
 	// pkg is nil for objects in Universe scope and possibly types
 	// introduced via Eval (see also comment in object.sameId)
 	if pkg != nil && pkg.path != "" {
-		path = pkg.path
+		return pkg.path
 	}
-	return path + "." + name
+	return "_"
 }
 
 // An object implements the common parts of an Object.
@@ -597,9 +606,10 @@ func writeObject(buf *bytes.Buffer, obj Object, qf Qualifier) {
 			}
 		} else if t, _ := typ.(*TypeParam); t != nil {
 			typ = t.bound
+		} else if t, ok := typ.(*Named); ok && !t.stateHas(hasUnder) {
+			// don't call Underlying if it's not available yet
+			typ = t.rhs()
 		} else {
-			// TODO(gri) should this be fromRHS for *Named?
-			// (See discussion in #66559.)
 			typ = typ.Underlying()
 		}
 	}

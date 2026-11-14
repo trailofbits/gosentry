@@ -216,12 +216,14 @@
 //		maps each disk file path (a string) to its backing file path, so that
 //		a build will run as if the disk file path exists with the contents
 //		given by the backing file paths, or as if the disk file path does not
-//		exist if its backing file path is empty. Support for the -overlay flag
-//		has some limitations: importantly, cgo files included from outside the
-//		include path must be in the same directory as the Go package they are
-//		included from, overlays will not appear when binaries and tests are
-//		run through go run and go test respectively, and files beneath
-//		GOMODCACHE may not be replaced.
+//		exist if its backing file path is empty. A disk file path in 'Replace'
+//		does not need to exist on disk, so an overlay can also add new files
+//		to a build. Support for the -overlay flag has some limitations:
+//		importantly, cgo files included from outside the include path must
+//		be in the same directory as the Go package they are included from,
+//		overlays will not appear when binaries and tests are run through
+//		go run and go test respectively, and files beneath GOMODCACHE may
+//		not be replaced.
 //	-pgo file
 //		specify the file path of a profile for profile-guided optimization (PGO).
 //		When the special name "auto" is specified, for each main package in the
@@ -3450,6 +3452,8 @@
 //	    that package. Fuzzing will occur after tests, benchmarks, seed corpora
 //	    of other fuzz tests, and examples have completed. See the Fuzzing
 //	    section of the testing package documentation for details.
+//	    In gosentry, when -fuzz is set, -use-libafl defaults to true
+//	    (use -use-libafl=false to opt out).
 //
 //	-fuzztime t
 //	    Run enough iterations of the fuzz target during fuzzing to take t,
@@ -3465,6 +3469,44 @@
 //		The default is 60s.
 //	    The special syntax Nx means to run the fuzz target N times
 //	    (for example, -fuzzminimizetime 100x).
+//
+//	-use-libafl
+//	    When -fuzz is set, use the LibAFL-based runner shipped with gosentry
+//	    instead of Go's native fuzzing engine.
+//	    The default is true when -fuzz is set (use -use-libafl=false to opt out).
+//
+//	-focus-on-new-code={true|false}
+//	    When -use-libafl is set, enable LibAFL's git-aware scheduling to prefer
+//	    testcases that execute recently changed lines (per git blame).
+//	    This flag is required when -use-libafl is set.
+//
+//	-catch-races={true|false}
+//	    When -use-libafl is set, run a race-instrumented sidecar that replays
+//	    new queue seeds under the Go race detector to help catch data races.
+//	    This flag is required when -use-libafl is set.
+//
+//	-catch-leaks={true|false}
+//	    When -use-libafl is set, run a goleak sidecar that replays new queue
+//	    seeds and checks for leaked goroutines.
+//	    This flag is required when -use-libafl is set.
+//
+//	-generate-coverage
+//	    When -fuzz is set, replay the current LibAFL queue corpus under Go
+//	    coverage instrumentation and generate cover.out + cover.html.
+//	    This does not run fuzzing.
+//
+//	-libafl-config file
+//	    When -use-libafl is set, pass a JSONC configuration file (JSON with // comments)
+//	    to the LibAFL runner (implemented in $GOROOT/golibafl).
+//
+//	-use-grammar
+//	    When -use-libafl is set, use Nautilus (JSON grammar) to generate and mutate
+//	    inputs that conform to a user-provided grammar.
+//	    Requires -grammar.
+//
+//	-grammar file
+//	    Nautilus JSON grammar file (.json) for -use-grammar.
+//	    Must be specified exactly once.
 //
 //	-json
 //	    Log verbose output and test results in JSON. This presents the

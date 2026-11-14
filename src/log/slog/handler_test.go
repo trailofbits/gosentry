@@ -65,6 +65,12 @@ func TestDefaultHandle(t *testing.T) {
 			want:  "INFO message pre=0 s.a=1 s.b=two",
 		},
 		{
+			name:  "empty group",
+			with:  func(h Handler) Handler { return h.WithAttrs(preAttrs).WithGroup("") },
+			attrs: attrs,
+			want:  "INFO message pre=0 a=1 b=two",
+		},
+		{
 			name: "preformatted groups",
 			with: func(h Handler) Handler {
 				return h.WithAttrs([]Attr{Int("p1", 1)}).
@@ -271,6 +277,18 @@ func TestJSONAndTextHandlers(t *testing.T) {
 			wantJSON: `{"msg":"message"}`,
 		},
 		{
+			name:    "empty group with empty attr",
+			replace: removeKeys(TimeKey, LevelKey),
+			attrs: []Attr{
+				Int("a", 1),
+				Group("g", Attr{}),
+				Group("h", Group("i", Attr{}), Int("b", 2)),
+				Int("c", 3),
+			},
+			wantText: "msg=message a=1 h.b=2 c=3",
+			wantJSON: `{"msg":"message","a":1,"h":{"b":2},"c":3}`,
+		},
+		{
 			name:    "nested non-empty group",
 			replace: removeKeys(TimeKey, LevelKey),
 			attrs: []Attr{
@@ -321,6 +339,14 @@ func TestJSONAndTextHandlers(t *testing.T) {
 			attrs:    attrs,
 			wantText: "msg=message pre=3 x=y s.a=one s.b=2",
 			wantJSON: `{"msg":"message","pre":3,"x":"y","s":{"a":"one","b":2}}`,
+		},
+		{
+			name:     "with-group empty name",
+			replace:  removeKeys(TimeKey, LevelKey),
+			with:     func(h Handler) Handler { return h.WithAttrs(preAttrs).WithGroup("") },
+			attrs:    attrs,
+			wantText: "msg=message pre=3 x=y a=one b=2",
+			wantJSON: `{"msg":"message","pre":3,"x":"y","a":"one","b":2}`,
 		},
 		{
 			name:    "preformatted with-groups",
@@ -442,6 +468,31 @@ func TestJSONAndTextHandlers(t *testing.T) {
 			attrs:    []Attr{Group("g", Int("a", 1))},
 			wantText: "",
 			wantJSON: `{}`,
+		},
+		{
+			name:     "replace empty followed by attr",
+			replace:  removeKeys(TimeKey, LevelKey, "a"),
+			attrs:    []Attr{Group("g", Int("a", 1)), Group("h", Group("i", Int("a", 1)), Int("b", 2)), Int("c", 3)},
+			wantText: "msg=message h.b=2 c=3",
+			wantJSON: `{"msg":"message","h":{"b":2},"c":3}`,
+		},
+		{
+			name: "empty group from LogValuer and ReplaceAttr",
+			with: func(h Handler) Handler {
+				return h.WithGroup("w").WithAttrs([]Attr{Group("wg"), Attr{}})
+			},
+			replace: func(gs []string, a Attr) Attr {
+				if a.Key == "a" {
+					return Group("h")
+				}
+				return removeKeys(TimeKey, LevelKey)(gs, a)
+			},
+			attrs: []Attr{
+				Group("g1", Int("a", 1)),
+				Group("g2", Any("b", &replace{GroupValue()})),
+			},
+			wantText: "msg=message",
+			wantJSON: `{"msg":"message"}`,
 		},
 		{
 			name: "replace empty 1",

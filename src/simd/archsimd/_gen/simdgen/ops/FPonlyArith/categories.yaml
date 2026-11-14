@@ -1,6 +1,10 @@
 !sum
+# Constrained to float elements: the integer Div in IntOnlyArith documents the
+# division-by-zero and overflow semantics of SDIV/UDIV.
 - go: Div
   commutative: false
+  out:
+  - base: float
   documentation: !string |-
     // NAME divides elements of two vectors. Division by zero follows IEEE 754 and does not panic.
 - go: Sqrt
@@ -17,6 +21,8 @@
     // NAME computes an approximate reciprocal of the square root of each element.
 - go: Scale
   commutative: false
+  out:
+  - base: float
   documentation: !string |-
     // NAME multiplies each element of x by 2 raised to the power of the
     // floor of the corresponding element in y.

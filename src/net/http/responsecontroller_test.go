@@ -7,6 +7,7 @@ package http_test
 import (
 	"errors"
 	"fmt"
+	"internal/nettest"
 	"io"
 	. "net/http"
 	"os"
@@ -15,7 +16,7 @@ import (
 	"time"
 )
 
-func TestResponseControllerFlush(t *testing.T) { run(t, testResponseControllerFlush) }
+func TestResponseControllerFlush(t *testing.T) { runSynctest(t, testResponseControllerFlush) }
 func testResponseControllerFlush(t *testing.T, mode testMode) {
 	continuec := make(chan struct{})
 	cst := newClientServerTest(t, mode, HandlerFunc(func(w ResponseWriter, r *Request) {
@@ -48,7 +49,7 @@ func testResponseControllerFlush(t *testing.T, mode testMode) {
 	}
 }
 
-func TestResponseControllerHijack(t *testing.T) { run(t, testResponseControllerHijack) }
+func TestResponseControllerHijack(t *testing.T) { runSynctest(t, testResponseControllerHijack) }
 func testResponseControllerHijack(t *testing.T, mode testMode) {
 	const header = "X-Header"
 	const value = "set"
@@ -72,13 +73,14 @@ func testResponseControllerHijack(t *testing.T, mode testMode) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer res.Body.Close()
 	if got, want := res.Header.Get(header), value; got != want {
 		t.Errorf("response header %q = %q, want %q", header, got, want)
 	}
 }
 
 func TestResponseControllerSetPastWriteDeadline(t *testing.T) {
-	run(t, testResponseControllerSetPastWriteDeadline)
+	runSynctest(t, testResponseControllerSetPastWriteDeadline)
 }
 func testResponseControllerSetPastWriteDeadline(t *testing.T, mode testMode) {
 	readOne := make(chan struct{})
@@ -132,18 +134,16 @@ func testResponseControllerSetPastWriteDeadline(t *testing.T, mode testMode) {
 }
 
 func TestResponseControllerSetFutureWriteDeadline(t *testing.T) {
-	run(t, testResponseControllerSetFutureWriteDeadline)
+	runSynctest(t, testResponseControllerSetFutureWriteDeadline)
 }
 func testResponseControllerSetFutureWriteDeadline(t *testing.T, mode testMode) {
 	errc := make(chan error, 1)
-	startwritec := make(chan struct{})
 	cst := newClientServerTest(t, mode, HandlerFunc(func(w ResponseWriter, r *Request) {
 		ctl := NewResponseController(w)
 		w.WriteHeader(200)
 		if err := ctl.Flush(); err != nil {
 			t.Errorf("ctl.Flush() = %v, want nil", err)
 		}
-		<-startwritec // don't set the deadline until the client reads response headers
 		if err := ctl.SetWriteDeadline(time.Now().Add(1 * time.Millisecond)); err != nil {
 			t.Errorf("ctl.SetWriteDeadline() = %v, want nil", err)
 		}
@@ -151,16 +151,17 @@ func testResponseControllerSetFutureWriteDeadline(t *testing.T, mode testMode) {
 		errc <- err
 	}))
 
+	// Set a buffer size large enough to hold the response headers,
+	// small enough to block writing the body before long.
+	cst.setDialNettestHook(func(nc *nettest.Conn) {
+		nc.SetReadBufferSize(10000)
+	})
+
 	res, err := cst.c.Get(cst.ts.URL)
-	close(startwritec)
 	if err != nil {
 		t.Fatalf("unexpected connection error: %v", err)
 	}
 	defer res.Body.Close()
-	_, err = io.Copy(io.Discard, res.Body)
-	if err == nil {
-		t.Errorf("client reading from truncated request body: got nil error, want non-nil")
-	}
 	err = <-errc // io.Copy error
 	if !errors.Is(err, os.ErrDeadlineExceeded) {
 		t.Errorf("server timed out writing request body: got err %v; want os.ErrDeadlineExceeded", err)
@@ -168,7 +169,7 @@ func testResponseControllerSetFutureWriteDeadline(t *testing.T, mode testMode) {
 }
 
 func TestResponseControllerSetPastReadDeadline(t *testing.T) {
-	run(t, testResponseControllerSetPastReadDeadline)
+	runSynctest(t, testResponseControllerSetPastReadDeadline)
 }
 func testResponseControllerSetPastReadDeadline(t *testing.T, mode testMode) {
 	readc := make(chan struct{})
@@ -232,7 +233,7 @@ func testResponseControllerSetPastReadDeadline(t *testing.T, mode testMode) {
 }
 
 func TestResponseControllerSetFutureReadDeadline(t *testing.T) {
-	run(t, testResponseControllerSetFutureReadDeadline)
+	runSynctest(t, testResponseControllerSetFutureReadDeadline)
 }
 func testResponseControllerSetFutureReadDeadline(t *testing.T, mode testMode) {
 	respBody := "response body"
@@ -268,7 +269,7 @@ func (w wrapWriter) Unwrap() ResponseWriter {
 	return w.ResponseWriter
 }
 
-func TestWrappedResponseController(t *testing.T) { run(t, testWrappedResponseController) }
+func TestWrappedResponseController(t *testing.T) { runSynctest(t, testWrappedResponseController) }
 func testWrappedResponseController(t *testing.T, mode testMode) {
 	cst := newClientServerTest(t, mode, HandlerFunc(func(w ResponseWriter, r *Request) {
 		w = wrapWriter{w}
@@ -292,7 +293,7 @@ func testWrappedResponseController(t *testing.T, mode testMode) {
 }
 
 func TestResponseControllerEnableFullDuplex(t *testing.T) {
-	run(t, testResponseControllerEnableFullDuplex)
+	runSynctest(t, testResponseControllerEnableFullDuplex)
 }
 func testResponseControllerEnableFullDuplex(t *testing.T, mode testMode) {
 	cst := newClientServerTest(t, mode, HandlerFunc(func(w ResponseWriter, req *Request) {

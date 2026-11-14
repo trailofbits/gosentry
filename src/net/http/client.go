@@ -326,8 +326,6 @@ func knownRoundTripperImpl(rt RoundTripper, req *Request) bool {
 			return knownRoundTripperImpl(altRT, req)
 		}
 		return true
-	case http2RoundTripper:
-		return true
 	}
 	// There's a very minor chance of a false positive with this.
 	// Instead of detecting our golang.org/x/net/http2.Transport,
@@ -364,9 +362,9 @@ func setRequestCancel(req *Request, rt RoundTripper, deadline time.Time) (stopTi
 			return nop, alwaysFalse
 		}
 
-		var cancelCtx func()
-		req.ctx, cancelCtx = context.WithDeadline(oldCtx, deadline)
-		return cancelCtx, func() bool { return time.Now().After(deadline) }
+		ctx, cancelCtx := context.WithDeadline(oldCtx, deadline)
+		req.ctx = ctx
+		return cancelCtx, func() bool { return ctx.Err() == context.DeadlineExceeded }
 	}
 	initialReqCancel := req.Cancel // the user's original Request.Cancel, if any
 
@@ -663,7 +661,7 @@ func (c *Client) do(req *Request) (retres *Response, reterr error) {
 				// If the caller specified a custom Host header and the
 				// redirect location is relative, preserve the Host header
 				// through the redirect. See issue #22233.
-				if u, _ := url.Parse(loc); u != nil && !u.IsAbs() {
+				if u, _ := url.Parse(loc); u != nil && !u.IsAbs() && u.Host == "" {
 					host = req.Host
 				}
 			}
@@ -979,7 +977,7 @@ func (c *Client) CloseIdleConnections() {
 }
 
 // cancelTimerBody is an io.ReadCloser that wraps rc with two features:
-//  1. On Read error or close, the stop func is called.
+//  1. On Close, the stop func is called.
 //  2. On Read failure, if reqDidTimeout is true, the error is wrapped and
 //     marked as net.Error that hit its timeout.
 type cancelTimerBody struct {

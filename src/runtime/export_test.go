@@ -592,9 +592,11 @@ func ArenaHintAddrs() []uintptr {
 
 type G = g
 
-type Sudog = sudog
+type WaitingG = waitingG
 
 type XRegPerG = xRegPerG
+
+type ValgrindPerG = valgrindPerG
 
 func Getg() *G {
 	return getg()
@@ -1285,6 +1287,24 @@ func PageCachePagesLeaked() (leaked uintptr) {
 var ProcYield = procyield
 var OSYield = osyield
 
+func StealRunnextSleep(ns int64) {
+	systemstack(func() { stealRunnextSleep(ns) })
+}
+
+type Note = note
+
+var NoteClear = noteclear
+var NoteTSleepG = notetsleepg
+
+// NoteTSleepG0 calls notetsleep on the system stack
+func NoteTSleepG0(n *Note, ns int64) bool {
+	var ok bool
+	systemstack(func() {
+		ok = notetsleep(n, ns)
+	})
+	return ok
+}
+
 type Mutex = mutex
 
 var Lock = lock
@@ -1314,20 +1334,20 @@ type SemTable struct {
 
 // Enqueue simulates enqueuing a waiter for a semaphore (or lock) at addr.
 func (t *SemTable) Enqueue(addr *uint32) {
-	s := acquireSudog()
-	s.releasetime = 0
-	s.acquiretime = 0
-	s.ticket = 0
-	t.semTable.rootFor(addr).queue(addr, s, false)
+	wg := acquireWaitingG(waitingGTypeSema)
+	wg.releasetime = 0
+	wg.acquiretime = 0
+	wg.ticket = 0
+	t.semTable.rootFor(addr).queue(addr, wg, false)
 }
 
 // Dequeue simulates dequeuing a waiter for a semaphore (or lock) at addr.
 //
 // Returns true if there actually was a waiter to be dequeued.
 func (t *SemTable) Dequeue(addr *uint32) bool {
-	s, _, _ := t.semTable.rootFor(addr).dequeue(addr)
-	if s != nil {
-		releaseSudog(s)
+	wg, _, _ := t.semTable.rootFor(addr).dequeue(addr)
+	if wg != nil {
+		releaseWaitingG(wg)
 		return true
 	}
 	return false
@@ -2154,6 +2174,18 @@ func GetScanAlloc() uintptr {
 
 func MallocGC(size uintptr, typ *abi.Type, needzero bool) unsafe.Pointer {
 	return mallocgc(size, typ, needzero)
+}
+
+// AllocSize returns how many bytes mallocgc uses for an object of the given
+// size of a type that contains pointers: the size of its size class,
+// including the malloc header if the object has one. A large object has no
+// size class, and the result is its size rounded up to a page.
+func AllocSize(size uintptr) uintptr {
+	if size <= maxSmallSize-gc.MallocHeaderSize && !heapBitsInSpan(size) {
+		// roundupsize subtracts the malloc header from the size class.
+		return roundupsize(size, false) + gc.MallocHeaderSize
+	}
+	return roundupsize(size, false)
 }
 
 func FuncNamePiecesForPrint(name string) (string, string, string, string, string) {

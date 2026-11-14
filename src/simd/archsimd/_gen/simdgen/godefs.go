@@ -17,6 +17,8 @@ import (
 
 	"simd/archsimd/_gen/gentools"
 	"simd/archsimd/_gen/simdgen/types"
+	"simd/archsimd/_gen/specdoc"
+	"simd/archsimd/_gen/specgen"
 	"simd/archsimd/_gen/unify"
 )
 
@@ -44,6 +46,11 @@ type Operation struct {
 	//
 	// For masked operations, this will have the mask operand appended.
 	In []types.Operand
+
+	// Sftimm, AsmRules, LowerRules, and PeepholeRules are the extra SSA
+	// rewrite rules for this operation. See [types.RawOperation].
+	Sftimm                              bool
+	AsmRules, LowerRules, PeepholeRules []string
 
 	// sveMergingPrefixed marks the MOVPRFX-prefixed variant of a merging
 	// predicated operation, built by [Operation.sveMergingPrefixedOp]. It exists
@@ -158,6 +165,19 @@ func (o *Operation) DecodeUnified(v *unify.Value) error {
 		o.In = append(o.rawOperation.In, o.rawOperation.InVariant...)
 	}
 
+	if o.rawOperation.Sftimm != nil {
+		o.Sftimm = *o.rawOperation.Sftimm
+	}
+	if o.rawOperation.AsmRules != nil {
+		o.AsmRules = *o.rawOperation.AsmRules
+	}
+	if o.rawOperation.LowerRules != nil {
+		o.LowerRules = *o.rawOperation.LowerRules
+	}
+	if o.rawOperation.PeepholeRules != nil {
+		o.PeepholeRules = *o.rawOperation.PeepholeRules
+	}
+
 	// For operations that read only the lower half of input registers (indicated by hiHalfAsm),
 	// add a doc note showing the compositional pattern for the upper half.
 	if o.rawOperation.HiHalfAsm != nil && o.hiHalfKind() == "long" {
@@ -179,19 +199,6 @@ func (o *Operation) DecodeUnified(v *unify.Value) error {
 		}
 	}
 
-	// For down conversions, the high elements are zeroed if the result has more elements.
-	// TODO: we should encode this logic in the YAML file, instead of hardcoding it here.
-	if len(o.In) > 0 && len(o.Out) > 0 {
-		inLanes := o.In[0].Lanes
-		outLanes := o.Out[0].Lanes
-		if inLanes != nil && outLanes != nil && *inLanes < *outLanes {
-			if (strings.Contains(o.Go, "Saturate") || strings.Contains(o.Go, "TruncTo")) &&
-				!strings.Contains(o.Go, "Concat") {
-				o.Documentation += "\n// Results are packed to low elements in the returned vector, its upper elements are zeroed."
-			}
-		}
-	}
-
 	return nil
 }
 
@@ -202,34 +209,15 @@ func (o *Operation) EncodeUnified() *unify.Value {
 func (o *Operation) VectorWidth() int {
 	out := o.Out[0]
 	if out.Class == "vreg" {
-		return out.Bits.N()
-	} else if out.Class == "greg" || out.Class == "mask" {
+		return out.GoWidth().N()
+	} else if out.Class == "greg" || out.Class == "fpreg" || out.Class == "mask" {
 		for i := range o.In {
 			if o.In[i].Class == "vreg" {
-				return o.In[i].Bits.N()
+				return o.In[i].GoWidth().N()
 			}
 		}
 	}
 	panic(fmt.Errorf("Figure out what the vector width is for %v and implement it", *o))
-}
-
-// Right now simdgen computes the machine op name for most instructions
-// as $Name$OutputSize, by this denotation, these instructions are "overloaded".
-// for example:
-// (Uint16x8) ConvertToInt8
-// (Uint16x16) ConvertToInt8
-// are both VPMOVWB128.
-// To make them distinguishable we need to append the input size to them as well.
-// TODO: document them well in the generated code.
-var demotingConvertOps = map[string]bool{
-	"VPMOVQD128": true, "VPMOVSQD128": true, "VPMOVUSQD128": true, "VPMOVQW128": true, "VPMOVSQW128": true,
-	"VPMOVUSQW128": true, "VPMOVDW128": true, "VPMOVSDW128": true, "VPMOVUSDW128": true, "VPMOVQB128": true,
-	"VPMOVSQB128": true, "VPMOVUSQB128": true, "VPMOVDB128": true, "VPMOVSDB128": true, "VPMOVUSDB128": true,
-	"VPMOVWB128": true, "VPMOVSWB128": true, "VPMOVUSWB128": true,
-	"VPMOVQDMasked128": true, "VPMOVSQDMasked128": true, "VPMOVUSQDMasked128": true, "VPMOVQWMasked128": true, "VPMOVSQWMasked128": true,
-	"VPMOVUSQWMasked128": true, "VPMOVDWMasked128": true, "VPMOVSDWMasked128": true, "VPMOVUSDWMasked128": true, "VPMOVQBMasked128": true,
-	"VPMOVSQBMasked128": true, "VPMOVUSQBMasked128": true, "VPMOVDBMasked128": true, "VPMOVSDBMasked128": true, "VPMOVUSDBMasked128": true,
-	"VPMOVWBMasked128": true, "VPMOVSWBMasked128": true, "VPMOVUSWBMasked128": true,
 }
 
 // sveMaskSuffix returns the machine-op name suffix for a masked operation:
@@ -243,6 +231,22 @@ func sveMaskSuffix(gOp Operation) string {
 		}
 	}
 	return "Masked"
+}
+
+// sveWideElements reports whether gOp is an SVE "wide elements" form, whose
+// last vector input has 64-bit elements while its result has narrower ones,
+// e.g. LSL <Zd>.<T>, <Zn>.<T>, <Zm>.D: each element is combined with the
+// 64-bit element of the last input that overlaps it.
+func sveWideElements(gOp Operation) bool {
+	if !CurrentArch().isSVE() || len(gOp.Out) != 1 || gOp.Out[0].ElemBits == nil || *gOp.Out[0].ElemBits == 64 {
+		return false
+	}
+	for i := len(gOp.In) - 1; i >= 0; i-- {
+		if gOp.In[i].Class == "vreg" {
+			return gOp.In[i].ElemBits != nil && *gOp.In[i].ElemBits == 64
+		}
+	}
+	return false
 }
 
 // sveArrangementLetter returns the SVE element-size arrangement letter
@@ -313,11 +317,6 @@ func machineOpName(maskType maskShape, gOp Operation) string {
 	}
 	if gOp.SSAVariant != nil {
 		asm += *gOp.SSAVariant
-	}
-	if demotingConvertOps[asm] {
-		// Need to append the size of the source as well.
-		// TODO: should be "%sto%d".
-		asm = fmt.Sprintf("%s_%d", asm, gOp.In[0].Bits.N())
 	}
 	return asm
 }
@@ -407,7 +406,7 @@ func compareOperands(x, y *types.Operand) int {
 		if c := compareIntPointers(x.ElemBits, y.ElemBits); c != 0 {
 			return c
 		}
-		if c := compareVectorSizes(x.Bits, y.Bits); c != 0 {
+		if c := compareVectorSizes(x.GoWidth(), y.GoWidth()); c != 0 {
 			return c
 		}
 		if c := compareIntPointers(x.ListNumber, y.ListNumber); c != 0 {
@@ -421,6 +420,20 @@ func compareOperands(x, y *types.Operand) int {
 // is written in place: <Zdn>, <Zda> and friends, as opposed to <Zd> or <Zn>.
 func isInPlaceRegName(name string) bool {
 	return len(name) >= 3 && name[1] == 'd'
+}
+
+// sveAccumulatorInput reports whether op's first input is an accumulator: an
+// in-place destination like FMLA's <Zda> that the assembly names only once, as
+// opposed to a <Zdn> operand that is also named in a source position. The two
+// need different ssa-to-prog helpers — an accumulating instruction has one
+// more distinct register — so the accumulator gives the operation its own
+// register shape.
+func (op Operation) sveAccumulatorInput() bool {
+	if op.sveInPlaceInput() != 0 || op.In[0].RegName == nil {
+		return false
+	}
+	name := *op.In[0].RegName
+	return len(name) >= 3 && name[1] == 'd' && name[2] == 'a'
 }
 
 // sveInPlaceInput returns the index in op.In of the input naming the same
@@ -715,9 +728,14 @@ func writeGoDefs(cl unify.Closure) error {
 		log.Printf("dedup len: %d\n", len(deduped))
 	}
 	reportXEDInconsistency(deduped)
+	relabelAVXBroadcasts(deduped)
 
 	// Sorting again, just in case.
 	slices.SortFunc(deduped, compareOperations)
+
+	if err := resolveSVEImmRanges(deduped); err != nil {
+		return err
+	}
 
 	typeMap := parseSIMDTypes(deduped)
 
@@ -730,7 +748,17 @@ func writeGoDefs(cl unify.Closure) error {
 	goTypeArch := archInfo.GoTypeArch
 	archLower := archInfo.Arch
 
+	specDir := specgen.MustFindSpecDir(genFlags.GOROOT)
+	specFuncs, err := specgen.Load(specDir, nil)
+	if err != nil {
+		return fmt.Errorf("loading spec: %w", err)
+	}
+	specIdx := specgen.NewIndex(specFuncs)
+
 	var files gentools.Files
+	files.AddPostProcessor(specdoc.Filler(specIdx, specdoc.Options{
+		AllowDocRewrite: true,
+	}))
 	defer files.FlushOrExit()
 
 	writeSIMDTypes(files.NewGoFile(simdPackage+"/types_"+goTypeArch+".go"), typeMap)
@@ -744,11 +772,33 @@ func writeGoDefs(cl unify.Closure) error {
 		deduped, typeMap, archLower == "amd64",
 	)
 	writeSIMDIntrinsics(files.NewGoFile("cmd/compile/internal/ssagen/simd"+simdTag+"intrinsics.go"), deduped, typeMap)
-	const simdGenericOpsFile = "cmd/compile/internal/ssa/_gen/simdgenericOps.go"
-	writeSIMDGenericOps(files.NewGoFile(simdGenericOpsFile), deduped, genFlags.InputPath(simdGenericOpsFile))
+	writeSIMDGenericOps(files.NewGoFile("cmd/compile/internal/ssa/_gen/simd"+simdTag+"genericOps_gen.go"), deduped)
 	writeSIMDMachineOps(files.NewGoFile("cmd/compile/internal/ssa/_gen/simd"+simdTag+"ops.go"), deduped)
 	writeSIMDSSA(files.NewGoFile("cmd/compile/internal/"+archLower+"/"+archInfo.ssaGenFile()), deduped)
 	writeSIMDRules(files.NewRawFile("cmd/compile/internal/ssa/_gen/simd"+simdTag+".rules"), deduped)
+	if buf := writeSIMDEnlargeTables(deduped); buf != nil {
+		files.NewGoFile("cmd/compile/internal/ssacompile/simd" + simdTag + "enlarge_gen.go").Write(buf.Bytes())
+	}
 
 	return nil
+}
+
+// relabelAVXBroadcasts lowers the CPU feature of the amd64 128-bit to 128-bit
+// broadcast1ToN methods from AVX2 to AVX. Their instructions (VPBROADCAST and
+// the register form of VBROADCASTSS) require AVX2 even at 128 bits, but unless
+// AVX2 is known to be available, the compiler implements them with AVX
+// shuffles instead (see AMD64latelower.rules). This lets 128-bit Broadcast
+// functions, and emulations built on them, require only AVX.
+func relabelAVXBroadcasts(ops []Operation) {
+	for i := range ops {
+		op := &ops[i]
+		if op.GOARCH != "amd64" || !strings.HasPrefix(op.Go, "broadcast1To") || op.CPUFeature != "AVX2" {
+			continue
+		}
+		if len(op.Out) != 1 || op.Out[0].Bits.Scalable || op.Out[0].Bits.N() != 128 {
+			continue
+		}
+		op.CPUFeature = "AVX"
+		op.Documentation += "\n//\n// Without AVX2, the compiler implements this with an AVX shuffle."
+	}
 }

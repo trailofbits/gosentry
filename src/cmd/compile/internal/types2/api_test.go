@@ -64,6 +64,7 @@ func pkgName(src string) string {
 }
 
 func TestValuesInfo(t *testing.T) {
+	t.Parallel()
 	var tests = []struct {
 		src  string
 		expr string // constant expression
@@ -107,7 +108,7 @@ func TestValuesInfo(t *testing.T) {
 		{`package c5a; var _ = string("foo")`, `"foo"`, `string`, `"foo"`},
 		{`package c5b; var _ = string("foo")`, `string("foo")`, `string`, `"foo"`},
 		{`package c5c; type T string; var _ = T("foo")`, `T("foo")`, `c5c.T`, `"foo"`},
-		{`package c5d; var _ = string(65)`, `65`, `untyped int`, `65`},
+		// {`package c5d; var _ = string(65)`, `65`, `untyped int`, `65`},  // not valid with Go 1.28 - go.dev/issue/3939
 		{`package c5e; var _ = string('A')`, `'A'`, `untyped rune`, `65`},
 		{`package c5f; type T string; var _ = T('A')`, `'A'`, `untyped rune`, `65`},
 
@@ -182,8 +183,9 @@ func TestValuesInfo(t *testing.T) {
 }
 
 func TestTypesInfo(t *testing.T) {
+	t.Parallel()
 	// Test sources that are not expected to typecheck must start with the broken prefix.
-	const brokenPkg = "package broken_"
+	const broken = "package broken_"
 
 	var tests = []struct {
 		src  string
@@ -214,7 +216,7 @@ func TestTypesInfo(t *testing.T) {
 		{`package n14; var (x chan int; _ = x == nil)`, `nil`, `chan int`},
 		{`package n15a; var (x interface{}; _ = x == (*int)(nil))`, `nil`, `*int`},
 		{`package n15b; var (x interface{m()}; _ = x == nil)`, `nil`, `interface{m()}`},
-		{`package n15; import "unsafe"; var (x unsafe.Pointer; _ = x == nil)`, `nil`, `unsafe.Pointer`},
+		{`package n16; import "unsafe"; var (x unsafe.Pointer; _ = x == nil)`, `nil`, `unsafe.Pointer`},
 
 		{`package n20; var _ = (*int)(nil)`, `nil`, `*int`},
 		{`package n21; var _ = (func())(nil)`, `nil`, `func()`},
@@ -232,7 +234,7 @@ func TestTypesInfo(t *testing.T) {
 		{`package n34; func f(chan int) { f(nil) }`, `nil`, `chan int`},
 		{`package n35a; func f(interface{}) { f((*int)(nil)) }`, `nil`, `*int`},
 		{`package n35b; func f(interface{m()}) { f(nil) }`, `nil`, `interface{m()}`},
-		{`package n35; import "unsafe"; func f(unsafe.Pointer) { f(nil) }`, `nil`, `unsafe.Pointer`},
+		{`package n36; import "unsafe"; func f(unsafe.Pointer) { f(nil) }`, `nil`, `unsafe.Pointer`},
 
 		// comma-ok expressions
 		{`package p0; var x interface{}; var _, _ = x.(int)`,
@@ -323,16 +325,20 @@ func TestTypesInfo(t *testing.T) {
 		{`package issue47243_f; var x int32; var _ = 1 << 2`, `2`, `untyped int`},
 		{`package issue47243_g; var x int32; var _ = int(1) << 2`, `2`, `untyped int`},
 		{`package issue47243_h; var x int32; var _ = 1 << (2 << x)`, `1`, `int`},
-		{`package issue47243_i; var x int32; var _ = 1 << (2 << x)`, `(2 << x)`, `untyped int`},
-		{`package issue47243_j; var x int32; var _ = 1 << (2 << x)`, `2`, `untyped int`},
+		{`package issue47243_i; var x int32; var _ = 1 << (2 << x)`, `(2 << x)`, `uint`},
+		{`package issue47243_j; var x int32; var _ = 1 << (2 << x)`, `2`, `uint`},
 
 		// tests for broken code that doesn't type-check
-		{brokenPkg + `x0; func _() { var x struct {f string}; x.f := 0 }`, `x.f`, `string`},
-		{brokenPkg + `x1; func _() { var z string; type x struct {f string}; y := &x{q: z}}`, `z`, `string`},
-		{brokenPkg + `x2; func _() { var a, b string; type x struct {f string}; z := &x{f: a, f: b,}}`, `b`, `string`},
-		{brokenPkg + `x3; var x = panic("");`, `panic`, `func(interface{})`},
+		{broken + `x0; func _() { var x struct {f string}; x.f := 0 }`, `x.f`, `string`},
+		{broken + `x1; func _() { var z string; type x struct {f string}; y := &x{q: z}}`, `z`, `string`},
+		{broken + `x2; func _() { var a, b string; type x struct {f string}; z := &x{f: a, f: b,}}`, `b`, `string`},
+		{broken + `x3; var x = panic("");`, `panic`, `func(interface{})`},
 		{`package x4; func _() { panic("") }`, `panic`, `func(interface{})`},
-		{brokenPkg + `x5; func _() { var x map[string][...]int; x = map[string][...]int{"": {1,2,3}} }`, `x`, `map[string]invalid type`},
+		{broken + `x5; func _() { var x map[string][...]int; x = map[string][...]int{"": {1,2,3}} }`, `x`, `map[string]invalid type`},
+		{broken + `x6; func _() { _ = undef[0] }`, `undef`, `invalid type`},
+		{broken + `x7; func _() { _ = undef[0] }`, `undef[0]`, `invalid type`},
+		{broken + `x8; type S struct{}; func _(x S) { _ = x.nofield[0] }`, `x.nofield`, `invalid type`},
+		{broken + `x9; func _(x int) { _ = x.f[1:2] }`, `x.f`, `invalid type`},
 
 		// parameterized functions
 		{`package p0; func f[T any](T) {}; var _ = f[int]`, `f`, `func[T any](T)`},
@@ -347,7 +353,7 @@ func TestTypesInfo(t *testing.T) {
 		{`package t1; type t[P any] int; var _ t[int]`, `t`, `t1.t[P any]`},
 		{`package t2; type t[P interface{}] int; var _ t[int]`, `t`, `t2.t[P interface{}]`},
 		{`package t3; type t[P, Q interface{}] int; var _ t[int, int]`, `t`, `t3.t[P, Q interface{}]`},
-		{brokenPkg + `t4; type t[P, Q interface{ m() }] int; var _ t[int, int]`, `t`, `broken_t4.t[P, Q interface{m()}]`},
+		{broken + `t4; type t[P, Q interface{ m() }] int; var _ t[int, int]`, `t`, `broken_t4.t[P, Q interface{m()}]`},
 
 		// instantiated types must be sanitized
 		{`package g0; type t[P any] int; var x struct{ f t[int] }; var _ = x.f`, `x.f`, `g0.t[int]`},
@@ -410,117 +416,115 @@ func TestTypesInfo(t *testing.T) {
 
 		// go.dev/issue/68639
 		// parenthesized and pointer type expressions in various positions
-		// (note that the syntax parser doesn't record unnecessary parentheses
-		// around types, tests that fail because of that are commented out below)
 		// - as variable type, not generic
 		{`package qa1; type T int; var x T`, `T`, `qa1.T`},
 		{`package qa2; type T int; var x (T)`, `T`, `qa2.T`},
-		// {`package qa3; type T int; var x (T)`, `(T)`, `qa3.T`}, // parser doesn't record parens
+		{`package qa3; type T int; var x (T)`, `(T)`, `qa3.T`},
 		{`package qa4; type T int; var x ((T))`, `T`, `qa4.T`},
-		// {`package qa5; type T int; var x ((T))`, `(T)`, `qa5.T`}, // parser doesn't record parens
-		// {`package qa6; type T int; var x ((T))`, `((T))`, `qa6.T`}, // parser doesn't record parens
+		{`package qa5; type T int; var x ((T))`, `(T)`, `qa5.T`},
+		{`package qa6; type T int; var x ((T))`, `((T))`, `qa6.T`},
 		{`package qa7; type T int; var x *T`, `T`, `qa7.T`},
 		{`package qa8; type T int; var x *T`, `*T`, `*qa8.T`},
 		{`package qa9; type T int; var x (*T)`, `T`, `qa9.T`},
 		{`package qa10; type T int; var x (*T)`, `*T`, `*qa10.T`},
 		{`package qa11; type T int; var x *(T)`, `T`, `qa11.T`},
-		// {`package qa12; type T int; var x *(T)`, `(T)`, `qa12.T`}, // parser doesn't record parens
-		// {`package qa13; type T int; var x *(T)`, `*(T)`, `*qa13.T`}, // parser doesn't record parens
-		// {`package qa14; type T int; var x (*(T))`, `(T)`, `qa14.T`}, // parser doesn't record parens
-		// {`package qa15; type T int; var x (*(T))`, `*(T)`, `*qa15.T`}, // parser doesn't record parens
-		// {`package qa16; type T int; var x (*(T))`, `(*(T))`, `*qa16.T`}, // parser doesn't record parens
+		{`package qa12; type T int; var x *(T)`, `(T)`, `qa12.T`},
+		{`package qa13; type T int; var x *(T)`, `*(T)`, `*qa13.T`},
+		{`package qa14; type T int; var x (*(T))`, `(T)`, `qa14.T`},
+		{`package qa15; type T int; var x (*(T))`, `*(T)`, `*qa15.T`},
+		{`package qa16; type T int; var x (*(T))`, `(*(T))`, `*qa16.T`},
 
 		// - as ordinary function parameter, not generic
 		{`package qb1; type T int; func _(T)`, `T`, `qb1.T`},
 		{`package qb2; type T int; func _((T))`, `T`, `qb2.T`},
-		// {`package qb3; type T int; func _((T))`, `(T)`, `qb3.T`}, // parser doesn't record parens
+		{`package qb3; type T int; func _((T))`, `(T)`, `qb3.T`},
 		{`package qb4; type T int; func _(((T)))`, `T`, `qb4.T`},
-		// {`package qb5; type T int; func _(((T)))`, `(T)`, `qb5.T`}, // parser doesn't record parens
-		// {`package qb6; type T int; func _(((T)))`, `((T))`, `qb6.T`}, // parser doesn't record parens
+		{`package qb5; type T int; func _(((T)))`, `(T)`, `qb5.T`},
+		{`package qb6; type T int; func _(((T)))`, `((T))`, `qb6.T`},
 		{`package qb7; type T int; func _(*T)`, `T`, `qb7.T`},
 		{`package qb8; type T int; func _(*T)`, `*T`, `*qb8.T`},
 		{`package qb9; type T int; func _((*T))`, `T`, `qb9.T`},
 		{`package qb10; type T int; func _((*T))`, `*T`, `*qb10.T`},
 		{`package qb11; type T int; func _(*(T))`, `T`, `qb11.T`},
-		// {`package qb12; type T int; func _(*(T))`, `(T)`, `qb12.T`}, // parser doesn't record parens
-		// {`package qb13; type T int; func _(*(T))`, `*(T)`, `*qb13.T`}, // parser doesn't record parens
-		// {`package qb14; type T int; func _((*(T)))`, `(T)`, `qb14.T`}, // parser doesn't record parens
-		// {`package qb15; type T int; func _((*(T)))`, `*(T)`, `*qb15.T`}, // parser doesn't record parens
-		// {`package qb16; type T int; func _((*(T)))`, `(*(T))`, `*qb16.T`}, // parser doesn't record parens
+		{`package qb12; type T int; func _(*(T))`, `(T)`, `qb12.T`},
+		{`package qb13; type T int; func _(*(T))`, `*(T)`, `*qb13.T`},
+		{`package qb14; type T int; func _((*(T)))`, `(T)`, `qb14.T`},
+		{`package qb15; type T int; func _((*(T)))`, `*(T)`, `*qb15.T`},
+		{`package qb16; type T int; func _((*(T)))`, `(*(T))`, `*qb16.T`},
 
 		// - as method receiver, not generic
 		{`package qc1; type T int; func (T) _() {}`, `T`, `qc1.T`},
 		{`package qc2; type T int; func ((T)) _() {}`, `T`, `qc2.T`},
-		// {`package qc3; type T int; func ((T)) _() {}`, `(T)`, `qc3.T`}, // parser doesn't record parens
+		{`package qc3; type T int; func ((T)) _() {}`, `(T)`, `qc3.T`},
 		{`package qc4; type T int; func (((T))) _() {}`, `T`, `qc4.T`},
-		// {`package qc5; type T int; func (((T))) _() {}`, `(T)`, `qc5.T`}, // parser doesn't record parens
-		// {`package qc6; type T int; func (((T))) _() {}`, `((T))`, `qc6.T`}, // parser doesn't record parens
+		{`package qc5; type T int; func (((T))) _() {}`, `(T)`, `qc5.T`},
+		{`package qc6; type T int; func (((T))) _() {}`, `((T))`, `qc6.T`},
 		{`package qc7; type T int; func (*T) _() {}`, `T`, `qc7.T`},
 		{`package qc8; type T int; func (*T) _() {}`, `*T`, `*qc8.T`},
 		{`package qc9; type T int; func ((*T)) _() {}`, `T`, `qc9.T`},
 		{`package qc10; type T int; func ((*T)) _() {}`, `*T`, `*qc10.T`},
 		{`package qc11; type T int; func (*(T)) _() {}`, `T`, `qc11.T`},
-		// {`package qc12; type T int; func (*(T)) _() {}`, `(T)`, `qc12.T`}, // parser doesn't record parens
-		// {`package qc13; type T int; func (*(T)) _() {}`, `*(T)`, `*qc13.T`}, // parser doesn't record parens
-		// {`package qc14; type T int; func ((*(T))) _() {}`, `(T)`, `qc14.T`}, // parser doesn't record parens
-		// {`package qc15; type T int; func ((*(T))) _() {}`, `*(T)`, `*qc15.T`}, // parser doesn't record parens
-		// {`package qc16; type T int; func ((*(T))) _() {}`, `(*(T))`, `*qc16.T`}, // parser doesn't record parens
+		{`package qc12; type T int; func (*(T)) _() {}`, `(T)`, `qc12.T`},
+		{`package qc13; type T int; func (*(T)) _() {}`, `*(T)`, `*qc13.T`},
+		{`package qc14; type T int; func ((*(T))) _() {}`, `(T)`, `qc14.T`},
+		{`package qc15; type T int; func ((*(T))) _() {}`, `*(T)`, `*qc15.T`},
+		{`package qc16; type T int; func ((*(T))) _() {}`, `(*(T))`, `*qc16.T`},
 
 		// - as variable type, generic
 		{`package qd1; type T[_ any] int; var x T[int]`, `T`, `qd1.T[_ any]`},
 		{`package qd2; type T[_ any] int; var x (T[int])`, `T[int]`, `qd2.T[int]`},
-		// {`package qd3; type T[_ any] int; var x (T[int])`, `(T[int])`, `qd3.T[int]`}, // parser doesn't record parens
+		{`package qd3; type T[_ any] int; var x (T[int])`, `(T[int])`, `qd3.T[int]`},
 		{`package qd4; type T[_ any] int; var x ((T[int]))`, `T`, `qd4.T[_ any]`},
-		// {`package qd5; type T[_ any] int; var x ((T[int]))`, `(T[int])`, `qd5.T[int]`}, // parser doesn't record parens
-		// {`package qd6; type T[_ any] int; var x ((T[int]))`, `((T[int]))`, `qd6.T[int]`}, // parser doesn't record parens
+		{`package qd5; type T[_ any] int; var x ((T[int]))`, `(T[int])`, `qd5.T[int]`},
+		{`package qd6; type T[_ any] int; var x ((T[int]))`, `((T[int]))`, `qd6.T[int]`},
 		{`package qd7; type T[_ any] int; var x *T[int]`, `T`, `qd7.T[_ any]`},
 		{`package qd8; type T[_ any] int; var x *T[int]`, `*T[int]`, `*qd8.T[int]`},
 		{`package qd9; type T[_ any] int; var x (*T[int])`, `T`, `qd9.T[_ any]`},
 		{`package qd10; type T[_ any] int; var x (*T[int])`, `*T[int]`, `*qd10.T[int]`},
 		{`package qd11; type T[_ any] int; var x *(T[int])`, `T[int]`, `qd11.T[int]`},
-		// {`package qd12; type T[_ any] int; var x *(T[int])`, `(T[int])`, `qd12.T[int]`}, // parser doesn't record parens
-		// {`package qd13; type T[_ any] int; var x *(T[int])`, `*(T[int])`, `*qd13.T[int]`}, // parser doesn't record parens
-		// {`package qd14; type T[_ any] int; var x (*(T[int]))`, `(T[int])`, `qd14.T[int]`}, // parser doesn't record parens
-		// {`package qd15; type T[_ any] int; var x (*(T[int]))`, `*(T[int])`, `*qd15.T[int]`}, // parser doesn't record parens
-		// {`package qd16; type T[_ any] int; var x (*(T[int]))`, `(*(T[int]))`, `*qd16.T[int]`}, // parser doesn't record parens
+		{`package qd12; type T[_ any] int; var x *(T[int])`, `(T[int])`, `qd12.T[int]`},
+		{`package qd13; type T[_ any] int; var x *(T[int])`, `*(T[int])`, `*qd13.T[int]`},
+		{`package qd14; type T[_ any] int; var x (*(T[int]))`, `(T[int])`, `qd14.T[int]`},
+		{`package qd15; type T[_ any] int; var x (*(T[int]))`, `*(T[int])`, `*qd15.T[int]`},
+		{`package qd16; type T[_ any] int; var x (*(T[int]))`, `(*(T[int]))`, `*qd16.T[int]`},
 
 		// - as ordinary function parameter, generic
 		{`package qe1; type T[_ any] int; func _(T[int])`, `T`, `qe1.T[_ any]`},
 		{`package qe2; type T[_ any] int; func _((T[int]))`, `T[int]`, `qe2.T[int]`},
-		// {`package qe3; type T[_ any] int; func _((T[int]))`, `(T[int])`, `qe3.T[int]`}, // parser doesn't record parens
+		{`package qe3; type T[_ any] int; func _((T[int]))`, `(T[int])`, `qe3.T[int]`},
 		{`package qe4; type T[_ any] int; func _(((T[int])))`, `T`, `qe4.T[_ any]`},
-		// {`package qe5; type T[_ any] int; func _(((T[int])))`, `(T[int])`, `qe5.T[int]`}, // parser doesn't record parens
-		// {`package qe6; type T[_ any] int; func _(((T[int])))`, `((T[int]))`, `qe6.T[int]`}, // parser doesn't record parens
+		{`package qe5; type T[_ any] int; func _(((T[int])))`, `(T[int])`, `qe5.T[int]`},
+		{`package qe6; type T[_ any] int; func _(((T[int])))`, `((T[int]))`, `qe6.T[int]`},
 		{`package qe7; type T[_ any] int; func _(*T[int])`, `T`, `qe7.T[_ any]`},
 		{`package qe8; type T[_ any] int; func _(*T[int])`, `*T[int]`, `*qe8.T[int]`},
 		{`package qe9; type T[_ any] int; func _((*T[int]))`, `T`, `qe9.T[_ any]`},
 		{`package qe10; type T[_ any] int; func _((*T[int]))`, `*T[int]`, `*qe10.T[int]`},
 		{`package qe11; type T[_ any] int; func _(*(T[int]))`, `T[int]`, `qe11.T[int]`},
-		// {`package qe12; type T[_ any] int; func _(*(T[int]))`, `(T[int])`, `qe12.T[int]`}, // parser doesn't record parens
-		// {`package qe13; type T[_ any] int; func _(*(T[int]))`, `*(T[int])`, `*qe13.T[int]`}, // parser doesn't record parens
-		// {`package qe14; type T[_ any] int; func _((*(T[int])))`, `(T[int])`, `qe14.T[int]`}, // parser doesn't record parens
-		// {`package qe15; type T[_ any] int; func _((*(T[int])))`, `*(T[int])`, `*qe15.T[int]`}, // parser doesn't record parens
-		// {`package qe16; type T[_ any] int; func _((*(T[int])))`, `(*(T[int]))`, `*qe16.T[int]`}, // parser doesn't record parens
+		{`package qe12; type T[_ any] int; func _(*(T[int]))`, `(T[int])`, `qe12.T[int]`},
+		{`package qe13; type T[_ any] int; func _(*(T[int]))`, `*(T[int])`, `*qe13.T[int]`},
+		{`package qe14; type T[_ any] int; func _((*(T[int])))`, `(T[int])`, `qe14.T[int]`},
+		{`package qe15; type T[_ any] int; func _((*(T[int])))`, `*(T[int])`, `*qe15.T[int]`},
+		{`package qe16; type T[_ any] int; func _((*(T[int])))`, `(*(T[int]))`, `*qe16.T[int]`},
 
 		// - as method receiver, generic
 		{`package qf1; type T[_ any] int; func (T[_]) _() {}`, `T`, `qf1.T[_ any]`},
 		{`package qf2; type T[_ any] int; func ((T[_])) _() {}`, `T[_]`, `qf2.T[_]`},
-		// {`package qf3; type T[_ any] int; func ((T[_])) _() {}`, `(T[_])`, `qf3.T[_]`}, // parser doesn't record parens
+		{`package qf3; type T[_ any] int; func ((T[_])) _() {}`, `(T[_])`, `qf3.T[_]`},
 		{`package qf4; type T[_ any] int; func (((T[_]))) _() {}`, `T`, `qf4.T[_ any]`},
-		// {`package qf5; type T[_ any] int; func (((T[_]))) _() {}`, `(T[_])`, `qf5.T[_]`}, // parser doesn't record parens
-		// {`package qf6; type T[_ any] int; func (((T[_]))) _() {}`, `((T[_]))`, `qf6.T[_]`}, // parser doesn't record parens
+		{`package qf5; type T[_ any] int; func (((T[_]))) _() {}`, `(T[_])`, `qf5.T[_]`},
+		{`package qf6; type T[_ any] int; func (((T[_]))) _() {}`, `((T[_]))`, `qf6.T[_]`},
 		{`package qf7; type T[_ any] int; func (*T[_]) _() {}`, `T`, `qf7.T[_ any]`},
 		{`package qf8; type T[_ any] int; func (*T[_]) _() {}`, `*T[_]`, `*qf8.T[_]`},
 		{`package qf9; type T[_ any] int; func ((*T[_])) _() {}`, `T`, `qf9.T[_ any]`},
 		{`package qf10; type T[_ any] int; func ((*T[_])) _() {}`, `*T[_]`, `*qf10.T[_]`},
 		{`package qf11; type T[_ any] int; func (*(T[_])) _() {}`, `T[_]`, `qf11.T[_]`},
-		// {`package qf12; type T[_ any] int; func (*(T[_])) _() {}`, `(T[_])`, `qf12.T[_]`}, // parser doesn't record parens
-		// {`package qf13; type T[_ any] int; func (*(T[_])) _() {}`, `*(T[_])`, `*qf13.T[_]`}, // parser doesn't record parens
-		// {`package qf14; type T[_ any] int; func ((*(T[_]))) _() {}`, `(T[_])`, `qf14.T[_]`}, // parser doesn't record parens
-		// {`package qf15; type T[_ any] int; func ((*(T[_]))) _() {}`, `*(T[_])`, `*qf15.T[_]`}, // parser doesn't record parens
-		// {`package qf16; type T[_ any] int; func ((*(T[_]))) _() {}`, `(*(T[_]))`, `*qf16.T[_]`}, // parser doesn't record parens
+		{`package qf12; type T[_ any] int; func (*(T[_])) _() {}`, `(T[_])`, `qf12.T[_]`},
+		{`package qf13; type T[_ any] int; func (*(T[_])) _() {}`, `*(T[_])`, `*qf13.T[_]`},
+		{`package qf14; type T[_ any] int; func ((*(T[_]))) _() {}`, `(T[_])`, `qf14.T[_]`},
+		{`package qf15; type T[_ any] int; func ((*(T[_]))) _() {}`, `*(T[_])`, `*qf15.T[_]`},
+		{`package qf16; type T[_ any] int; func ((*(T[_]))) _() {}`, `(*(T[_]))`, `*qf16.T[_]`},
 
-		// For historic reasons, type parameters in receiver type expressions
+		// For historical reasons, type parameters in receiver type expressions
 		// are considered both definitions and uses and thus also show up in
 		// the Info.Types map (see go.dev/issue/68670).
 		{`package t1; type T[_ any] int; func (T[P]) _() {}`, `P`, `P`},
@@ -531,7 +535,7 @@ func TestTypesInfo(t *testing.T) {
 	for _, test := range tests {
 		info := Info{Types: make(map[syntax.Expr]TypeAndValue)}
 		var name string
-		if strings.HasPrefix(test.src, brokenPkg) {
+		if strings.HasPrefix(test.src, broken) {
 			pkg, err := typecheck(test.src, nil, &info)
 			if err == nil {
 				t.Errorf("package %s: expected to fail but passed", pkg.Name())
@@ -546,8 +550,9 @@ func TestTypesInfo(t *testing.T) {
 
 		// look for expression type
 		var typ Type
+		expr := unparen(test.expr) // syntax parser doesn't record unnecessary parentheses
 		for e, tv := range info.Types {
-			if ExprString(e) == test.expr {
+			if ExprString(e) == expr {
 				typ = tv.Type
 				break
 			}
@@ -564,7 +569,19 @@ func TestTypesInfo(t *testing.T) {
 	}
 }
 
+func unparen(s string) string {
+	switch {
+	case len(s) >= 1 && s[0] == '*':
+		return "*" + unparen(s[1:])
+	case len(s) >= 2 && s[0] == '(' && s[len(s)-1] == ')':
+		return unparen(s[1 : len(s)-1])
+	default:
+		return s
+	}
+}
+
 func TestInstanceInfo(t *testing.T) {
+	t.Parallel()
 	const lib = `package lib
 
 func F[P any](P) {}
@@ -824,6 +841,7 @@ func sortedInstances(m map[*syntax.Name]Instance) (instances []recordedInstance)
 }
 
 func TestDefsInfo(t *testing.T) {
+	t.Parallel()
 	var tests = []struct {
 		src  string
 		obj  string
@@ -873,6 +891,7 @@ func TestDefsInfo(t *testing.T) {
 }
 
 func TestUsesInfo(t *testing.T) {
+	t.Parallel()
 	var tests = []struct {
 		src  string
 		obj  string
@@ -946,6 +965,7 @@ func TestUsesInfo(t *testing.T) {
 }
 
 func TestGenericMethodInfo(t *testing.T) {
+	t.Parallel()
 	src := `package p
 
 type N[A any] int
@@ -954,17 +974,12 @@ func (r N[B]) m() { r.m(); r.n() }
 
 func (r *N[C]) n() {  }
 `
-	f := mustParse(src)
 	info := Info{
 		Defs:       make(map[*syntax.Name]Object),
 		Uses:       make(map[*syntax.Name]Object),
 		Selections: make(map[*syntax.SelectorExpr]*Selection),
 	}
-	var conf Config
-	pkg, err := conf.Check("p", []*syntax.File{f}, &info)
-	if err != nil {
-		t.Fatal(err)
-	}
+	pkg := mustTypecheck(src, nil, &info)
 
 	N := pkg.Scope().Lookup("N").Type().(*Named)
 
@@ -975,39 +990,30 @@ func (r *N[C]) n() {  }
 	}
 
 	// Collect objects from info.
-	var dm, dn *Func   // the declared methods
-	var dmm, dmn *Func // the methods used in the body of m
-	for _, decl := range f.DeclList {
-		fdecl, ok := decl.(*syntax.FuncDecl)
-		if !ok {
-			continue
-		}
-		def := info.Defs[fdecl.Name].(*Func)
-		switch fdecl.Name.Value {
+	var dm, dn *Func // the declared methods
+	for id, obj := range info.Defs {
+		switch id.Value {
 		case "m":
-			dm = def
-			syntax.Inspect(fdecl.Body, func(n syntax.Node) bool {
-				if call, ok := n.(*syntax.CallExpr); ok {
-					sel := call.Fun.(*syntax.SelectorExpr)
-					use := info.Uses[sel.Sel].(*Func)
-					selection := info.Selections[sel]
-					if selection.Kind() != MethodVal {
-						t.Errorf("Selection kind = %v, want %v", selection.Kind(), MethodVal)
-					}
-					if selection.Obj() != use {
-						t.Errorf("info.Selections contains %v, want %v", selection.Obj(), use)
-					}
-					switch sel.Sel.Value {
-					case "m":
-						dmm = use
-					case "n":
-						dmn = use
-					}
-				}
-				return true
-			})
+			dm = obj.(*Func)
 		case "n":
-			dn = def
+			dn = obj.(*Func)
+		}
+	}
+
+	var dmm, dmn *Func // the methods used in the body of m
+	for sel, selection := range info.Selections {
+		use := info.Uses[sel.Sel].(*Func)
+		if selection.Kind() != MethodVal {
+			t.Errorf("Selection kind = %v, want %v", selection.Kind(), MethodVal)
+		}
+		if selection.Obj() != use {
+			t.Errorf("info.Selections contains %v, want %v", selection.Obj(), use)
+		}
+		switch sel.Sel.Value {
+		case "m":
+			dmm = use
+		case "n":
+			dmn = use
 		}
 	}
 
@@ -1399,6 +1405,7 @@ func TestScopesInfo(t *testing.T) {
 }
 
 func TestInitOrderInfo(t *testing.T) {
+	t.Parallel()
 	var tests = []struct {
 		src   string
 		inits []string
@@ -1557,6 +1564,7 @@ func TestInitOrderInfo(t *testing.T) {
 }
 
 func TestMultiFileInitOrder(t *testing.T) {
+	t.Parallel()
 	fileA := mustParse(`package main; var a = 1`)
 	fileB := mustParse(`package main; var b = 2`)
 
@@ -1581,6 +1589,7 @@ func TestMultiFileInitOrder(t *testing.T) {
 }
 
 func TestFiles(t *testing.T) {
+	t.Parallel()
 	var sources = []string{
 		"package p; type T struct{}; func (T) m1() {}",
 		"package p; func (T) m2() {}; var x interface{ m1(); m2() } = T{}",
@@ -1621,6 +1630,7 @@ func (m testImporter) Import(path string) (*Package, error) {
 }
 
 func TestSelection(t *testing.T) {
+	t.Parallel()
 	selections := make(map[*syntax.SelectorExpr]*Selection)
 
 	imports := make(testImporter)
@@ -1806,13 +1816,14 @@ func indexFor(s string, pos syntax.Pos) int {
 }
 
 func TestIssue8518(t *testing.T) {
+	t.Parallel()
 	imports := make(testImporter)
 	conf := Config{
 		Error:    func(err error) { t.Log(err) }, // don't exit after first error
 		Importer: imports,
 	}
 	makePkg := func(path, src string) {
-		imports[path], _ = conf.Check(path, []*syntax.File{mustParse(src)}, nil) // errors logged via conf.Error
+		imports[path], _ = typecheck(src, &conf, nil) // errors logged via conf.Error
 	}
 
 	const libSrc = `
@@ -1834,13 +1845,14 @@ var _ = a.C2
 }
 
 func TestIssue59603(t *testing.T) {
+	t.Parallel()
 	imports := make(testImporter)
 	conf := Config{
 		Error:    func(err error) { t.Log(err) }, // don't exit after first error
 		Importer: imports,
 	}
 	makePkg := func(path, src string) {
-		imports[path], _ = conf.Check(path, []*syntax.File{mustParse(src)}, nil) // errors logged via conf.Error
+		imports[path], _ = typecheck(src, &conf, nil) // errors logged via conf.Error
 	}
 
 	const libSrc = `
@@ -1859,6 +1871,7 @@ const _ = a.C
 }
 
 func TestLookupFieldOrMethodOnNil(t *testing.T) {
+	t.Parallel()
 	// LookupFieldOrMethod on a nil type is expected to produce a run-time panic.
 	defer func() {
 		const want = "LookupFieldOrMethod on nil type"
@@ -1871,6 +1884,7 @@ func TestLookupFieldOrMethodOnNil(t *testing.T) {
 }
 
 func TestLookupFieldOrMethod(t *testing.T) {
+	t.Parallel()
 	// Test cases assume a lookup of the form a.f or x.f, where a stands for an
 	// addressable value, and x for a non-addressable value (even though a variable
 	// for ease of test case writing).
@@ -1952,6 +1966,7 @@ func TestLookupFieldOrMethod(t *testing.T) {
 
 // Test for go.dev/issue/52715
 func TestLookupFieldOrMethod_RecursiveGeneric(t *testing.T) {
+	t.Parallel()
 	const src = `
 package pkg
 
@@ -1968,11 +1983,7 @@ type Node[T any] struct {
 type Instance = *Tree[int]
 `
 
-	f := mustParse(src)
-	pkg := NewPackage("pkg", f.PkgName.Value)
-	if err := NewChecker(nil, pkg, nil).Files([]*syntax.File{f}); err != nil {
-		panic(err)
-	}
+	pkg := mustTypecheck(src, nil, nil)
 
 	T := pkg.Scope().Lookup("Instance").Type()
 	_, _, _ = LookupFieldOrMethod(T, false, pkg, "M") // verify that LookupFieldOrMethod terminates
@@ -1985,13 +1996,16 @@ func newDefined(underlying Type) *Named {
 }
 
 func TestConvertibleTo(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		v, t Type
 		want bool
 	}{
 		{Typ[Int], Typ[Int], true},
 		{Typ[Int], Typ[Float32], true},
-		{Typ[Int], Typ[String], true},
+		{Typ[Byte], Typ[String], true},
+		{Typ[Rune], Typ[String], true},
+		{Typ[Int], Typ[String], false},
 		{newDefined(Typ[Int]), Typ[Int], true},
 		{newDefined(new(Struct)), new(Struct), true},
 		{newDefined(Typ[Int]), new(Struct), false},
@@ -2010,6 +2024,7 @@ func TestConvertibleTo(t *testing.T) {
 }
 
 func TestAssignableTo(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		v, t Type
 		want bool
@@ -2033,6 +2048,7 @@ func TestAssignableTo(t *testing.T) {
 }
 
 func TestIdentical(t *testing.T) {
+	t.Parallel()
 	// For each test, we compare the types of objects X and Y in the source.
 	tests := []struct {
 		src  string
@@ -2079,6 +2095,7 @@ func TestIdentical(t *testing.T) {
 }
 
 func TestIdentical_issue15173(t *testing.T) {
+	t.Parallel()
 	// Identical should allow nil arguments and be symmetric.
 	for _, test := range []struct {
 		x, y Type
@@ -2096,6 +2113,7 @@ func TestIdentical_issue15173(t *testing.T) {
 }
 
 func TestIdenticalUnions(t *testing.T) {
+	t.Parallel()
 	tname := NewTypeName(nopos, nil, "myInt", nil)
 	myInt := NewNamed(tname, Typ[Int], nil)
 	tmap := map[string]*Term{
@@ -2138,6 +2156,7 @@ func TestIdenticalUnions(t *testing.T) {
 }
 
 func TestIssue61737(t *testing.T) {
+	t.Parallel()
 	// This test verifies that it is possible to construct invalid interfaces
 	// containing duplicate methods using the go/types API.
 	//
@@ -2161,21 +2180,91 @@ func TestIssue61737(t *testing.T) {
 }
 
 func TestNewAlias_Issue65455(t *testing.T) {
+	t.Parallel()
 	obj := NewTypeName(nopos, nil, "A", nil)
 	alias := NewAlias(obj, Typ[Int])
 	alias.Underlying() // must not panic
 }
 
-func TestIssue15305(t *testing.T) {
-	const src = "package p; func f() int16; var _ = f(undef)"
-	f := mustParse(src)
-	conf := Config{
-		Error: func(err error) {}, // allow errors
+func shouldPanic(t *testing.T, msg string, f func()) {
+	t.Helper()
+	defer func() {
+		if recover() == nil {
+			t.Errorf("%s: expected panic, but did not panic", msg)
+		}
+	}()
+	f()
+}
+
+func TestIncompleteAlias(t *testing.T) {
+	t.Parallel()
+	obj := NewTypeName(nopos, nil, "A", nil)
+	alias := NewAlias(obj, nil)
+
+	// An incomplete alias has no defined underlying or RHS type;
+	// accessing it must panic rather than return a misleading type.
+	shouldPanic(t, "alias.Underlying()", func() { alias.Underlying() })
+	shouldPanic(t, "alias.Rhs()", func() { alias.Rhs() })
+
+	// Unalias on an incomplete alias returns nil per its contract.
+	if got := Unalias(alias); got != nil {
+		t.Errorf("Unalias(alias) = %v, want nil", got)
 	}
+}
+
+func TestIncompleteTypeParam(t *testing.T) {
+	t.Parallel()
+	tname := NewTypeName(nopos, nil, "P", nil)
+	tparam := NewTypeParam(tname, nil)
+
+	// An incomplete TypeParam has no defined constraint or underlying type;
+	// accessing it must panic.
+	shouldPanic(t, "tparam.Constraint()", func() { tparam.Constraint() })
+	shouldPanic(t, "tparam.Underlying()", func() { tparam.Underlying() })
+}
+
+func TestIncompletePackageObjects(t *testing.T) {
+	t.Parallel()
+	const src = `package p
+type A = undeclared
+type B undeclared
+var C = undeclared
+const D = undeclared
+func F(undeclared)
+`
+	pkg, _ := typecheck(src, nil, nil)
+
+	for _, name := range pkg.Scope().Names() {
+		obj := pkg.Scope().Lookup(name)
+		if obj.Type() == nil {
+			t.Errorf("object %s has nil Type", obj.Name())
+		}
+	}
+
+	// Check that an incomplete alias from package checking has Typ[Invalid]
+	// as its Underlying and Rhs (errors occurred), and does not panic.
+	a := pkg.Scope().Lookup("A").Type().(*Alias)
+	if got, want := a.Underlying(), Typ[Invalid]; got != want {
+		t.Errorf("A.Underlying() = %v, want %v", got, want)
+	}
+	if got, want := a.Rhs(), Typ[Invalid]; got != want {
+		t.Errorf("A.Rhs() = %v, want %v", got, want)
+	}
+
+	// Verify that the broken func has an empty *Signature type, not Typ[Invalid] or nil.
+	fn := pkg.Scope().Lookup("F").(*Func)
+	if _, ok := fn.Type().(*Signature); !ok {
+		t.Errorf("F has type %T, want *Signature", fn.Type())
+	}
+}
+
+func TestIssue15305(t *testing.T) {
+	t.Parallel()
+	const src = "package p; func f() int16; var _ = f(undef)"
 	info := &Info{
 		Types: make(map[syntax.Expr]TypeAndValue),
 	}
-	conf.Check("p", []*syntax.File{f}, info) // ignore result
+	typecheck(src, nil, info) // ignore result
 	for e, tv := range info.Types {
 		if _, ok := e.(*syntax.CallExpr); ok {
 			if tv.Type != Typ[Int16] {
@@ -2191,6 +2280,7 @@ func TestIssue15305(t *testing.T) {
 // types for composite literal expressions and composite literal type
 // expressions.
 func TestCompositeLitTypes(t *testing.T) {
+	t.Parallel()
 	for i, test := range []struct {
 		lit, typ string
 	}{
@@ -2203,11 +2293,9 @@ func TestCompositeLitTypes(t *testing.T) {
 		{`struct{}{}`, `struct{}`},
 		{`struct{x, y int; z complex128}{}`, `struct{x int; y int; z complex128}`},
 	} {
-		f := mustParse(fmt.Sprintf("package p%d; var _ = %s", i, test.lit))
+		src := fmt.Sprintf("package p%d; var _ = %s", i, test.lit)
 		types := make(map[syntax.Expr]TypeAndValue)
-		if _, err := new(Config).Check("p", []*syntax.File{f}, &Info{Types: types}); err != nil {
-			t.Fatalf("%s: %v", test.lit, err)
-		}
+		mustTypecheck(src, nil, &Info{Types: types})
 
 		cmptype := func(x syntax.Expr, want string) {
 			tv, ok := types[x]
@@ -2224,18 +2312,31 @@ func TestCompositeLitTypes(t *testing.T) {
 			}
 		}
 
+		// find composite literal expression
+		var rhs *syntax.CompositeLit
+		for x := range types {
+			if clit, ok := x.(*syntax.CompositeLit); ok {
+				rhs = clit
+				break
+			}
+		}
+		if rhs == nil {
+			t.Errorf("%s: no composite literal found", test.lit)
+			continue
+		}
+
 		// test type of composite literal expression
-		rhs := f.DeclList[0].(*syntax.VarDecl).Values
 		cmptype(rhs, test.typ)
 
 		// test type of composite literal type expression
-		cmptype(rhs.(*syntax.CompositeLit).Type, test.typ)
+		cmptype(rhs.Type, test.typ)
 	}
 }
 
 // TestObjectParents verifies that objects have parent scopes or not
 // as specified by the Object interface.
 func TestObjectParents(t *testing.T) {
+	t.Parallel()
 	const src = `
 package p
 
@@ -2257,14 +2358,10 @@ func (*T1) m2() {}
 func f(x int) { y := x; print(y) }
 `
 
-	f := mustParse(src)
-
 	info := &Info{
 		Defs: make(map[*syntax.Name]Object),
 	}
-	if _, err := new(Config).Check("p", []*syntax.File{f}, info); err != nil {
-		t.Fatal(err)
-	}
+	mustTypecheck(src, nil, info)
 
 	for ident, obj := range info.Defs {
 		if obj == nil {
@@ -2304,6 +2401,7 @@ func f(x int) { y := x; print(y) }
 // elsewhere in a package due to failing to import a package.
 func TestFailedImport(t *testing.T) {
 	testenv.MustHaveGoBuild(t)
+	t.Parallel()
 
 	const src = `
 package p
@@ -2315,8 +2413,6 @@ type T = foo.T
 var v T = c
 func f(x T) T { return foo.F(x) }
 `
-	f := mustParse(src)
-	files := []*syntax.File{f}
 
 	// type-check using all possible importers
 	for _, compiler := range []string{"gc", "gccgo", "source"} {
@@ -2335,7 +2431,7 @@ func f(x T) T { return foo.F(x) }
 		info := &Info{
 			Uses: make(map[*syntax.Name]Object),
 		}
-		pkg, _ := conf.Check("p", files, info)
+		pkg, _ := typecheck(src, &conf, info)
 		if pkg == nil {
 			t.Errorf("for %s importer, type-checking failed to return a package", compiler)
 			continue
@@ -2368,6 +2464,7 @@ func f(x T) T { return foo.F(x) }
 }
 
 func TestInstantiate(t *testing.T) {
+	t.Parallel()
 	// eventually we like more tests but this is a start
 	const src = "package p; type T[P any] *T[P]"
 	pkg := mustTypecheck(src, nil, nil)
@@ -2392,6 +2489,7 @@ func TestInstantiate(t *testing.T) {
 }
 
 func TestInstantiateConcurrent(t *testing.T) {
+	t.Parallel()
 	const src = `package p
 
 type I[P any] interface {
@@ -2468,6 +2566,7 @@ type GI = G[int]
 }
 
 func TestInstantiateErrors(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		src    string // by convention, T must be the type being instantiated
 		targs  []Type
@@ -2502,6 +2601,7 @@ func TestInstantiateErrors(t *testing.T) {
 }
 
 func TestArgumentErrorUnwrapping(t *testing.T) {
+	t.Parallel()
 	var err error = &ArgumentError{
 		Index: 1,
 		Err:   Error{Msg: "test"},
@@ -2516,16 +2616,12 @@ func TestArgumentErrorUnwrapping(t *testing.T) {
 }
 
 func TestInstanceIdentity(t *testing.T) {
+	t.Parallel()
 	imports := make(testImporter)
 	conf := Config{Importer: imports}
 	makePkg := func(src string) {
-		f := mustParse(src)
-		name := f.PkgName.Value
-		pkg, err := conf.Check(name, []*syntax.File{f}, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		imports[name] = pkg
+		pkg := mustTypecheck(src, &conf, nil)
+		imports[pkg.Name()] = pkg
 	}
 	makePkg(`package lib; type T[P any] struct{}`)
 	makePkg(`package a; import "lib"; var A lib.T[int]`)
@@ -2539,6 +2635,7 @@ func TestInstanceIdentity(t *testing.T) {
 
 // TestInstantiatedObjects verifies properties of instantiated objects.
 func TestInstantiatedObjects(t *testing.T) {
+	t.Parallel()
 	const src = `
 package p
 
@@ -2575,12 +2672,7 @@ func fn() {
 	info := &Info{
 		Defs: make(map[*syntax.Name]Object),
 	}
-	f := mustParse(src)
-	conf := Config{}
-	pkg, err := conf.Check(f.PkgName.Value, []*syntax.File{f}, info)
-	if err != nil {
-		t.Fatal(err)
-	}
+	pkg := mustTypecheck(src, nil, info)
 
 	lookup := func(name string) Type { return pkg.Scope().Lookup(name).Type() }
 	fnScope := pkg.Scope().Lookup("fn").(*Func).Scope()
@@ -2613,12 +2705,9 @@ func fn() {
 
 	// Collect all identifiers by name.
 	idents := make(map[string][]*syntax.Name)
-	syntax.Inspect(f, func(n syntax.Node) bool {
-		if id, ok := n.(*syntax.Name); ok {
-			idents[id.Value] = append(idents[id.Value], id)
-		}
-		return true
-	})
+	for id := range info.Defs {
+		idents[id.Value] = append(idents[id.Value], id)
+	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -2667,6 +2756,7 @@ func originObject(obj Object) Object {
 }
 
 func TestImplements(t *testing.T) {
+	t.Parallel()
 	const src = `
 package p
 
@@ -2705,9 +2795,7 @@ func (N4) m()
 type Bad Bad // invalid type
 `
 
-	f := mustParse(src)
-	conf := Config{Error: func(error) {}}
-	pkg, _ := conf.Check(f.PkgName.Value, []*syntax.File{f}, nil)
+	pkg, _ := typecheck(src, nil, nil)
 
 	lookup := func(tname string) Type { return pkg.Scope().Lookup(tname).Type() }
 	var (
@@ -2779,6 +2867,7 @@ type Bad Bad // invalid type
 }
 
 func TestMissingMethodAlternative(t *testing.T) {
+	t.Parallel()
 	const src = `
 package p
 type T interface {
@@ -2834,6 +2923,7 @@ func (V4) M()
 }
 
 func TestErrorURL(t *testing.T) {
+	t.Parallel()
 	conf := Config{ErrorURL: " [go.dev/e/%s]"}
 
 	// test case for a one-line error
@@ -2859,6 +2949,7 @@ var _ = f(1, 2)
 }
 
 func TestModuleVersion(t *testing.T) {
+	t.Parallel()
 	// version go1.dd must be able to typecheck go1.dd.0, go1.dd.1, etc.
 	goversion := fmt.Sprintf("go1.%d", goversion.Version)
 	for _, v := range []string{
@@ -2876,6 +2967,7 @@ func TestModuleVersion(t *testing.T) {
 }
 
 func TestFileVersions(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		goVersion   string
 		fileVersion string
@@ -2953,6 +3045,7 @@ func TestFileVersions(t *testing.T) {
 // TestTooNew ensures that "too new" errors are emitted when the file
 // or module is tagged with a newer version of Go than this go/types.
 func TestTooNew(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		goVersion   string // package's Go version (as if derived from go.mod file)
 		fileVersion string // file's Go version (becomes a build tag)
@@ -3000,6 +3093,7 @@ func TestTooNew(t *testing.T) {
 
 // This is a regression test for #66704.
 func TestUnaliasTooSoonInCycle(t *testing.T) {
+	t.Parallel()
 	const src = `package a
 
 var x T[B] // this appears to cause Unalias to be called on B while still Invalid
@@ -3018,6 +3112,7 @@ type B = T[A]
 }
 
 func TestAlias_Rhs(t *testing.T) {
+	t.Parallel()
 	const src = `package p
 
 type A = B
@@ -3047,6 +3142,7 @@ type C = int
 //
 // The Checker now holds the effective version in a state variable.
 func TestVersionWithoutPos(t *testing.T) {
+	t.Parallel()
 	f := mustParse("//go:build go1.22\n\npackage p; var _ int")
 
 	// Splice in a decl from another file. Its pos will be wrong.
@@ -3067,7 +3163,8 @@ func TestVersionWithoutPos(t *testing.T) {
 }
 
 func TestVarKind(t *testing.T) {
-	f := mustParse(`package p
+	t.Parallel()
+	const src = `package p
 
 var global int
 
@@ -3082,14 +3179,10 @@ func (recv T) f(param int) (result int) {
 	}
 	return local2
 }
-`)
+`
 
-	pkg := NewPackage("p", "p")
 	info := &Info{Defs: make(map[*syntax.Name]Object)}
-	check := NewChecker(&Config{}, pkg, info)
-	if err := check.Files([]*syntax.File{f}); err != nil {
-		t.Fatal(err)
-	}
+	mustTypecheck(src, nil, info)
 	var got []string
 	for _, obj := range info.Defs {
 		if v, ok := obj.(*Var); ok {
@@ -3111,7 +3204,54 @@ func (recv T) f(param int) (result int) {
 	}
 }
 
+func TestIssue73871(t *testing.T) {
+	t.Parallel()
+	const src = `package p
+
+func f[T ~[]byte](y T) []byte { return append([]byte(nil), y...) }
+
+type B []byte
+var _ = f[B]
+`
+	f := mustParse(src)
+
+	pkg := NewPackage("p", "p")
+	info := &Info{Types: make(map[syntax.Expr]TypeAndValue)}
+	check := NewChecker(&Config{}, pkg, info)
+	if err := check.Files([]*syntax.File{f}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Check type inferred for 'append'.
+	//
+	// Before CL 688815, the inferred type of append's y parameter
+	// was T. When a client such as x/tools/go/ssa instantiated T=B,
+	// it would result in the Signature "func([]byte, B)" with the
+	// variadic flag set, an invalid combination that caused
+	// NewSignatureType to panic.
+	append := f.DeclList[0].(*syntax.FuncDecl).Body.List[0].(*syntax.ReturnStmt).Results.(*syntax.CallExpr).Fun
+	tAppend := info.TypeOf(append).(*Signature)
+	if got, want := fmt.Sprint(tAppend), "func([]byte, ...byte) []byte"; got != want {
+		// Before CL 688815, tAppend was func([]byte, T) []byte,
+		// where T prints as "<expected string type>".
+		t.Errorf("append: got type %s, want %s", got, want)
+	}
+
+	// Instantiate the type inferred for append(...) at T=B.
+	// Before the fix in CL 689277, NewSignatureType would panic.
+	params := make([]*Var, tAppend.Params().Len())
+	for i := range params {
+		params[i] = tAppend.Params().At(i)
+	}
+	params[1] = NewVar(nopos, pkg, "", pkg.Scope().Lookup("B").Type())
+	sig := NewSignatureType(nil, nil, nil, NewTuple(params...), tAppend.Results(), true)
+	if got, want := fmt.Sprint(sig), "func([]byte, p.B...) []byte"; got != want {
+		t.Errorf("instantiated: got type %s, want %s", got, want)
+	}
+}
+
 func TestIssue79657(t *testing.T) {
+	t.Parallel()
 	src := `package p
 
 type T[P any] struct{}
@@ -3161,5 +3301,152 @@ var (
 	}
 	if l != 2 {
 		t.Errorf("found %d instances of L, want 2", l)
+	}
+}
+
+func TestTypeOf(t *testing.T) {
+	const src = `package p
+
+type S struct{ f int }
+
+func _() {
+	var s S
+	var i int
+	_ = undef
+	_ = undef[0]
+	_ = s.nofield
+	_ = s.nofield[0]
+	_ = i.f[1:2]
+	_ = 1 + "a"
+}
+`
+	for _, storeInSyntax := range []bool{false, true} {
+		f := mustParse(src)
+		info := &Info{
+			StoreTypesInSyntax: storeInSyntax,
+			Defs:               make(map[*syntax.Name]Object),
+			Uses:               make(map[*syntax.Name]Object),
+		}
+		if !storeInSyntax {
+			info.Types = make(map[syntax.Expr]TypeAndValue)
+		}
+		conf := Config{Error: func(error) {}}
+		conf.Check("p", []*syntax.File{f}, info)
+
+		wantInvalid := map[string]bool{
+			`undef`:        true,
+			`undef[0]`:     true,
+			`s.nofield`:    true,
+			`s.nofield[0]`: true,
+			`i.f`:          true,
+			`i.f[1:2]`:     true,
+			`1 + "a"`:      true,
+		}
+
+		body := f.DeclList[1].(*syntax.FuncDecl).Body
+		syntax.Inspect(body, func(n syntax.Node) bool {
+			if e, ok := n.(syntax.Expr); ok {
+				if id, ok := e.(*syntax.Name); ok && id.Value == "_" {
+					return false
+				}
+				typ := info.TypeOf(e)
+				if typ == nil {
+					t.Errorf("storeInSyntax=%v: TypeOf(%s) = nil, want non-nil", storeInSyntax, ExprString(e))
+				} else if expr := ExprString(e); wantInvalid[expr] {
+					if typ != Typ[Invalid] {
+						t.Errorf("storeInSyntax=%v: TypeOf(%s) = %v, want %v", storeInSyntax, expr, typ, Typ[Invalid])
+					}
+					delete(wantInvalid, expr)
+				}
+				if _, ok := e.(*syntax.SelectorExpr); ok {
+					// Don't visit sel.Sel, which has no type for invalid selectors.
+					return false
+				}
+			}
+			return true
+		})
+		for expr := range wantInvalid {
+			t.Errorf("storeInSyntax=%v: expression %s not visited", storeInSyntax, expr)
+		}
+	}
+}
+
+func TestComparable(t *testing.T) {
+	t.Parallel()
+	const src = `package p
+
+type (
+	S1 struct{ a int; b string }
+	S2 struct{ a int; b any }
+	S3 struct{ a int; b []int }
+
+	A1 [2]int
+	A2 [2]any
+	A3 [2][]int
+
+	I1 interface{ m() }
+	I2 interface{ ~int | ~string }
+	I3 interface{ ~int | ~[]byte }
+	I4 interface{ int; string } // empty type set
+
+	TP[P any, Q comparable, R ~int | ~string, U ~int | ~[]byte, V I4] struct {
+		sp struct{ f P }
+		sq struct{ f Q }
+	}
+)
+`
+	pkg := mustTypecheck(src, nil, nil)
+	lookup := func(name string) Type { return pkg.Scope().Lookup(name).Type() }
+
+	tp := lookup("TP").(*Named)
+	tparams := tp.TypeParams()
+	tpStruct := tp.Underlying().(*Struct)
+
+	tests := []struct {
+		name               string
+		typ                Type
+		comparable         bool
+		strictlyComparable bool
+	}{
+		{"int", Typ[Int], true, true},
+		{"string", Typ[String], true, true},
+		{"untyped nil", Typ[UntypedNil], false, false},
+		{"*int", NewPointer(Typ[Int]), true, true},
+		{"chan int", NewChan(SendRecv, Typ[Int]), true, true},
+		{"[]int", NewSlice(Typ[Int]), false, false},
+		{"map[string]int", NewMap(Typ[String], Typ[Int]), false, false},
+		{"func()", NewSignatureType(nil, nil, nil, nil, nil, false), false, false},
+
+		{"S1", lookup("S1"), true, true},
+		{"S2", lookup("S2"), true, false},
+		{"S3", lookup("S3"), false, false},
+
+		{"A1", lookup("A1"), true, true},
+		{"A2", lookup("A2"), true, false},
+		{"A3", lookup("A3"), false, false},
+
+		{"any", Universe.Lookup("any").Type(), true, false},
+		{"comparable", Universe.Lookup("comparable").Type(), true, true},
+		{"I1", lookup("I1"), true, false},
+		{"I2", lookup("I2"), true, true},
+		{"I3", lookup("I3"), true, false},
+		{"I4 (empty type set)", lookup("I4"), true, false},
+
+		{"P (any)", tparams.At(0), false, false},
+		{"Q (comparable)", tparams.At(1), true, true},
+		{"R (~int | ~string)", tparams.At(2), true, true},
+		{"U (~int | ~[]byte)", tparams.At(3), false, false},
+		{"V (empty type set)", tparams.At(4), false, false},
+		{"struct{ f P }", tpStruct.Field(0).Type(), false, false},
+		{"struct{ f Q }", tpStruct.Field(1).Type(), true, true},
+	}
+
+	for _, test := range tests {
+		if got := Comparable(test.typ); got != test.comparable {
+			t.Errorf("Comparable(%s) = %v, want %v", test.name, got, test.comparable)
+		}
+		if got := StrictlyComparable(test.typ); got != test.strictlyComparable {
+			t.Errorf("StrictlyComparable(%s) = %v, want %v", test.name, got, test.strictlyComparable)
+		}
 	}
 }

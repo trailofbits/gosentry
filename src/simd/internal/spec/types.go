@@ -5,6 +5,8 @@
 package spec
 
 import (
+	"fmt"
+	"sync/atomic"
 	"unsafe"
 )
 
@@ -77,6 +79,20 @@ type FixedWidth interface {
 	bits() int
 }
 
+// SplittableWidth is a constraint for the fixed vector widths whose halves are
+// also vector widths.
+type SplittableWidth interface {
+	Width256 | Width512
+	bits() int
+}
+
+// DoublableWidth is a constraint for the fixed vector widths whose doubles are
+// also vector widths.
+type DoublableWidth interface {
+	Width128 | Width256
+	bits() int
+}
+
 type Width128 struct{}
 
 func (Width128) bits() int { return 128 }
@@ -89,22 +105,61 @@ type Width512 struct{}
 
 func (Width512) bits() int { return 512 }
 
-// scalableWidth is the bit width to use for scalable vectors when executing the
-// spec. This is intentionally set to be large and different from any hardware
-// platform we support.
+// maxScalableWidth is the maximum bit width allowed for scalable vectors.
+// This matches the architectural maximum of ARM SVE (2048 bits) and ensures
+// that 8-bit unsigned element indices (values 0..255) can address all lanes
+// of a byte vector (256 * 8 = 2048 bits) without overflow.
+const maxScalableWidth = 2048
+
+// scalableWidth is the active scalable vector bit width. If 0, it's unset and
+// [ScalableWidth] panics.
+var scalableWidth atomic.Int64
+
+// ScalableWidth returns the current bit width used for scalable vectors when
+// executing the spec, or panics if it has not been set via [SetScalableWidth].
+func ScalableWidth() int {
+	w := int(scalableWidth.Load())
+	if w == 0 {
+		panic("spec: scalable vector width has not been set (use SetScalableWidth)")
+	}
+	return w
+}
+
+// SetScalableWidth sets the bit width to use for scalable vectors when
+// executing the spec (for example, to match the runtime vector length of a
+// target hardware architecture during conformance testing).
 //
-// TODO: For testing against the spec, do we need a way to match this to the
-// hardware we're testing on?
-const scalableWidth = 4096
+// bits must be a power of two between 128 and 2048, inclusive.
+//
+// SetScalableWidth returns a restore function that clears the scalable width.
+//
+// Since the scalable width is global state, this panics if there are
+// overlapping attempts to set the width.
+func SetScalableWidth(bits int) (restore func()) {
+	if bits < 128 || bits > maxScalableWidth || bits&(bits-1) != 0 {
+		panic(fmt.Sprintf("invalid scalable width %d", bits))
+	}
+
+	if !scalableWidth.CompareAndSwap(0, int64(bits)) {
+		panic("SetScalableWidth called concurrently or without restoring previous width")
+	}
+
+	return func() {
+		if !scalableWidth.CompareAndSwap(int64(bits), 0) {
+			panic("restore called out of sequence or more than once")
+		}
+	}
+}
 
 // WidthScalable is the width representing scalable vectors. At a spec level,
 // the actual width this represents is completely symbolic, but when executing
-// the spec, we concretely interpret this as [scalableWidth] bits.
+// the spec, we concretely interpret this as [ScalableWidth] bits (which must be
+// configured via [SetScalableWidth]).
 //
 // This type is known to specgen.
 type WidthScalable struct{}
 
-func (WidthScalable) bits() int { return scalableWidth }
+func (WidthScalable) bits() int { return ScalableWidth() }
 
 // Vectors
 
@@ -114,25 +169,34 @@ func (WidthScalable) bits() int { return scalableWidth }
 // This is implemented as a Go slice, which must have length `width[W]() / elemBits[E]()`.
 //
 // This type is known to specgen.
-type Vec[E EltOrMask, W Width] []E
+type Vec[E any, W Width] []E
 
-func (v Vec[E, W]) len() int {
+func (x Vec[E, W]) len() int {
 	return lanes[E, W]()
 }
 
-func makeVec[E EltOrMask, W Width]() Vec[E, W] {
+func makeVec[E any, W Width]() Vec[E, W] {
 	return make([]E, lanes[E, W]())
 }
 
-func elemBits[E EltOrMask]() int {
-	return 8 * int(unsafe.Sizeof(*new(E)))
+type elemBitter interface {
+	elemBits() int
+}
+
+func elemBits[E any]() int {
+	var zero E
+	if v, ok := any(zero).(elemBitter); ok {
+		// Variation[E] provides its own size via v.elemBits()
+		return v.elemBits()
+	}
+	return 8 * int(unsafe.Sizeof(zero))
 }
 
 func width[W Width]() int {
 	return (*(new(W))).bits()
 }
 
-func lanes[E EltOrMask, W Width]() int {
+func lanes[E any, W Width]() int {
 	return width[W]() / elemBits[E]()
 }
 

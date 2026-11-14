@@ -10,4 +10,48 @@
     base: int
   - class: mask # governing predicate
   out:
+  # ZABS "wraps" in the signed domain for MinIntN, which is equivalent to just
+  # producing the full range in the unsigned domain.
+  - base: int
+    overwriteBase: uint
+
+# Div — signed and unsigned integer divide (ZSDIV/ZUDIV), 32- and 64-bit
+# elements only (the narrower widths have no encoding). Predicated-only and
+# destructive like the float Div.
+- go: Div
+  asm: "ZSDIV"
+  in:
   - *int
+  - *int
+  - class: mask # governing predicate
+  out:
+  - *int
+- go: Div
+  asm: "ZUDIV"
+  in:
+  - &uint
+    go: $t
+    base: uint
+  - *uint
+  - class: mask # governing predicate
+  out:
+  - *uint
+
+# OnesCount - population count per element at every element width. ZCNT is
+# predicated-only, as ZABS is, so its governing predicate is implicit-all-true
+# and its merging qualifier becomes the predicated machine op. The count is
+# never negative, thus the signed form keeps a signed result.
+- go: OnesCount
+  asm: "ZCNT"
+  in:
+  - *int
+  - class: mask # governing predicate
+  out:
+  - *int
+- go: OnesCount
+  asm: "ZCNT"
+  in:
+  - *uint
+  - class: mask # governing predicate
+  out:
+  - *uint

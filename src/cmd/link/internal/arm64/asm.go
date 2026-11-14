@@ -338,7 +338,7 @@ func adddynrel(target *ld.Target, ldr *loader.Loader, syms *ld.ArchSyms, s loade
 		return true
 
 	case objabi.R_ADDRARM64:
-		if targType == sym.SDYNIMPORT && ldr.SymType(s).IsText() && target.IsDarwin() {
+		if targType == sym.SDYNIMPORT && ldr.SymType(s).IsText() && (target.IsDarwin() || target.IsElf()) {
 			// Loading the address of a dynamic symbol. Rewrite to use GOT.
 			// turn MOVD $sym (adrp+add) into MOVD sym@GOT (adrp+ldr)
 			if r.Add() != 0 {
@@ -359,7 +359,11 @@ func adddynrel(target *ld.Target, ldr *loader.Loader, syms *ld.ArchSyms, s loade
 				su.MakeWritable()
 				su.SetUint32(target.Arch, int64(off+4), o)
 				if target.IsInternal() {
-					ld.AddGotSym(target, ldr, syms, targ, 0)
+					var elfRelocTyp uint32
+					if target.IsElf() {
+						elfRelocTyp = uint32(elf.R_AARCH64_GLOB_DAT)
+					}
+					ld.AddGotSym(target, ldr, syms, targ, elfRelocTyp)
 					su.SetRelocSym(rIdx, syms.GOT)
 					su.SetRelocAdd(rIdx, int64(ldr.SymGot(targ)))
 					su.SetRelocType(rIdx, objabi.R_ARM64_PCREL_LDST64)
@@ -427,12 +431,27 @@ func adddynrel(target *ld.Target, ldr *loader.Loader, syms *ld.ArchSyms, s loade
 			// linking, in which case the relocation will be
 			// prepared in the 'reloc' phase and passed to the
 			// external linker in the 'asmb' phase.
-			if t := ldr.SymType(s); !t.IsDATA() && !t.IsRODATA() {
+			if t := ldr.SymType(s); !t.IsDATA() && !t.IsNOPTRDATA() && !t.IsRODATA() {
 				break
 			}
 		}
 
 		if target.IsElf() {
+			rela := ldr.MakeSymbolUpdater(syms.Rela)
+			rela.AddAddrPlus(target.Arch, s, int64(r.Off()))
+			if r.Siz() != 8 {
+				ldr.Errorf(s, "unexpected relocation for dynamic symbol %s", ldr.SymName(targ))
+			}
+
+			if targType == sym.SDYNIMPORT {
+				ld.Adddynsym(ldr, target, syms, targ)
+				rela.AddUint64(target.Arch, elf.R_INFO(uint32(ldr.SymDynid(targ)), uint32(elf.R_AARCH64_ABS64)))
+				rela.AddUint64(target.Arch, uint64(r.Add()))
+				su := ldr.MakeSymbolUpdater(s)
+				su.SetRelocType(rIdx, objabi.ElfRelocOffset)
+				return true
+			}
+
 			// Generate R_AARCH64_RELATIVE relocations for best
 			// efficiency in the dynamic linker.
 			//
@@ -450,13 +469,7 @@ func adddynrel(target *ld.Target, ldr *loader.Loader, syms *ld.ArchSyms, s loade
 			// AddAddrPlus is used for r_offset and r_addend to
 			// generate new R_ADDR relocations that will update
 			// these fields in the 'reloc' phase.
-			rela := ldr.MakeSymbolUpdater(syms.Rela)
-			rela.AddAddrPlus(target.Arch, s, int64(r.Off()))
-			if r.Siz() == 8 {
-				rela.AddUint64(target.Arch, elf.R_INFO(0, uint32(elf.R_AARCH64_RELATIVE)))
-			} else {
-				ldr.Errorf(s, "unexpected relocation for dynamic symbol %s", ldr.SymName(targ))
-			}
+			rela.AddUint64(target.Arch, elf.R_INFO(0, uint32(elf.R_AARCH64_RELATIVE)))
 			rela.AddAddrPlus(target.Arch, targ, r.Add())
 			// Not mark r done here. So we still apply it statically,
 			// so in the file content we'll also have the right offset
@@ -735,7 +748,7 @@ func pereloc1(arch *sys.Arch, out *ld.OutBuf, ldr *loader.Loader, s loader.Sym, 
 	default:
 		return false
 
-	case objabi.R_DWARFSECREF:
+	case objabi.R_ADDROFF, objabi.R_DWARFSECREF:
 		out.Write32(uint32(sectoff))
 		out.Write32(uint32(symdynid))
 		out.Write16(ld.IMAGE_REL_ARM64_SECREL)
@@ -1294,7 +1307,7 @@ func gensymlate(ctxt *ld.Link, ldr *loader.Loader) {
 			ldr.SetSymValue(p, v+off)
 			ldr.SetSymSect(p, ldr.SymSect(s))
 			if ctxt.IsDarwin() {
-				ld.AddMachoSym(ldr, p)
+				ld.AddMachoSym(ctxt, p)
 			} else if ctxt.IsWindows() {
 				ld.AddPELabelSym(ldr, p)
 			} else {
@@ -1326,8 +1339,8 @@ func gensymlate(ctxt *ld.Link, ldr *loader.Loader) {
 			// We don't target the middle of a function.
 			continue
 		}
-		if t >= sym.SDWARFSECT {
-			continue // no need to add label for DWARF symbols
+		if t >= sym.SFirstUnallocated {
+			continue // no need to add label for unallocated symbols
 		}
 		if ldr.AttrSpecial(s) || !ldr.TopLevelSym(s) {
 			// no need to add label for special symbols and non-top-level symbols
@@ -1417,9 +1430,12 @@ func trampoline(ctxt *ld.Link, ldr *loader.Loader, ri int, rs, s loader.Sym) {
 					if r.Add() != 0 {
 						ctxt.Errorf(s, "nonzero addend for DYNIMPORT call: %v+%d", ldr.SymName(rs), r.Add())
 					}
+					// TODO: Define how DWARF should describe a trampoline
+					// whose final target is resolved dynamically through the GOT.
 					gentrampgot(ctxt, ldr, trampb, rs)
 				} else {
 					gentramp(ctxt, ldr, trampb, rs, r.Add())
+					ctxt.AddDwarfDirectTrampoline(tramp, rs, r.Add(), ldr.SymUnit(s))
 				}
 			}
 			// modify reloc to point to tramp, which will be resolved later

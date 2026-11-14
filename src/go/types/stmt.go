@@ -235,10 +235,14 @@ type (
 )
 
 func (check *Checker) caseValues(x *operand, values []ast.Expr, seen valueMap) {
+	var T *target
+	if x.isValid() {
+		T = newTarget(x.typ(), "case")
+	}
 L:
 	for _, e := range values {
 		var v operand
-		check.expr(nil, &v, e)
+		check.expr(T, &v, e)
 		if !x.isValid() || !v.isValid() {
 			continue L
 		}
@@ -500,7 +504,7 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 		}
 
 		Y := &ast.BasicLit{ValuePos: s.X.Pos(), Kind: token.INT, Value: "1"} // use x's position
-		check.binary(&x, nil, s.X, Y, op, s.TokPos)
+		check.binary(&x, nil, s.X, Y, op)
 		if !x.isValid() {
 			return
 		}
@@ -532,7 +536,7 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 				return
 			}
 			var x operand
-			check.binary(&x, nil, s.Lhs[0], s.Rhs[0], op, s.TokPos)
+			check.binary(&x, nil, s.Lhs[0], s.Rhs[0], op)
 			if !x.isValid() {
 				return
 			}
@@ -651,7 +655,7 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 			x.mode_ = constant_
 			x.typ_ = Typ[Bool]
 			x.val = constant.MakeBool(true)
-			x.expr = &ast.Ident{NamePos: s.Body.Lbrace, Name: "true"}
+			x.expr = newIdent(s.Body.Lbrace, "true")
 		}
 
 		check.multipleDefaults(s.Body.List)

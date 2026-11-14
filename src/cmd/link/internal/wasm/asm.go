@@ -24,6 +24,11 @@ const (
 	F32  = 0x7D
 	F64  = 0x7C
 	V128 = 0x7B
+
+	// contRef is a sentinel value in wasmFuncType.Params and Results standing for
+	// the nullable continuation reference (ref null $ContinuationTypeIndex)
+	// under GOWASM=stackswitch.
+	contRef = 0x00
 )
 
 const (
@@ -33,6 +38,7 @@ const (
 	sectionFunction = 3
 	sectionTable    = 4
 	sectionMemory   = 5
+	sectionTag      = 13
 	sectionGlobal   = 6
 	sectionExport   = 7
 	sectionStart    = 8
@@ -54,6 +60,8 @@ type wasmFunc struct {
 type wasmFuncType struct {
 	Params  []byte
 	Results []byte
+	isCont  bool // the entry represent a continuation type.
+	contOf  uint32
 }
 
 func readWasmImport(ldr *loader.Loader, s loader.Sym) obj.WasmImport {
@@ -62,6 +70,9 @@ func readWasmImport(ldr *loader.Loader, s loader.Sym) obj.WasmImport {
 	return wi
 }
 
+// wasmFuncTypes gives the Wasm signatures of functions that do not use the
+// Go calling convention. Keep in sync with notUsePC_B and the special cases
+// in assemble in cmd/internal/obj/wasm.
 var wasmFuncTypes = map[string]*wasmFuncType{
 	"_rt0_wasm_js":            {Params: []byte{}},                                         //
 	"_rt0_wasm_wasip1":        {Params: []byte{}},                                         //
@@ -89,6 +100,10 @@ var wasmFuncTypes = map[string]*wasmFuncType{
 	"memeqbody":               {Params: []byte{I64, I64, I64}, Results: []byte{I64}},      // a, b, len -> 0/1
 	"memcmp":                  {Params: []byte{I32, I32, I32}, Results: []byte{I32}},      // a, b, len -> <0/0/>0
 	"memchr":                  {Params: []byte{I32, I32, I32}, Results: []byte{I32}},      // s, c, len -> index
+	"wasm_scheduler_loop":     {Params: []byte{}},                                         //
+	"wasm_resume":             {Params: []byte{I32}, Results: []byte{contRef}},            // slot -> cont
+	"runtime.wasm_goentry":    {Params: []byte{}},                                         //
+	"runtime.wasm_g0entry":    {Params: []byte{}},                                         //
 }
 
 // pcBase is the base value for PCs on Wasm.
@@ -148,6 +163,10 @@ func asmb2(ctxt *ld.Link, ldr *loader.Loader) {
 		// 0 if the function returned normally or
 		// 1 if the stack needs to be unwound.
 		{Params: []byte{I32}, Results: []byte{I32}},
+	}
+
+	if buildcfg.GOWASM.StackSwitch {
+		initStackSwitchingTypes(&types)
 	}
 
 	// collect host imports (functions that get imported from the WebAssembly host, usually JavaScript)
@@ -248,6 +267,7 @@ func asmb2(ctxt *ld.Link, ldr *loader.Loader) {
 	writeFunctionSec(ctxt, fns)
 	writeTableSec(ctxt, fns)
 	writeMemorySec(ctxt, ldr)
+	writeTagSec(ctxt)
 	writeGlobalSec(ctxt)
 	writeExportSec(ctxt, ldr, len(hostImports))
 	writeElementSec(ctxt, uint64(len(hostImports)), uint64(len(fns)))
@@ -261,12 +281,28 @@ func asmb2(ctxt *ld.Link, ldr *loader.Loader) {
 
 func lookupType(sig *wasmFuncType, types *[]*wasmFuncType) uint32 {
 	for i, t := range *types {
-		if bytes.Equal(sig.Params, t.Params) && bytes.Equal(sig.Results, t.Results) {
+		if !t.isCont && bytes.Equal(sig.Params, t.Params) && bytes.Equal(sig.Results, t.Results) {
 			return uint32(i)
 		}
 	}
 	*types = append(*types, sig)
 	return uint32(len(*types) - 1)
+}
+
+// contTableInitialSize is the initial capacity of the continuation table.
+const contTableInitialSize = 1024
+
+// initStackSwitchingTypes registers the fixed-index WasmFX continuation types
+// at the top of types so their indices remain constant across all Go programs.
+func initStackSwitchingTypes(types *[]*wasmFuncType) {
+	// Force () -> () function type to be at index 1.
+	emptyFuncType := lookupType(&wasmFuncType{Params: []byte{}, Results: []byte{}}, types)
+
+	// Continuation type (cont $emptyFuncType) at index 2 (wasm.ContinuationTypeIndex).
+	if uint32(len(*types)) != wasm.ContinuationTypeIndex {
+		panic("wasm: ContinuationTypeIndex is not at the expected index")
+	}
+	*types = append(*types, &wasmFuncType{isCont: true, contOf: emptyFuncType})
 }
 
 func writeSecHeader(ctxt *ld.Link, id uint8) int64 {
@@ -291,25 +327,44 @@ func writeBuildID(ctxt *ld.Link, buildid []byte) {
 }
 
 // writeTypeSec writes the section that declares all function types
-// so they can be referenced by index.
+// (and, under GOWASM=stackswitch, continuation types) so they can be
+// referenced by index.
 func writeTypeSec(ctxt *ld.Link, types []*wasmFuncType) {
 	sizeOffset := writeSecHeader(ctxt, sectionType)
 
 	writeUleb128(ctxt.Out, uint64(len(types)))
 
 	for _, t := range types {
+		if t.isCont {
+			ctxt.Out.WriteByte(0x5d)                // conttype
+			writeSleb128(ctxt.Out, int64(t.contOf)) // underlying functype index (s33)
+			continue
+		}
 		ctxt.Out.WriteByte(0x60) // functype
-		writeUleb128(ctxt.Out, uint64(len(t.Params)))
-		for _, v := range t.Params {
-			ctxt.Out.WriteByte(v)
-		}
-		writeUleb128(ctxt.Out, uint64(len(t.Results)))
-		for _, v := range t.Results {
-			ctxt.Out.WriteByte(v)
-		}
+		writeValTypes(ctxt.Out, t.Params)
+		writeValTypes(ctxt.Out, t.Results)
 	}
 
 	writeSecSize(ctxt, sizeOffset)
+}
+
+// writeContRefType writes the Wasm reference type (ref null $ContinuationTypeIndex).
+func writeContRefType(w io.ByteWriter) {
+	w.WriteByte(0x63)                           // ref null
+	writeSleb128(w, wasm.ContinuationTypeIndex) // heaptype $ContinuationTypeIndex (s33)
+}
+
+// writeValTypes writes a Wasm resulttype vector, expanding the contRef sentinel
+// into the nullable concrete reference type (ref null $ContinuationTypeIndex).
+func writeValTypes(w io.ByteWriter, vs []byte) {
+	writeUleb128(w, uint64(len(vs)))
+	for _, v := range vs {
+		if v == contRef {
+			writeContRefType(w)
+			continue
+		}
+		w.WriteByte(v)
+	}
 }
 
 // writeImportSec writes the section that lists the functions that get
@@ -345,17 +400,29 @@ func writeFunctionSec(ctxt *ld.Link, fns []*wasmFunc) {
 	writeSecSize(ctxt, sizeOffset)
 }
 
-// writeTableSec writes the section that declares tables. Currently there is only a single table
-// that is used by the CallIndirect operation to dynamically call any function.
-// The contents of the table get initialized by the "element" section.
+// writeTableSec writes the section that declares tables. Table 0 holds funcrefs
+// used by CallIndirect; under GOWASM=stackswitch, Table 1 holds
+// (ref null $ContinuationTypeIndex) entries for suspended goroutine continuations.
 func writeTableSec(ctxt *ld.Link, fns []*wasmFunc) {
 	sizeOffset := writeSecHeader(ctxt, sectionTable)
 
+	numTables := uint64(1)
+	if buildcfg.GOWASM.StackSwitch {
+		numTables = 2
+	}
+	writeUleb128(ctxt.Out, numTables) // number of tables
+
 	numElements := uint64(len(fns))
-	writeUleb128(ctxt.Out, 1)           // number of tables
-	ctxt.Out.WriteByte(0x70)            // type: anyfunc
+	ctxt.Out.WriteByte(0x70)            // type: funcref
 	ctxt.Out.WriteByte(0x00)            // no max
 	writeUleb128(ctxt.Out, numElements) // min
+
+	if buildcfg.GOWASM.StackSwitch {
+		// Table 1: nullable continuation references initialized to null.
+		writeContRefType(ctxt.Out)
+		ctxt.Out.WriteByte(0x00)                     // limits: no max
+		writeUleb128(ctxt.Out, contTableInitialSize) // initial capacity
+	}
 
 	writeSecSize(ctxt, sizeOffset)
 }
@@ -373,6 +440,21 @@ func writeMemorySec(ctxt *ld.Link, ldr *loader.Loader) {
 	writeUleb128(ctxt.Out, 1)                        // number of memories
 	ctxt.Out.WriteByte(0x00)                         // no maximum memory size
 	writeUleb128(ctxt.Out, initialSize/wasmPageSize) // minimum (initial) memory size
+
+	writeSecSize(ctxt, sizeOffset)
+}
+
+// writeTagSec writes the Wasm Tag section (ID 13) declaring effect tags
+// used to implement goroutines with stack-switching instructions (suspend/resume).
+func writeTagSec(ctxt *ld.Link) {
+	if !buildcfg.GOWASM.StackSwitch {
+		return
+	}
+	sizeOffset := writeSecHeader(ctxt, sectionTag)
+
+	writeUleb128(ctxt.Out, 1) // number of tags
+	ctxt.Out.WriteByte(0x00)  // A tag we will call $yield, index 0
+	ctxt.Out.WriteByte(0x01)  // the tag's function type (forced at index 1 by initStackSwitchingTypes)
 
 	writeSecSize(ctxt, sizeOffset)
 }

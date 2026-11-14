@@ -52,6 +52,8 @@ const (
 	ALocalTee
 	AGlobalGet
 	AGlobalSet
+	ATableGet // opcode 0x25
+	ATableSet
 
 	AI32Load // opcode 0x28
 	AI64Load
@@ -220,6 +222,18 @@ const (
 	AI64Extend8S
 	AI64Extend16S
 	AI64Extend32S
+
+	ARefNull   // opcode 0xD0
+	ARefIsNull // opcode 0xD1
+	ARefFunc   // opcode 0xD2
+
+	AContNew        // opcode 0xE0
+	AContBind       // opcode 0xE1
+	ASuspend        // opcode 0xE2
+	AResume         // opcode 0xE3
+	AResumeThrow    // opcode 0xE4
+	AResumeThrowRef // opcode 0xE5
+	ASwitch         // opcode 0xE6
 
 	AI32TruncSatF32S // opcode 0xFC 0x00
 	AI32TruncSatF32U

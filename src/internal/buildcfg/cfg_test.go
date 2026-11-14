@@ -6,6 +6,9 @@ package buildcfg
 
 import (
 	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -75,6 +78,15 @@ func TestConfigFlags(t *testing.T) {
 	os.Setenv("GOARM64", "v9.0")
 	if goarm64().Version != "v9.0" || goarm64().LSE != true || goarm64().Crypto != false {
 		t.Errorf("Wrong parsing of GOARM64=v9.0")
+	}
+	os.Setenv("GOWASM", "stackswitch")
+	if !gowasm().StackSwitch {
+		t.Errorf("Wrong parsing of GOWASM=stackswitch")
+	}
+	Error = nil
+	os.Setenv("GOWASM", "invalid")
+	if _ = gowasm(); Error == nil {
+		t.Errorf("Wrong parsing of GOWASM=invalid")
 	}
 }
 
@@ -160,6 +172,25 @@ func TestIsFIPSVersion(t *testing.T) {
 	for _, s := range badFIPS {
 		if isFIPSVersion(s) {
 			t.Errorf("isFIPSVersion(%q) = true, want false", s)
+		}
+	}
+	// all snapshots and aliases in lib/fips140
+	entries, err := os.ReadDir(filepath.Join(runtime.GOROOT(), "lib/fips140"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		name := e.Name()
+		if v, ok := strings.CutSuffix(name, ".zip"); ok {
+			t.Setenv("GOFIPS140", v)
+			if Error = nil; gofips140() != v || Error != nil {
+				t.Errorf("gofips140(%q): Error = %v", v, Error)
+			}
+		} else if v, ok := strings.CutSuffix(name, ".txt"); ok {
+			t.Setenv("GOFIPS140", v)
+			if Error = nil; gofips140() != v || Error != nil {
+				t.Errorf("gofips140(%q): Error = %v", v, Error)
+			}
 		}
 	}
 }

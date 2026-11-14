@@ -917,6 +917,14 @@ func (w *writer) doObj(wext *writer, obj types2.Object) pkgbits.CodeObj {
 		named := obj.Type().(*types2.Named)
 		assert(named.TypeArgs() == nil)
 
+		// Record method indices before encoding anything else, as
+		// encoding the underlying type may transitively encode one of
+		// named's generic methods (e.g., via a function body that
+		// calls it), which needs its index.
+		for i := range named.NumMethods() {
+			w.p.methodIdx[named.Method(i)] = i
+		}
+
 		w.pos(obj)
 		w.typeParamNames(named.TypeParams())
 		wext.typeExt(obj)
@@ -926,7 +934,6 @@ func (w *writer) doObj(wext *writer, obj types2.Object) pkgbits.CodeObj {
 		var methods, gmethods []*types2.Func
 		for i := range named.NumMethods() {
 			m := named.Method(i)
-			w.p.methodIdx[m] = i
 			if isGenericMethod(m.Type()) {
 				gmethods = append(gmethods, m)
 			} else {
@@ -1540,7 +1547,11 @@ func (w *writer) declStmt(decl syntax.Decl) {
 	case *syntax.ConstDecl, *syntax.TypeDecl:
 
 	case *syntax.VarDecl:
-		w.assignStmt(decl, namesAsExpr(decl.NameList), decl.Values)
+		var pos poser = decl
+		if n := len(decl.NameList); decl.Values != nil && n > 1 && decl.NameList[n-1].Pos().Line() > decl.Pos().Line() {
+			pos = decl.NameList[n-1]
+		}
+		w.assignStmt(pos, namesAsExpr(decl.NameList), decl.Values)
 	}
 }
 

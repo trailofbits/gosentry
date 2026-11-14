@@ -2,6 +2,15 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// Individual test cases in GOROOT/test are already responsible for setting -race flag
+// and other flags to suit their needs, and that flag doesn't automatically propagate
+// to the individual test cases anyway.
+//
+// So, avoid repeating these tests in race mode to avoid doing duplicate work.
+// In particular, this saves time on the race builders.
+//
+//go:build !race
+
 // Package testdir_test runs tests in the GOROOT/test directory.
 package testdir_test
 
@@ -13,7 +22,6 @@ import (
 	"fmt"
 	"go/build"
 	"go/build/constraint"
-	"hash/fnv"
 	"internal/testenv"
 	"io"
 	"io/fs"
@@ -42,9 +50,6 @@ var (
 	runoutputLimit = flag.Int("l", defaultRunOutputLimit(), "number of parallel runoutput tests to run")
 	force          = flag.Bool("f", false, "ignore expected-failure test lists")
 	target         = flag.String("target", "", "cross-compile tests for `goos/goarch`")
-
-	shard  = flag.Int("shard", 0, "shard index to run. Only applicable if -shards is non-zero.")
-	shards = flag.Int("shards", 0, "number of shards. If 0, all tests are run. This is used by the continuous build.")
 )
 
 // defaultAllCodeGen returns the default value of the -all_codegen
@@ -158,15 +163,6 @@ func Test(t *testing.T) {
 	}
 }
 
-func shardMatch(name string) bool {
-	if *shards <= 1 {
-		return true
-	}
-	h := fnv.New32()
-	io.WriteString(h, name)
-	return int(h.Sum32()%uint32(*shards)) == *shard
-}
-
 func goFiles(t *testing.T, dir string) []string {
 	files, err := os.ReadDir(filepath.Join(testenv.GOROOT(t), "test", dir))
 	if err != nil {
@@ -175,7 +171,7 @@ func goFiles(t *testing.T, dir string) []string {
 	names := []string{}
 	for _, file := range files {
 		name := file.Name()
-		if !strings.HasPrefix(name, ".") && strings.HasSuffix(name, ".go") && shardMatch(name) {
+		if !strings.HasPrefix(name, ".") && strings.HasSuffix(name, ".go") {
 			names = append(names, name)
 		}
 	}
@@ -217,7 +213,7 @@ func compileInDir(runcmd runCmd, dir string, flags []string, importcfg string, p
 
 var stdlibImportcfg = sync.OnceValue(func() string {
 	cmd := exec.Command(goTool, "list", "-export", "-f", "{{if .Export}}packagefile {{.ImportPath}}={{.Export}}{{end}}", "std")
-	cmd.Env = append(os.Environ(), "GOENV=off", "GOFLAGS=")
+	cmd.Env = append(os.Environ(), "GOENV=off", "GOFLAGS=", "TESTGO_EXPORT_ARCHIVE=1")
 	output, err := cmd.Output()
 	if err, ok := err.(*exec.ExitError); ok && len(err.Stderr) != 0 {
 		log.Fatalf("'go list' failed: %v: %s", err, err.Stderr)
@@ -468,11 +464,13 @@ func (ctxt *context) match(name string) bool {
 }
 
 // goGcflags returns the -gcflags argument to use with go build / go run.
-// This must match the flags used for building the standard library,
-// or else the commands will rebuild any needed packages (like runtime)
-// over and over.
+// Upstream test programs require Go's usual wrapping arithmetic.
 func (test) goGcflags() string {
-	return "-gcflags=all=" + os.Getenv("GO_GCFLAGS")
+	flags := os.Getenv("GO_GCFLAGS")
+	if flags != "" {
+		flags += " "
+	}
+	return "-gcflags=all=" + flags + "-overflowdetect=false"
 }
 
 func (test) goGcflagsIsEmpty() bool {
@@ -640,11 +638,16 @@ func (t test) run() error {
 		tempDirIsGOPATH = false
 	)
 	runcmd := func(args ...string) ([]byte, error) {
+		// Direct compiler calls also need upstream wrapping arithmetic.
+		if len(args) >= 3 && args[0] == goTool && args[1] == "tool" && args[2] == "compile" {
+			args = append([]string{goTool, "tool", "compile", "-overflowdetect=false"}, args[3:]...)
+		}
 		cmd := exec.Command(args[0], args[1:]...)
 		var buf bytes.Buffer
 		cmd.Stdout = &buf
 		cmd.Stderr = &buf
-		cmd.Env = append(os.Environ(), "GOENV=off", "GOFLAGS=")
+		// test/linkmain_run.go itself shells out to "go list -export", so we pass this along.
+		cmd.Env = append(os.Environ(), "GOENV=off", "GOFLAGS=", "TESTGO_EXPORT_ARCHIVE=1")
 		if runInDir != "" {
 			cmd.Dir = runInDir
 			// Set PWD to match Dir to speed up os.Getwd in the child process.
@@ -733,7 +736,7 @@ func (t test) run() error {
 				continue
 			}
 			// -S=2 forces outermost line numbers when disassembling inlined code.
-			cmdline := []string{"build", "-gcflags", "-S=2"}
+			cmdline := []string{"build", "-gcflags", "-S=2 -overflowdetect=false"}
 
 			// Append flags, but don't override -gcflags=-S=2; add to it instead.
 			for i := 0; i < len(flags); i++ {
@@ -930,7 +933,7 @@ func (t test) run() error {
 
 		modVersion := gomodvers
 		if modVersion == "" {
-			modVersion = "1.18"
+			modVersion = "1.14"
 		}
 		modFile := fmt.Sprintf("module %s\ngo %s\n", modName, modVersion)
 		if err := os.WriteFile(filepath.Join(gopathSrcDir, "go.mod"), []byte(modFile), 0666); err != nil {
@@ -1832,10 +1835,6 @@ func defaultRunOutputLimit() int {
 }
 
 func TestShouldTest(t *testing.T) {
-	if *shard != 0 {
-		t.Skipf("nothing to test on shard index %d", *shard)
-	}
-
 	assert := func(ok bool, _ string) {
 		t.Helper()
 		if !ok {

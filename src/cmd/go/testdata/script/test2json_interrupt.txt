@@ -1,12 +1,12 @@
 [!fuzz] skip 'tests SIGINT behavior for interrupting fuzz tests'
 [GOOS:windows] skip 'windows does not support os.Interrupt'
 
-? go test -json -fuzz FuzzInterrupt -run '^$' -parallel 1
+? go test -json -fuzz FuzzInterrupt -use-libafl=false -run '^$' -parallel 1
 stdout -count=1 '"Action":"pass","Package":"example","Test":"FuzzInterrupt"'
 stdout -count=1 '"Action":"pass","Package":"example","Elapsed":'
 
 mkdir $WORK/fuzzcache
-go test -c . -fuzz=. -o example_test.exe
+go test -c . -fuzz=. -use-libafl=false -o example_test.exe
 ? go tool test2json -p example -t ./example_test.exe -test.v -test.paniconexit0 -test.fuzzcachedir $WORK/fuzzcache -test.fuzz FuzzInterrupt -test.run '^$' -test.parallel 1
 stdout -count=1 '"Action":"pass","Package":"example","Test":"FuzzInterrupt"'
 stdout -count=1 '"Action":"pass","Package":"example","Elapsed":'

@@ -7,9 +7,11 @@ package http3
 import (
 	"errors"
 	"fmt"
+	"internal/nettest"
 	"io"
 	"maps"
 	"net/http"
+	"net/http/internal"
 	"net/netip"
 	"net/url"
 	"os"
@@ -72,6 +74,12 @@ func TestServerCancelPushForUnsentPromise(t *testing.T) {
 func TestServerHeader(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ts := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.TLS == nil {
+				t.Error("Request.TLS = nil, want non-nil")
+			}
+			if !r.TLS.HandshakeComplete {
+				t.Error("Request.TLS.HandshakeComplete = false, want true")
+			}
 			header := w.Header()
 			for key, values := range r.Header {
 				for _, value := range values {
@@ -545,27 +553,48 @@ func TestServerInvalidStatus(t *testing.T) {
 func TestServerHeaderLimits(t *testing.T) {
 	for _, test := range []struct {
 		name                string
-		h                   http.Header
+		header              http.Header
+		trailer             http.Header
 		valid               bool
 		maxHeaderBytes      int
 		maxHeaderValueCount int
 	}{{
 		name: "within limits",
-		h: http.Header{
+		header: {
 			"x-foo": {strings.Repeat("x", 1000)},
 		},
 		maxHeaderBytes: 1500,
 		valid:          true,
 	}, {
 		name: "too many header bytes",
-		h: http.Header{
+		header: {
+			"x-foo": {strings.Repeat("x", 1000)},
+			"x-bar": {strings.Repeat("x", 1000)},
+		},
+		maxHeaderBytes: 1500,
+	}, {
+		name: "sent trailer within limits",
+		header: {
+			"trailer": {"x-foo"},
+		},
+		trailer: http.Header{
+			"x-foo": {strings.Repeat("x", 1000)},
+		},
+		maxHeaderBytes: 1500,
+		valid:          true,
+	}, {
+		name: "too many sent trailer bytes",
+		header: {
+			"trailer": {"x-foo, x-bar"},
+		},
+		trailer: http.Header{
 			"x-foo": {strings.Repeat("x", 1000)},
 			"x-bar": {strings.Repeat("x", 1000)},
 		},
 		maxHeaderBytes: 1500,
 	}, {
 		name: "field count within limit",
-		h: http.Header{
+		header: {
 			// :method, :scheme, :path, plus:
 			"x-foo": {"4"},
 			"x-bar": {"5"},
@@ -575,34 +604,65 @@ func TestServerHeaderLimits(t *testing.T) {
 		valid:               true,
 	}, {
 		name: "field count over limit",
-		h: http.Header{
+		header: {
 			// :method, :scheme, :path, plus:
 			"x-foo": {"4"},
 			"x-bar": {"5"},
 		},
 		maxHeaderBytes:      1500,
 		maxHeaderValueCount: 4,
+	}, {
+		name: "declared trailer field count within limit",
+		header: {
+			"trailer": {"a, b, c, d, e"},
+		},
+		maxHeaderBytes:      1500,
+		maxHeaderValueCount: 5,
+		valid:               true,
+	}, {
+		name: "declared trailer field count over limit",
+		header: {
+			"trailer": {"a, b, c, d, e"},
+		},
+		maxHeaderBytes:      1500,
+		maxHeaderValueCount: 4,
+	}, {
+		name: "declared trailer bytes over limit",
+		header: {
+			"trailer": {strings.Repeat("a,", 50)},
+		},
+		maxHeaderBytes: 1500,
 	}} {
 		synctestSubtest(t, test.name, func(t *testing.T) {
-			if test.maxHeaderValueCount != 0 {
-				t.Skip("TODO: when we support only go1.27")
-			}
 			ts := newTestServer(t, nil)
 			ts.s.srv1.MaxHeaderBytes = test.maxHeaderBytes
-			// TODO: When we only support go1.27.
-			//ts.s.srv1.MaxHeaderValueCount = test.maxHeaderValueCount
+			ts.s.srv1.MaxHeaderValueCount = test.maxHeaderValueCount
 			tc := ts.connect()
 			tc.greet()
 
 			reqStream := tc.newStream(streamTypeRequest)
-			reqStream.writeHeaders(requestHeader(test.h))
-			if test.valid {
-				call := tc.nextHandlerCall()
-				if call == nil {
-					t.Fatal("no server handler call; want one")
-				}
-			} else {
-				reqStream.wantError(quic.StreamError(errH3RequestRejected))
+			reqStream.writeHeaders(requestHeader(test.header))
+
+			if test.trailer == nil && !test.valid {
+				reqStream.wantSomeHeaders(http.Header{
+					":status": {"431"},
+				})
+				reqStream.wantClosed("request is complete")
+				return
+			}
+
+			call := tc.nextHandlerCall()
+			if call == nil {
+				t.Fatal("no server handler call; want one")
+			}
+			if test.trailer == nil {
+				return
+			}
+
+			reqStream.writeHeaders(test.trailer)
+			_, err := io.ReadAll(call.req.Body)
+			if (err == nil) != test.valid {
+				t.Fatalf("io.ReadAll(req.Body) = %v, want valid=%v", err, test.valid)
 			}
 		})
 	}
@@ -1356,7 +1416,7 @@ func TestServerInfersHeaders(t *testing.T) {
 			reqStream.writeHeaders(requestHeader(nil))
 			tt.want.Add(":status", strconv.Itoa(tt.responseStatus))
 			reqStream.wantHeaders(tt.want)
-			if responseCanHaveBody(tt.responseStatus) {
+			if internal.BodyAllowedForStatus(tt.responseStatus) {
 				reqStream.wantData(body)
 			}
 			reqStream.wantClosed("request is complete")
@@ -1538,6 +1598,7 @@ func TestServerOptionsMethod(t *testing.T) {
 			":method": []string{"OPTIONS"},
 			":path":   []string{"*"},
 		}))
+		reqStream.CloseWrite()
 		reqStream.wantSomeHeaders(http.Header{
 			":status": {"200"},
 		})
@@ -1918,7 +1979,7 @@ func TestServerWriteTimeoutInProgress(t *testing.T) {
 type testServer struct {
 	t           testing.TB
 	s           *server
-	tn          testNet
+	pnet        *nettest.PacketNet
 	testHandler *testServerHandler
 	*testQUICEndpoint
 
@@ -1955,7 +2016,8 @@ type serverHandlerCall struct {
 func newTestServer(t testing.TB, handler http.Handler) *testServer {
 	t.Helper()
 	ts := &testServer{
-		t: t,
+		t:    t,
+		pnet: newPacketNet(t),
 	}
 	if handler == nil {
 		ts.testHandler = &testServerHandler{
@@ -1965,20 +2027,22 @@ func newTestServer(t testing.TB, handler http.Handler) *testServer {
 		handler = ts.testHandler
 	}
 	ts.s = &server{
-		srv1: &http.Server{},
+		srv1: &http.Server{
+			Handler: handler,
+		},
 	}
-	e := ts.tn.newQUICEndpoint(t, &quic.Config{
+	e := newQUICEndpoint(t, ts.pnet, &quic.Config{
 		TLSConfig: testTLSConfig,
 	})
 	ts.addr = e.LocalAddr()
-	go ts.s.serve(t.Context(), e, handler)
+	go ts.s.serve(t.Context(), e)
 	return ts
 }
 
 func (ts *testServer) connect() *testServerConn {
 	ts.t.Helper()
 	config := &quic.Config{TLSConfig: testTLSConfig}
-	e := ts.tn.newQUICEndpoint(ts.t, nil)
+	e := newQUICEndpoint(ts.t, ts.pnet, nil)
 	qconn, err := e.Dial(ts.t.Context(), "udp", ts.addr.String(), config)
 	if err != nil {
 		ts.t.Fatal(err)

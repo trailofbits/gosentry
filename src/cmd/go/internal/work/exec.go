@@ -47,8 +47,6 @@ import (
 	"cmd/internal/buildid"
 	"cmd/internal/quoted"
 	"cmd/internal/sys"
-
-	"golang.org/x/tools/go/analysis"
 )
 
 const DefaultCFlags = "-O2 -g"
@@ -102,6 +100,9 @@ func (b *Builder) Do(ctx context.Context, root *Action) {
 	all := actionList(root)
 	for i, a := range all {
 		a.priority = i
+	}
+	if cfg.Experiment.VetFiles {
+		b.prioritizeAnalysisTool(all) // see analysis.go
 	}
 
 	// Write action graph, without timing information, in case we fail and exit early.
@@ -281,9 +282,6 @@ func (b *Builder) buildActionID(a *Action) cache.ActionID {
 	fmt.Fprintf(h, "goos %s goarch %s\n", cfg.Goos, cfg.Goarch)
 	fmt.Fprintf(h, "import %q\n", p.ImportPath)
 	fmt.Fprintf(h, "omitdebug %v standard %v local %v prefix %q\n", p.Internal.OmitDebug, p.Standard, p.Internal.Local, p.Internal.LocalPrefix)
-	if cfg.BuildTrimpath {
-		fmt.Fprintln(h, "trimpath")
-	}
 	if p.Internal.ForceLibrary {
 		fmt.Fprintf(h, "forcelibrary\n")
 	}
@@ -384,11 +382,20 @@ func (b *Builder) buildActionID(a *Action) cache.ActionID {
 	return h.Sum()
 }
 
+// trimpathInvariant reports whether p compiles to the same objects
+// with or without -trimpath. Go paths in GOROOT/src start with "$GOROOT",
+// which the linker expands or trims, and C paths in GOROOT are always trimmed.
+func trimpathInvariant(p *load.Package) bool {
+	return p.Standard && p.Dir == filepath.Join(cfg.GOROOTsrc, p.Internal.OrigImportPath)
+}
+
 // addPackageOrigin writes information about the origin of the package that
-// may be embedded in the debug info for the object file. It is used by
-// buildActionID.
+// may be embedded in the debug info for the object file.
 func (b *Builder) addPackageOrigin(h io.Writer, p *load.Package) {
-	if cfg.BuildTrimpath {
+	if trimpathInvariant(p) {
+		// Paths depend on neither -trimpath nor GOROOT.
+	} else if cfg.BuildTrimpath {
+		fmt.Fprintln(h, "trimpath")
 		// When -trimpath is used with a package built from the module cache,
 		// its debug information refers to the module path and version
 		// instead of the directory.
@@ -405,7 +412,7 @@ func (b *Builder) addPackageOrigin(h io.Writer, p *load.Package) {
 		// GOROOT_FINAL, but we no longer ship precompiled archive files as of Go 1.20
 		// (https://go.dev/issue/47257) and no longer support GOROOT_FINAL
 		// (https://go.dev/issue/62047).
-		// TODO(bcmills): Figure out whether this behavior is still useful.
+		// It also keeps C objects independent of -trimpath.
 		//
 		// b.WorkDir is always either trimmed or rewritten to
 		// the literal string "/tmp/go-build".
@@ -725,6 +732,7 @@ func (b *Builder) buildExport(ctx context.Context, a *Action) (err error) {
 	if p.Internal.Cover.Mode != "" {
 		gofiles = coverPr.goSources
 	}
+	gofiles = slices.Clip(gofiles)
 
 	if p.UsesCgo() || p.UsesSwig() {
 		if runCgoPr == nil {
@@ -738,14 +746,10 @@ func (b *Builder) buildExport(ctx context.Context, a *Action) (err error) {
 		cfiles = nil
 		if p.Standard && p.ImportPath == "runtime/cgo" {
 			// filter to the non-gcc files.
-			i := 0
-			for _, f := range sfiles {
-				if !strings.HasPrefix(f, "gcc_") {
-					sfiles[i] = f
-					i++
-				}
-			}
-			sfiles = sfiles[:i]
+			sfiles = slices.Clone(sfiles)
+			sfiles = slices.DeleteFunc(sfiles, func(f string) bool {
+				return strings.HasPrefix(f, "gcc_")
+			})
 		} else {
 			sfiles = nil
 		}
@@ -1035,7 +1039,13 @@ func (b *Builder) buildObject(ctx context.Context, a *Action) error {
 
 	// Add system object files.
 	for _, syso := range p.SysoFiles {
-		objects = append(objects, filepath.Join(p.Dir, syso))
+		sysoPath := filepath.Join(p.Dir, syso)
+		if !cfg.BuildN {
+			if err := checkLinkerInputFile(".syso", sysoPath); err != nil {
+				return err
+			}
+		}
+		objects = append(objects, sysoPath)
 	}
 
 	// Pack into archive in objdir directory.
@@ -1292,9 +1302,6 @@ func (b *Builder) cgoCompileActionID(a *Action, f string, flags []string) cache.
 	// flag added during C compilation, which changes the DWARF paths
 	// in the resulting .o file.
 	b.addPackageOrigin(h, p)
-	if cfg.BuildTrimpath {
-		fmt.Fprintln(h, "trimpath")
-	}
 
 	// This has too much information.
 	// We only need to choose CC/CXX/FC based on which kind of compilation this
@@ -1538,7 +1545,7 @@ type vetConfig struct {
 	NonGoFiles   []string // absolute paths to package non-Go files
 	IgnoredFiles []string // absolute paths to ignored source files
 
-	Module      *analysis.Module  // module information, if any
+	Module      *vetModule        // module information, if any
 	ImportMap   map[string]string // map import path in source code to package path
 	PackageFile map[string]string // map package path to .a file with export data
 	Standard    map[string]bool   // map package path to whether it's in the standard library
@@ -1555,20 +1562,43 @@ type vetConfig struct {
 // exportConfig is the configuration passed to the export tool describing a single package.
 type exportConfig struct {
 	ImportPath  string            // package path
-	Compiler    string            // gc or gccgo, provided to makeTypesImporter
 	GoVersion   string            // minimum required Go version, such as "go1.21.0"
 	GoFiles     []string          // absolute paths to package source files
 	ImportMap   map[string]string // maps import path to package path
 	PackageFile map[string]string // maps package path to file of type information
 	Output      string            // where to write file of type information
+	TrimPath    string            // rewrites for source file paths, as in -trimpath
 }
 
-// analysisModuleFromModulePublic converts a modinfo.ModulePublic to a analysis.Module.
-func analysisModuleFromModulePublic(m *modinfo.ModulePublic) *analysis.Module {
+// A vetModule describes the module to which a package belongs, in the
+// configuration of a vet tool. Its JSON encoding must match that of
+// golang.org/x/tools/go/analysis.Module, which the tool decodes.
+//
+// TODO(adonovan): reunify the types when x/tools/go/analysis moves to std (#82465).
+type vetModule struct {
+	Path      string          // module path
+	Version   string          // module version ("" if unknown, such as for workspace modules)
+	Replace   *vetModule      // replaced by this module
+	Time      *time.Time      // time version was created
+	Main      bool            // is this the main module?
+	Indirect  bool            // is this module only an indirect dependency of main module?
+	Dir       string          // directory holding files for this module, if any
+	GoMod     string          // path to go.mod file used when loading this module, if any
+	GoVersion string          // go version used in module (e.g. "go1.22.0")
+	Error     *vetModuleError // error loading module
+}
+
+// A vetModuleError holds errors loading a module; see [vetModule].
+type vetModuleError struct {
+	Err string // the error itself
+}
+
+// analysisModuleFromModulePublic converts a modinfo.ModulePublic to a vetModule.
+func analysisModuleFromModulePublic(m *modinfo.ModulePublic) *vetModule {
 	if m == nil {
 		return nil
 	}
-	vm := &analysis.Module{
+	vm := &vetModule{
 		Path:      m.Path,
 		Version:   m.Version,
 		Replace:   analysisModuleFromModulePublic(m.Replace),
@@ -1580,7 +1610,7 @@ func analysisModuleFromModulePublic(m *modinfo.ModulePublic) *analysis.Module {
 		GoVersion: m.GoVersion,
 	}
 	if m.Error != nil {
-		vm.Error = &analysis.ModuleError{Err: m.Error.Err}
+		vm.Error = &vetModuleError{Err: m.Error.Err}
 	}
 	return vm
 }
@@ -1603,13 +1633,14 @@ func buildVetConfig(a *Action, srcfiles []string, vetDeps []*Action) {
 	// so that vet's error messages will use absolute paths,
 	// so that we can reformat them relative to the directory
 	// in which the go command is invoked.
+	// (The exception is files in a.Objdir; see trimObjdir.)
 	vcfg := &vetConfig{
 		ID:           a.Package.ImportPath,
 		Compiler:     cfg.BuildToolchainName,
 		Dir:          a.Package.Dir,
-		GoFiles:      actualFiles(mkAbsFiles(a.Package.Dir, gofiles)),
-		NonGoFiles:   actualFiles(mkAbsFiles(a.Package.Dir, nongofiles)),
-		IgnoredFiles: actualFiles(mkAbsFiles(a.Package.Dir, ignored)),
+		GoFiles:      trimObjdir(a, actualFiles(mkAbsFiles(a.Package.Dir, gofiles))),
+		NonGoFiles:   trimObjdir(a, actualFiles(mkAbsFiles(a.Package.Dir, nongofiles))),
+		IgnoredFiles: trimObjdir(a, actualFiles(mkAbsFiles(a.Package.Dir, ignored))),
 		ImportPath:   a.Package.ImportPath,
 		ImportMap:    make(map[string]string),
 		PackageFile:  make(map[string]string),
@@ -1703,6 +1734,7 @@ func (b *Builder) vet(ctx context.Context, a *Action) error {
 
 	h := cache.NewHash("vet " + a.Package.ImportPath)
 	fmt.Fprintf(h, "vet %q\n", b.toolID("vet"))
+	fmt.Fprintf(h, "vetxonly %v\n", vcfg.VetxOnly)
 
 	vetFlags := VetFlags
 
@@ -1738,6 +1770,12 @@ func (b *Builder) vet(ctx context.Context, a *Action) error {
 		// and should be updated if these flags are
 		// changed here.
 		vetFlags = []string{"-unsafeptr=false"}
+
+		// Unlike go test, go vet has no analyzer flags in VetFlags here,
+		// only its own flags for the tool, such as -json and -fix. Keep them.
+		if cfg.CmdName != "test" {
+			vetFlags = append(vetFlags, VetFlags...)
+		}
 
 		// Also turn off -unreachable checks during go test.
 		// During testing it is very common to make changes
@@ -1779,9 +1817,9 @@ func (b *Builder) vet(ctx context.Context, a *Action) error {
 		// We need to retrieve them all, or none:
 		// the effect must be transactional.
 		var (
-			vetxFile   string                           // name of cached .vetx file
-			fixArchive string                           // name of cached .fix.zip file
-			stdout     io.Reader = bytes.NewReader(nil) // cached stdout stream
+			vetxFile   string    // name of cached .vetx file
+			fixArchive string    // name of cached .fix.zip file
+			stdout     io.Reader // cached stdout stream
 		)
 
 		// Obtain location of cached .vetx file.
@@ -1800,14 +1838,16 @@ func (b *Builder) vet(ctx context.Context, a *Action) error {
 		}
 
 		// Copy cached .stdout file to stdout.
-		if file, _, err := cache.GetFile(c, stdoutKey); err == nil {
-			f, err := os.Open(file)
-			if err != nil {
-				goto cachemiss
-			}
-			defer f.Close() // ignore error (can't fail)
-			stdout = f
+		file, _, err := cache.GetFile(c, stdoutKey)
+		if err != nil {
+			goto cachemiss
 		}
+		f, err := os.Open(file)
+		if err != nil {
+			goto cachemiss
+		}
+		defer f.Close() // ignore error (can't fail)
+		stdout = f
 
 		// Cache hit: commit transaction.
 		a.built = vetxFile
@@ -1840,7 +1880,12 @@ cachemiss:
 		panic("VetTool unset")
 	}
 
-	runErr := sh.run(p.Dir, p.ImportPath, env, cfg.BuildToolexec, tool, vetFlags, a.Objdir+"vet.cfg")
+	// Run vet in the work directory of the package's build, relative
+	// to which the files generated by cgo are named (see trimObjdir);
+	// all other file names in the config are absolute. Report its
+	// output relative to the directory of the package.
+	out, runErr := sh.runOut(a.Deps[0].Objdir, env, cfg.BuildToolexec, tool, vetFlags, a.Objdir+"vet.cfg")
+	runErr = sh.reportCmd(p.ImportPath, p.Dir, out, runErr)
 
 	// Save facts and export data.
 	// Even if vet reported diagnostics and exited non-zero, it may have
@@ -1855,12 +1900,10 @@ cachemiss:
 	// The principled fix is for 'go test' to run vet in -json mode (like
 	// 'go vet' does), where exit code 0 unambiguously indicates a clean
 	// run (with diagnostics in stdout), while non-zero indicates tool failure.
-	if f, err := os.Open(vcfg.VetxOutput); err == nil {
-		defer f.Close() // ignore error
+	vetx, vetxErr := os.Open(vcfg.VetxOutput)
+	if vetxErr == nil {
+		defer vetx.Close() // ignore error
 		a.built = vcfg.VetxOutput
-		if runErr == nil {
-			cache.Default().Put(id, f) // ignore error
-		}
 	}
 
 	if runErr != nil {
@@ -1884,6 +1927,12 @@ cachemiss:
 		}
 		f.Seek(0, io.SeekStart)           // ignore error
 		cache.Default().Put(stdoutKey, f) // ignore error
+	}
+
+	// Save facts last so that a cache hit on id implies fixArchiveKey
+	// and stdoutKey have already been written.
+	if vetxErr == nil {
+		cache.Default().Put(id, vetx) // ignore error
 	}
 
 	return nil
@@ -1918,7 +1967,8 @@ func (b *Builder) export(ctx context.Context, a *Action) error {
 		return err
 	}
 	tool := base.Tool("export")
-	if err := sh.run(a.Package.Dir, a.Package.ImportPath, nil, cfg.BuildToolexec, tool, in); err != nil {
+	// Use b.WorkDir since a.Package.Dir might not exist on disk (e.g. for overlay packages).
+	if err := sh.run(b.WorkDir, a.Package.ImportPath, nil, cfg.BuildToolexec, tool, in); err != nil {
 		return err
 	}
 	// Update a.buildID and a.built.
@@ -1947,21 +1997,35 @@ func (b *Builder) buildExportConfig(a *Action) *exportConfig {
 		v = cmp.Or(a.Package.Module.GoVersion, gover.DefaultGoModVersion)
 	}
 
-	srcs := slices.Concat(a.Package.GoFiles, a.Package.CgoFiles)
+	// Careful, a.Package.GoFiles can be relative or absolute paths (see #82042).
+	// Also, the path may point to a virtual file system (e.g. for overlays).
+	srcs := actualFiles(mkAbsFiles(a.Package.Dir, a.Package.GoFiles))
+	// Collect output source files from any cgo dependencies.
+	if a.Package.UsesCgo() {
+		for _, dep := range a.Deps {
+			if cgo, ok := dep.Provider.(*runCgoProvider); ok {
+				srcs = append(srcs, cgo.goFiles...)
+			}
+		}
+	}
+
 	ecfg := &exportConfig{
 		ImportPath:  a.Package.ImportPath,
-		Compiler:    cfg.BuildToolchainName,
 		GoVersion:   "go" + v,
-		GoFiles:     make([]string, len(srcs)),
+		GoFiles:     srcs,
 		ImportMap:   make(map[string]string),
 		PackageFile: make(map[string]string),
 		Output:      a.Target,
+		TrimPath:    a.trimpath(),
 	}
-	for i, f := range srcs {
-		ecfg.GoFiles[i] = filepath.Join(a.Package.Dir, f)
+	for i, s := range a.Package.Internal.RawImports {
+		if s != "C" {
+			ecfg.ImportMap[s] = a.Package.Imports[i]
+		}
 	}
-	for i, r := range a.Package.Internal.RawImports {
-		ecfg.ImportMap[r] = a.Package.Imports[i]
+	// Bring in any imports from cgo.
+	for _, s := range a.Package.Internal.CompiledImports {
+		ecfg.ImportMap[s] = s
 	}
 	for _, dep := range a.Deps {
 		// Careful: Export actions can have other kinds of dependencies and we
@@ -1979,8 +2043,10 @@ func (b *Builder) exportActionID(a *Action, ecfg *exportConfig) cache.ActionID {
 	fmt.Fprintf(h, "export %s\n", b.toolID("export"))
 	// Flags.
 	fmt.Fprintf(h, "importPath %s\n", ecfg.ImportPath)
-	fmt.Fprintf(h, "compiler %s\n", ecfg.Compiler)
 	fmt.Fprintf(h, "goVersion %s\n", ecfg.GoVersion)
+	// The type checker's sizes depend on the target architecture.
+	fmt.Fprintf(h, "goos %s goarch %s\n", cfg.Goos, cfg.Goarch)
+	b.addPackageOrigin(h, a.Package)
 	// Source file contents.
 	for _, file := range ecfg.GoFiles {
 		fmt.Fprintf(h, "goFile %s %s\n", file, b.fileHash(file))
@@ -2075,13 +2141,8 @@ func (b *Builder) printLinkerConfig(h io.Writer, p *load.Package) {
 			fmt.Fprintf(h, "GOEXPERIMENT=%q\n", cfg.CleanGOEXPERIMENT)
 		}
 
-		// The linker writes source file paths that refer to GOROOT,
-		// but only if -trimpath is not specified (see [gctoolchain.ld] in gc.go).
-		gorootFinal := cfg.GOROOT
-		if cfg.BuildTrimpath {
-			gorootFinal = ""
-		}
-		fmt.Fprintf(h, "GOROOT=%s\n", gorootFinal)
+		// The linker writes source file paths that refer to GOROOT.
+		fmt.Fprintf(h, "GOROOT=%s\n", linkGOROOT())
 
 		// GO_EXTLINK_ENABLED controls whether the external linker is used.
 		fmt.Fprintf(h, "GO_EXTLINK_ENABLED=%s\n", cfg.Getenv("GO_EXTLINK_ENABLED"))
@@ -2294,7 +2355,7 @@ func (b *Builder) getPkgConfigFlags(a *Action, p *load.Package) (cflags, ldflags
 			}
 		}
 		for _, pkg := range pkgs {
-			if !load.SafeArg(pkg) {
+			if !validPkgConfigName(pkg) {
 				return nil, nil, fmt.Errorf("invalid pkg-config package name: %s", pkg)
 			}
 		}
@@ -2507,7 +2568,31 @@ func BuildInstallFunc(b *Builder, ctx context.Context, a *Action) (err error) {
 		defer b.cleanup(a1)
 	}
 
-	return sh.moveOrCopyFile(a.Target, a1.built, perm, false)
+	if err := sh.moveOrCopyFile(a.Target, a1.built, perm, false); err != nil {
+		return err
+	}
+
+	// Move the split DWARF file to the output directory, except for "go install"
+	// (so we don't clutter the install directory).
+	if a1.Mode == "link" && cfg.CmdName != "install" && a.Target != os.DevNull {
+		dsym := filepath.Join(a1.built+".dSYM", "Contents", "Resources", "DWARF", filepath.Base(a1.built))
+		if _, err := os.Stat(dsym); err == nil {
+			hdr := filepath.Join(a.Target+".dSYM", "Contents", "Resources", "DWARF")
+			if err := sh.Mkdir(hdr); err != nil {
+				return err
+			}
+			if err := sh.moveOrCopyFile(filepath.Join(hdr, filepath.Base(a.Target)), dsym, 0666, false); err != nil {
+				return err
+			}
+		} else if !cfg.BuildN {
+			// If the build does not produce a dSYM directory, delete it.
+			if err := sh.RemoveAll(a.Target + ".dSYM"); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 // AllowInstall returns a non-nil error if this invocation of the go command is
@@ -3332,6 +3417,11 @@ func (b *Builder) CFlags(p *load.Package) (cppflags, cflags, cxxflags, fflags, l
 	if ldflags, err = buildFlags("LDFLAGS", DefaultCFlags, p.CgoLDFLAGS, checkLinkerFlags); err != nil {
 		return
 	}
+	if p.Dir != "" && hasGCCSpecFlags(p.CgoLDFLAGS) {
+		if err = checkLinkerSpecDir("#cgo LDFLAGS", p.Dir); err != nil {
+			return
+		}
+	}
 
 	return
 }
@@ -3467,8 +3557,8 @@ func (b *Builder) runCgo(_ context.Context, a *Action) error {
 	// documented (although coming up with a simple explanation of the
 	// flag might be challenging). For more context see issues #58619,
 	// #58620, and #58848.
-	flagSources := []string{"CGO_CFLAGS", "CGO_CXXFLAGS", "CGO_FFLAGS"}
-	flagLists := [][]string{cgoCFLAGS, cgoCXXFLAGS, cgoFFLAGS}
+	flagSources := []string{"CGO_CPPFLAGS", "CGO_CFLAGS", "CGO_CXXFLAGS", "CGO_FFLAGS"}
+	flagLists := [][]string{cgoCPPFLAGS, cgoCFLAGS, cgoCXXFLAGS, cgoFFLAGS}
 	notCompatibleWithInternalLinking := flagsNotCompatibleWithInternalLinking(flagSources, flagLists)
 	if !notCompatibleWithInternalLinking {
 		if err := checkLinkerFlagsForInternalLink("CGO_LDFLAGS", "CGO_LDFLAGS", cgoLDFLAGS); err != nil {
@@ -3702,7 +3792,10 @@ func (b *Builder) processCgoOutputs(a *Action, runCgoProvider *runCgoProvider, c
 					// This is what the compiler does.
 					flag := string(src[idx+len(cgoLdflag) : end])
 					flag = strings.TrimSpace(flag)
-					flag = strings.Trim(flag, `"`)
+					flag, err = strconv.Unquote(flag)
+					if err != nil {
+						return nil, nil, err
+					}
 					flags = append(flags, flag)
 				}
 				src = src[end:]
@@ -3711,15 +3804,15 @@ func (b *Builder) processCgoOutputs(a *Action, runCgoProvider *runCgoProvider, c
 		}
 
 		// We expect to find the contents of cgoLDFLAGS used when running the CGO action in flags.
-		if len(runCgoProvider.LDFLAGS) > 0 {
+		if n := len(runCgoProvider.LDFLAGS); n > 0 {
 		outer:
-			for i := range flags {
+			for i := 0; i+n <= len(flags); i++ {
 				for j, f := range runCgoProvider.LDFLAGS {
 					if f != flags[i+j] {
 						continue outer
 					}
 				}
-				flags = append(flags[:i], flags[i+len(runCgoProvider.LDFLAGS):]...)
+				flags = append(flags[:i], flags[i+n:]...)
 				break
 			}
 		}
@@ -3784,6 +3877,13 @@ func (b *Builder) dynimport(a *Action, objdir, importGo, cgoExe string, cflags, 
 	gatherSyso(a)
 	sort.Strings(syso)
 	str.Uniq(&syso)
+	if !cfg.BuildN {
+		for _, f := range syso {
+			if err := checkLinkerInputFile(".syso", f); err != nil {
+				return "", "", err
+			}
+		}
+	}
 	linkobj := str.StringList(ofile, outObj, syso)
 	dynobj := objdir + "_cgo_.o"
 
@@ -4115,6 +4215,23 @@ func mkAbsFiles(dir string, files []string) []string {
 		abs[i] = f
 	}
 	return abs
+}
+
+// trimObjdir returns the list of files, with the names of those in the
+// work directory of action a made relative to it.
+//
+// Files generated by cgo live in a.Objdir, whose name varies from run
+// to run. Vet records the names of the files it parses in the export
+// data of its .vetx file, so naming them relative to a.Objdir, and
+// running vet in that directory, makes the .vetx file deterministic
+// (as with the compiler's -trimpath). See go.dev/issue/82758.
+func trimObjdir(a *Action, files []string) []string {
+	for i, f := range files {
+		if rel, ok := strings.CutPrefix(f, a.Objdir); ok && a.Objdir != "" {
+			files[i] = rel
+		}
+	}
+	return files
 }
 
 // actualFiles applies fsys.Actual to the list of files.

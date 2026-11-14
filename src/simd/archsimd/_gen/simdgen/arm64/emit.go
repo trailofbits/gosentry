@@ -92,6 +92,9 @@ func (template *template) Emit(arrangement string) *unify.Value {
 	case "INS", "UMOV":
 		arrangement = arrangement[len(arrangement)-1:]
 		mnemonic = "VMOV"
+	case "SMOV":
+		arrangement = arrangement[len(arrangement)-1:]
+		mnemonic = "VSMOV"
 	case "DUP":
 		arrangement = arrangement[len(arrangement)-1:]
 		mnemonic = "V" + mnemonic
@@ -108,7 +111,7 @@ func (template *template) Emit(arrangement string) *unify.Value {
 	db.Add("asm", unify.NewValue(unify.NewStringExact(mnemonic)))
 	db.Add("arrangement", unify.NewValue(unify.NewStringExact(arrangement)))
 	db.Add("goarch", unify.NewValue(unify.NewStringExact("arm64")))
-	db.Add("cpuFeature", unify.NewValue(unify.NewStringExact("NEON"))) // TODO: features
+	db.Add("cpuFeature", unify.NewValue(unify.NewStringExact(""))) // TODO: features
 	db.Add("inVariant", unify.NewValue(unify.NewTuple()))
 
 	if doc := template.instruction.Documentation(); doc != "" {

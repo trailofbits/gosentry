@@ -430,6 +430,39 @@ func expectUnhandledCriticalExtension(t *testing.T, err error) {
 	}
 }
 
+// TestExpiredErrorUsesUTC checks that both times in the error for an expired
+// or not yet valid certificate are in UTC, even when CurrentTime is not
+// (Issue 58551).
+func TestExpiredErrorUsesUTC(t *testing.T) {
+	leaf, err := certificateFromPEM(googleLeaf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loc := time.FixedZone("UTC-8", -8*60*60)
+	for _, tc := range []struct {
+		now  time.Time
+		want string
+	}{
+		{
+			now:  leaf.NotBefore.Add(-time.Hour).In(loc),
+			want: "current time 2023-01-02T07:19:19Z is before 2023-01-02T08:19:19Z",
+		},
+		{
+			now:  leaf.NotAfter.Add(time.Hour).In(loc),
+			want: "current time 2023-03-27T09:19:18Z is after 2023-03-27T08:19:18Z",
+		},
+	} {
+		_, err := leaf.Verify(VerifyOptions{Roots: NewCertPool(), CurrentTime: tc.now})
+		var inval CertificateInvalidError
+		if !errors.As(err, &inval) || inval.Reason != Expired {
+			t.Fatalf("Verify at %v: got %v, want an Expired CertificateInvalidError", tc.now, err)
+		}
+		if inval.Detail != tc.want {
+			t.Errorf("Verify at %v: got detail %q, want %q", tc.now, inval.Detail, tc.want)
+		}
+	}
+}
+
 func certificateFromPEM(pemBytes string) (*Certificate, error) {
 	block, _ := pem.Decode([]byte(pemBytes))
 	if block == nil {
@@ -471,9 +504,6 @@ func testVerify(t *testing.T, test verifyTest, useSystemRoots bool) {
 	chains, err := leaf.Verify(opts)
 
 	if test.errorCallback == nil && err != nil {
-		if runtime.GOOS == "windows" && strings.HasSuffix(testenv.Builder(), "-2008") && err.Error() == "x509: certificate signed by unknown authority" {
-			testenv.SkipFlaky(t, 19564)
-		}
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if test.errorCallback != nil {
@@ -3217,5 +3247,20 @@ func TestVerifyHostnameIPAddresses(t *testing.T) {
 				t.Errorf("VerifyHostname(%q) = nil, want error", tc.host)
 			}
 		})
+	}
+}
+
+func TestSystemVerifyInvalidUTF8DNSName(t *testing.T) {
+	if runtime.GOOS != "darwin" && runtime.GOOS != "ios" {
+		t.Skip("only relevant to the macOS platform verifier")
+	}
+	c, err := certificateFromPEM(selfSigned)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Leaving Roots nil selects the platform verifier.
+	_, err = c.Verify(VerifyOptions{DNSName: "\xff.example.com"})
+	if _, ok := errors.AsType[HostnameError](err); !ok {
+		t.Errorf("Verify with invalid UTF-8 DNSName: got error %v, want HostnameError", err)
 	}
 }

@@ -3,7 +3,8 @@
 // license that can be found in the LICENSE file.
 
 TEXT errors(SB),$0
-	MOVL	foo<>(SB)(AX), AX	// ERROR "invalid instruction"
+	MOVL	foo<>(SB)(AX), AX	// ERROR "base register not allowed with global symbol"
+	MOVL	foo<>(SB)(AX*1), AX	// ERROR "invalid instruction"
 	MOVL	(AX)(SP*1), AX		// ERROR "invalid instruction"
 	EXTRACTPS $4, X2, (BX)          // ERROR "invalid instruction"
 	EXTRACTPS $-1, X2, (BX)         // ERROR "invalid instruction"
@@ -146,5 +147,17 @@ TEXT errors(SB),$0
 	VMOVDQA32.Z Z0, K1, Z1           // ok
 
 	RDPID (BX)			 // ERROR "invalid instruction"
+
+	// High byte registers cannot be encoded with a REX prefix.
+	MOVB (BX)(R8*4), AH              // ERROR "cannot use AH in instruction requiring REX prefix"
+	MOVB AH, (R8)                    // ERROR "cannot use AH in instruction requiring REX prefix"
+	MOVB AH, SIB                     // ERROR "cannot use AH in instruction requiring REX prefix"
+	MOVB R9B, BH                     // ERROR "cannot use BH in instruction requiring REX prefix"
+	MOVBQZX AH, AX                   // ERROR "cannot use AH in instruction requiring REX prefix"
+	MOVBQZX AH, R8                   // ERROR "cannot use AH in instruction requiring REX prefix"
+	MOVBLZX AH, R9                   // ERROR "cannot use AH in instruction requiring REX prefix"
+	MOVBQSX DH, AX                   // ERROR "cannot use DH in instruction requiring REX prefix"
+	MOVBWZX CH, R10                  // ERROR "cannot use CH in instruction requiring REX prefix"
+	ADDB $1, CH                      // ok
 
 	RET

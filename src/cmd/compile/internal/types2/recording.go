@@ -56,9 +56,6 @@ func (check *Checker) recordUntyped() {
 func (check *Checker) recordTypeAndValue(x syntax.Expr, mode operandMode, typ Type, val constant.Value) {
 	assert(x != nil)
 	assert(typ != nil)
-	if mode == invalid {
-		return // omit
-	}
 	if mode == constant_ {
 		assert(val != nil)
 		// We check allBasic(typ, IsConstType) here as constant expressions may be
@@ -141,14 +138,14 @@ func (check *Checker) recordInstance(expr syntax.Expr, targs []Type, typ Type) {
 				copy.recv = pars.vars[0]
 				pars.vars = pars.vars[1:]
 				copy.params = &pars
-				m[ident] = Instance{newTypeList(targs), &copy}
+				m[ident] = Instance{NewTypeList(targs), &copy}
 				return
 			}
 			copy.recv = sig.recvold
-			m[ident] = Instance{newTypeList(targs), &copy}
+			m[ident] = Instance{NewTypeList(targs), &copy}
 			return
 		}
-		m[ident] = Instance{newTypeList(targs), typ}
+		m[ident] = Instance{NewTypeList(targs), typ}
 	}
 }
 
@@ -179,7 +176,7 @@ func (check *Checker) recordSelection(x *syntax.SelectorExpr, kind SelectionKind
 	assert(obj != nil && (recv == nil || len(index) > 0))
 	check.recordUse(x.Sel, obj)
 	if m := check.Selections; m != nil {
-		m[x] = &Selection{kind, recv, obj, index, indirect}
+		m[x] = &Selection{int8(kind), indirect, recv, obj, index}
 	}
 }
 

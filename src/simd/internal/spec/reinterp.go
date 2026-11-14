@@ -2,14 +2,68 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//simdgen:category Reinterpretation
+//specgen:category Reinterpretation
 
 package spec
 
-// ReshapeToUints reinterprets the bits of x as a {z} vector. The least
-// significant bit of element 0 is bit 0
+import "math"
+
+// ToBits reinterprets the bits of each element of x as type {{.zE}}.
 //
-//specgen:name ReshapeToUint{zN}s
+//specgen:name ToBits
+//specgen:require xN=zN
+func ToBits[xE Ints, xW Width, zE Uints](x Vec[xE, xW]) (z Vec[zE, xW]) {
+	return map1[xE, xW, zE, xW](x, func(xe xE) zE { return zE(xe) })
+}
+
+// ToBitsFloat returns the IEEE 754 binary representation of each element of x.
+//
+//specgen:name ToBits
+//specgen:require xN=zN
+func ToBitsFloat[xE float32 | float64, xW Width, zE Uints](x Vec[xE, xW]) (z Vec[zE, xW]) {
+	return map1[xE, xW, zE, xW](x, func(xe xE) zE {
+		switch xe := any(xe).(type) {
+		case float32:
+			return zE(math.Float32bits(xe))
+		case float64:
+			return zE(math.Float64bits(xe))
+		}
+		panic("impossible type for xE")
+	})
+}
+
+// BitsTo reinterprets the bits of each element of x as type {{.zE}}.
+//
+//specgen:name BitsTo{{.zE | title}}
+//specgen:require xN=zN
+func BitsTo[xE Uints, xW Width, zE Ints](x Vec[xE, xW]) (z Vec[zE, xW]) {
+	return map1[xE, xW, zE, xW](x, func(xe xE) zE { return zE(xe) })
+}
+
+// BitsToFloat reinterprets the bits of each element of x as type {{.zE}}.
+//
+//specgen:name BitsTo{{.zE | title}}
+//specgen:require xN=zN
+func BitsToFloat[xE Uints, xW Width, zE Floats](x Vec[xE, xW]) (z Vec[zE, xW]) {
+	return map1[xE, xW, zE, xW](x, func(xe xE) zE {
+		switch xe := any(xe).(type) {
+		case uint32:
+			return zE(math.Float32frombits(xe))
+		case uint64:
+			return zE(math.Float64frombits(xe))
+		}
+		panic("impossible type for xE")
+	})
+}
+
+// ReshapeToUints reinterprets the bits of x as a {{.z}} vector.
+//
+// Both the vector elements and the bits of each element are interpreted in
+// little endian order.
+//
+// {{reshapeDiagram .x .z}}
+//
+//specgen:name ReshapeToUint{{.zN}}s
 //specgen:require xN!=zN
 func ReshapeToUints[xE Uints, xW Width, zE Uints](x Vec[xE, xW]) (z Vec[zE, xW]) {
 	z = makeVec[zE, xW]()

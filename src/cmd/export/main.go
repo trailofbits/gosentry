@@ -48,12 +48,12 @@ func usage() {
 // config defines the JSON schema of the file passed by 'go list -export'.
 type config struct {
 	ImportPath  string            // package path
-	Compiler    string            // gc or gccgo, provided to makeTypesImporter
 	GoVersion   string            // minimum required Go version, such as "go1.21.0"
 	GoFiles     []string          // absolute paths to package source files
 	ImportMap   map[string]string // maps import path to package path
 	PackageFile map[string]string // maps package path to file of type information
 	Output      string            // where to write file of type information
+	TrimPath    string            // rewrites for source file paths, as in -trimpath
 }
 
 func main() {
@@ -84,7 +84,14 @@ func export(configFile string) error {
 	fset := token.NewFileSet()
 	var files []*ast.File
 	for _, name := range cfg.GoFiles {
-		f, err := parser.ParseFile(fset, name, nil, parser.SkipObjectResolution)
+		// cmd/compile rewrites paths with -trimpath and prefixes paths in std
+		// with "$GOROOT"; do the same here.
+		src, err := os.ReadFile(name)
+		if err != nil {
+			return err
+		}
+		name = objabi.AbsFile("", name, cfg.TrimPath) // name is an absolute path
+		f, err := parser.ParseFile(fset, name, src, parser.SkipObjectResolution)
 		if err != nil {
 			return err
 		}
@@ -92,7 +99,7 @@ func export(configFile string) error {
 	}
 	tc := &types.Config{
 		Importer:  makeTypesImporter(cfg, fset),
-		Sizes:     types.SizesFor(cfg.Compiler, build.Default.GOARCH),
+		Sizes:     types.SizesFor("gc", build.Default.GOARCH),
 		GoVersion: cfg.GoVersion,
 	}
 	pkg, err := tc.Check(cfg.ImportPath, fset, files, nil)

@@ -222,9 +222,9 @@ var urltests = []URLTest{
 	{
 		"///threeslashes",
 		&URL{
-			Path: "///threeslashes",
+			Path: "/threeslashes",
 		},
-		"",
+		"/threeslashes",
 	},
 	{
 		"http://user:password@google.com",

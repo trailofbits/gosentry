@@ -256,6 +256,8 @@ func genpltstub(ctxt *ld.Link, ldr *loader.Loader, r loader.Reloc, ri int, s loa
 		}
 		if nop != OP_NOP {
 			ldr.Errorf(s, "Symbol %s is missing toc restoration slot at offset %d", ldr.SymName(s), r.Off()+4)
+			// Avoid rewriting an invalid slot.
+			return stub.Sym(), firstUse
 		}
 		ctxt.Arch.ByteOrder.PutUint32(p[r.Off()+4:], OP_TOCRESTORE)
 	}
@@ -1224,6 +1226,7 @@ func trampoline(ctxt *ld.Link, ldr *loader.Loader, ri int, rs, s loader.Sym) {
 				trampb := ldr.MakeSymbolUpdater(tramp)
 				ctxt.AddTramp(trampb, ldr.SymType(s))
 				gentramp(ctxt, ldr, trampb, rs, r.Add())
+				ctxt.AddDwarfDirectTrampoline(tramp, rs, r.Add(), ldr.SymUnit(s))
 			}
 			sb := ldr.MakeSymbolUpdater(s)
 			relocs := sb.Relocs()

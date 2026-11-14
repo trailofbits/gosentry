@@ -77,8 +77,9 @@ type Link struct {
 	ErrorReporter
 	ArchSyms
 
-	outSem chan int // limits the number of output writers
-	Out    *OutBuf
+	outSem   chan int // limits the number of output writers
+	Out      *OutBuf
+	OutDWARF *OutBuf // for split DWARF file
 
 	version int // current version number for static/file-local symbols
 
@@ -103,7 +104,8 @@ type Link struct {
 	PackageFile  map[string]string
 	PackageShlib map[string]string
 
-	tramps []loader.Sym // trampolines
+	tramps           []loader.Sym      // trampolines
+	dwarfTrampolines []dwarfTrampoline // trampolines with statically addressable targets
 
 	compUnits []*sym.CompilationUnit // DWARF compilation units
 	runtimeCU *sym.CompilationUnit   // One of the runtime CUs, the last one seen.

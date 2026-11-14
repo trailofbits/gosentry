@@ -19,6 +19,7 @@ import (
 )
 
 func TestIssue5770(t *testing.T) {
+	t.Parallel()
 	_, err := typecheck(`package p; type S struct{T}`, nil, nil)
 	const want = "undefined: T"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -27,6 +28,7 @@ func TestIssue5770(t *testing.T) {
 }
 
 func TestIssue5849(t *testing.T) {
+	t.Parallel()
 	src := `
 package p
 var (
@@ -69,6 +71,7 @@ var (
 }
 
 func TestIssue6413(t *testing.T) {
+	t.Parallel()
 	src := `
 package p
 func f() int {
@@ -97,25 +100,26 @@ func f() int {
 }
 
 func TestIssue7245(t *testing.T) {
+	t.Parallel()
 	src := `
 package p
 func (T) m() (res bool) { return }
 type T struct{} // receiver type after method declaration
 `
-	f := mustParse(src)
-
-	var conf Config
 	defs := make(map[*syntax.Name]Object)
-	_, err := conf.Check(f.PkgName.Value, []*syntax.File{f}, &Info{Defs: defs})
-	if err != nil {
-		t.Fatal(err)
+	mustTypecheck(src, nil, &Info{Defs: defs})
+
+	var res1, res2 *Var
+	for id, obj := range defs {
+		switch id.Value {
+		case "m":
+			res1 = obj.(*Func).Type().(*Signature).Results().At(0)
+		case "res":
+			res2 = obj.(*Var)
+		}
 	}
 
-	m := f.DeclList[0].(*syntax.FuncDecl)
-	res1 := defs[m.Name].(*Func).Type().(*Signature).Results().At(0)
-	res2 := defs[m.Type.ResultList[0].Name].(*Var)
-
-	if res1 != res2 {
+	if res1 == nil || res1 != res2 {
 		t.Errorf("got %s (%p) != %s (%p)", res1, res2, res1, res2)
 	}
 }
@@ -124,6 +128,7 @@ type T struct{} // receiver type after method declaration
 // are Uses, not Defs; and also that the (illegal) use of a non-var on
 // the LHS of an assignment is a Use nonetheless.
 func TestIssue7827(t *testing.T) {
+	t.Parallel()
 	const src = `
 package p
 func _() {
@@ -252,6 +257,7 @@ func main() {
 }
 
 func TestIssue22525(t *testing.T) {
+	t.Parallel()
 	const src = `package p; func f() { var a, b, c, d, e int }`
 
 	got := "\n"
@@ -269,6 +275,7 @@ func TestIssue22525(t *testing.T) {
 }
 
 func TestIssue25627(t *testing.T) {
+	t.Parallel()
 	const prefix = `package p; import "unsafe"; type P *struct{}; type I interface{}; type T `
 	// The src strings (without prefix) are constructed such that the number of semicolons
 	// plus one corresponds to the number of fields expected in the respective struct.
@@ -281,32 +288,23 @@ func TestIssue25627(t *testing.T) {
 		`struct { *I }`,
 		`struct { a int; b Missing; *Missing }`,
 	} {
-		f := mustParse(prefix + src)
-
-		conf := Config{Importer: defaultImporter(), Error: func(err error) {}}
-		info := &Info{Types: make(map[syntax.Expr]TypeAndValue)}
-		_, err := conf.Check(f.PkgName.Value, []*syntax.File{f}, info)
+		pkg, err := typecheck(prefix+src, nil, nil)
 		if err != nil {
 			if _, ok := err.(Error); !ok {
 				t.Fatal(err)
 			}
 		}
 
-		syntax.Inspect(f, func(n syntax.Node) bool {
-			if decl, _ := n.(*syntax.TypeDecl); decl != nil {
-				if tv, ok := info.Types[decl.Type]; ok && decl.Name.Value == "T" {
-					want := strings.Count(src, ";") + 1
-					if got := tv.Type.(*Struct).NumFields(); got != want {
-						t.Errorf("%s: got %d fields; want %d", src, got, want)
-					}
-				}
-			}
-			return true
-		})
+		typ := pkg.Scope().Lookup("T").Type().Underlying()
+		want := strings.Count(src, ";") + 1
+		if got := typ.(*Struct).NumFields(); got != want {
+			t.Errorf("%s: got %d fields; want %d", src, got, want)
+		}
 	}
 }
 
 func TestIssue28005(t *testing.T) {
+	t.Parallel()
 	// method names must match defining interface name for this test
 	// (see last comment in this function)
 	sources := [...]string{
@@ -370,6 +368,7 @@ func TestIssue28005(t *testing.T) {
 }
 
 func TestIssue28282(t *testing.T) {
+	t.Parallel()
 	// create type interface { error }
 	et := Universe.Lookup("error").Type()
 	it := NewInterfaceType(nil, []Type{et})
@@ -393,6 +392,7 @@ func TestIssue28282(t *testing.T) {
 }
 
 func TestIssue29029(t *testing.T) {
+	t.Parallel()
 	f1 := mustParse(`package p; type A interface { M() }`)
 	f2 := mustParse(`package p; var B interface { A }`)
 
@@ -437,6 +437,7 @@ func TestIssue29029(t *testing.T) {
 }
 
 func TestIssue34151(t *testing.T) {
+	t.Parallel()
 	const asrc = `package a; type I interface{ M() }; type T struct { F interface { I } }`
 	const bsrc = `package b; import "a"; type T struct { F interface { a.I } }; var _ = a.T(T{})`
 
@@ -468,6 +469,7 @@ func (h importHelper) Import(path string) (*Package, error) {
 // a race condition if package b is imported elsewhere, in a package that is
 // concurrently type-checked.
 func TestIssue34921(t *testing.T) {
+	t.Parallel()
 	defer func() {
 		if r := recover(); r != nil {
 			t.Error(r)
@@ -487,6 +489,7 @@ func TestIssue34921(t *testing.T) {
 }
 
 func TestIssue43088(t *testing.T) {
+	t.Parallel()
 	// type T1 struct {
 	//         _ T2
 	// }
@@ -512,6 +515,7 @@ func TestIssue43088(t *testing.T) {
 }
 
 func TestIssue44515(t *testing.T) {
+	t.Parallel()
 	typ := Unsafe.Scope().Lookup("Pointer").Type()
 
 	got := TypeString(typ, nil)
@@ -600,6 +604,7 @@ var _ T = template /* ERRORx "cannot use.*text/template.* as T value" */.Templat
 }
 
 func TestIssue50646(t *testing.T) {
+	t.Parallel()
 	anyType := Universe.Lookup("any").Type().Underlying()
 	comparableType := Universe.Lookup("comparable").Type()
 
@@ -626,6 +631,7 @@ func TestIssue50646(t *testing.T) {
 }
 
 func TestIssue55030(t *testing.T) {
+	t.Parallel()
 	// makeSig makes the signature func(typ...)
 	// If valid is not set, making that signature is expected to panic.
 	makeSig := func(typ Type, valid bool) {
@@ -691,6 +697,7 @@ func TestIssue55030(t *testing.T) {
 }
 
 func TestIssue51093(t *testing.T) {
+	t.Parallel()
 	// Each test stands for a conversion of the form P(val)
 	// where P is a type parameter with typ as constraint.
 	// The test ensures that P(val) has the correct type P
@@ -744,6 +751,7 @@ func TestIssue51093(t *testing.T) {
 }
 
 func TestIssue54258(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ main, b, want string }{
 		{ //---------------------------------------------------------------
 			`package main
@@ -847,9 +855,8 @@ func (S) M5(struct {S;t}) {}
 	test := func(main, b, want string) {
 		re := regexp.MustCompile(want)
 		bpkg := mustTypecheck(b, nil, nil)
-		mast := mustParse(main)
 		conf := Config{Importer: importHelper{pkg: bpkg}}
-		_, err := conf.Check(mast.PkgName.Value, []*syntax.File{mast}, nil)
+		_, err := typecheck(main, &conf, nil)
 		if err == nil {
 			t.Error("Expected failure, but it did not")
 		} else if got := err.Error(); !re.MatchString(got) {
@@ -899,10 +906,10 @@ func _Cgo_ptr(ptr unsafe.Pointer) unsafe.Pointer { return ptr }
 //go:linkname _Cgo_always_false runtime.cgoAlwaysFalse
 var _Cgo_always_false bool
 //go:linkname _Cgo_use runtime.cgoUse
-func _Cgo_use(any)
+func _Cgo_use(interface{})
 //go:linkname _Cgo_keepalive runtime.cgoKeepAlive
 //go:noescape
-func _Cgo_keepalive(any)
+func _Cgo_keepalive(interface{})
 //go:linkname _Cgo_no_callback runtime.cgoNoCallback
 func _Cgo_no_callback(bool)
 type _Ctype_struct_layout struct {
@@ -915,11 +922,11 @@ func _cgo_runtime_cgocall(unsafe.Pointer, uintptr) int32
 
 //go:linkname _cgoCheckPointer runtime.cgoCheckPointer
 //go:noescape
-func _cgoCheckPointer(any, any)
+func _cgoCheckPointer(interface{}, interface{})
 
 //go:linkname _cgoCheckResult runtime.cgoCheckResult
 //go:noescape
-func _cgoCheckResult(any)
+func _cgoCheckResult(interface{})
 `
 	testFiles(t, []string{"p.go", "_cgo_gotypes.go"}, [][]byte{[]byte(src), []byte(cgoTypes)}, 0, false, func(cfg *Config) {
 		*boolFieldAddr(cfg, "go115UsesCgo") = true
@@ -927,6 +934,7 @@ func _cgoCheckResult(any)
 }
 
 func TestIssue61931(t *testing.T) {
+	t.Parallel()
 	const src = `
 package p
 
@@ -947,6 +955,7 @@ func _() {
 }
 
 func TestIssue61938(t *testing.T) {
+	t.Parallel()
 	const src = `
 package p
 
@@ -963,6 +972,7 @@ func _()        { f() }
 }
 
 func TestIssue63260(t *testing.T) {
+	t.Parallel()
 	const src = `
 package p
 
@@ -1007,6 +1017,7 @@ func f[I *T, T any]() {
 }
 
 func TestIssue44410(t *testing.T) {
+	t.Parallel()
 	const src = `
 package p
 
@@ -1029,6 +1040,7 @@ type S struct{ A }
 }
 
 func TestIssue59831(t *testing.T) {
+	t.Parallel()
 	// Package a exports a type S with an unexported method m;
 	// the tests check the error messages when m is not found.
 	const asrc = `package a; type S struct{}; func (S) m() {}`
@@ -1102,6 +1114,7 @@ func TestIssue59831(t *testing.T) {
 }
 
 func TestIssue64759(t *testing.T) {
+	t.Parallel()
 	const src = `
 //go:build go1.18
 package p
@@ -1119,6 +1132,7 @@ func _() {
 }
 
 func TestIssue68334(t *testing.T) {
+	t.Parallel()
 	const src = `
 package p
 
@@ -1148,6 +1162,7 @@ func f(x int) {
 }
 
 func TestIssue68877(t *testing.T) {
+	t.Parallel()
 	const src = `
 package p
 
@@ -1167,6 +1182,7 @@ type (
 }
 
 func TestIssue69092(t *testing.T) {
+	t.Parallel()
 	const src = `
 package p
 
@@ -1193,6 +1209,7 @@ var _ = T{{x}}
 }
 
 func TestIssue72978(t *testing.T) {
+	t.Parallel()
 	const src = `
 package p
 
@@ -1220,5 +1237,45 @@ var f = genericF[string, float64]
 				t.Errorf("%s[bool, int]: got %q, want %q", name, err.Error(), want)
 			}
 		}()
+	}
+}
+
+func TestIssue47410(t *testing.T) {
+	t.Parallel()
+	const src = `
+package p
+
+func _() {
+	var s int
+	_ = s << 1
+	_ = s << 2.
+}
+`
+
+	info := Info{Types: make(map[syntax.Expr]TypeAndValue)}
+	mustTypecheck(src, nil, &info)
+
+	for _, test := range []struct {
+		expr string
+		typ  Type
+	}{
+		{"s", Typ[Int]},
+		{"s << 1", Typ[Int]},
+		{"s << 2.", Typ[Int]},
+		{"1", Typ[UntypedInt]},
+		{"2.", Typ[UntypedFloat]},
+	} {
+		found := false
+		for e, tv := range info.Types {
+			if ExprString(e) == test.expr {
+				if tv.Type != test.typ {
+					t.Errorf("%s: got %s; want %s", test.expr, tv.Type, test.typ)
+				}
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("no type found for %s", test.expr)
+		}
 	}
 }

@@ -5,7 +5,7 @@
   - class: immediate
     immOffset: 0
     immMax: 15
-    name: index
+    name: i
   - &t
     class: vreg
     base: $b
@@ -20,7 +20,7 @@
   - class: immediate
     immOffset: 0
     immMax: 7
-    name: index
+    name: i
   - &t
     class: vreg
     base: $b
@@ -35,7 +35,7 @@
   - class: immediate
     immOffset: 0
     immMax: 3
-    name: index
+    name: i
   - &t
     class: vreg
     base: $b
@@ -50,7 +50,7 @@
   - class: immediate
     immOffset: 0
     immMax: 1
-    name: index
+    name: i
   - &t
     class: vreg
     base: $b
@@ -66,7 +66,7 @@
   - class: immediate
     immOffset: 0
     immMax: 3
-    name: index
+    name: i
   - &t
     class: vreg
     base: int
@@ -83,7 +83,7 @@
   - class: immediate
     immOffset: 0
     immMax: 1
-    name: index
+    name: i
   - &t
     class: vreg
     base: int
@@ -101,7 +101,7 @@
   - class: immediate
     immOffset: 0
     immMax: 15
-    name: index
+    name: i
   - bits: 128
     base: $b
     class: vreg
@@ -118,7 +118,7 @@
   - class: immediate
     immOffset: 0
     immMax: 7
-    name: index
+    name: i
   - bits: 128
     base: $b
     class: vreg
@@ -135,7 +135,7 @@
   - class: immediate
     immOffset: 0
     immMax: 3
-    name: index
+    name: i
   - class: vreg
     base: $b
     elemBits: $e
@@ -150,7 +150,7 @@
   - class: immediate
     immOffset: 0
     immMax: 1
-    name: index
+    name: i
   - class: vreg
     base: $b
     elemBits: $e
@@ -165,7 +165,7 @@
   - class: immediate
     immOffset: 0
     immMax: 3
-    name: index
+    name: i
   - class: vreg
     base: int
     elemBits: $e
@@ -182,7 +182,7 @@
   - class: immediate
     immOffset: 0
     immMax: 1
-    name: index
+    name: i
   - class: vreg
     base: int
     elemBits: $e
@@ -201,7 +201,7 @@
   - &imm01 # This immediate should be only 0 or 1
     class: immediate
     const: 0 # place holder
-    name: index
+    name: i
   - &i8x2N
     class: vreg
     base: $t
@@ -358,7 +358,67 @@
   out:
   - *f64xN
 
-- go: Permute
+# Enlarge is a register-to-register move of x to a register the width of x. A
+# VEX-encoded instruction zeroes the bits of the destination above the register
+# it writes, which is exactly the upper half of the result, so the result takes
+# its Go width from goBits. This relies on the VEX encoding: a legacy SSE move
+# preserves the upper bits, and an EVEX move would let the register allocator
+# pick a register VEX can't encode. VMOVDQA matches only the VEX instruction (the
+# EVEX ones are VMOVDQA32/64), and inVariant: [] excludes the masked (EVEX) forms
+# of VMOVAPS/VMOVAPD.
+#
+# XED gives VMOVDQA's operands no element type, which simdgen reads as 32 bits,
+# so the int entries set each element width with overwriteElementBits.
+#
+# The int entries can't be compacted: in and out must agree on
+# overwriteElementBits (and goBits must be twice bits), which takes a shared
+# variable, but nothing here can restrict a variable to a set of values like
+# 8|16|32|64. A !sum in each field would make independent choices, as would
+# YAML aliases of one !sum.
+- go: Enlarge
+  asm: VMOVDQA
+  in:  [{go: $t, bits: 128, overwriteElementBits: 8}]
+  out: [{go: $t, bits: 128, overwriteElementBits: 8, goBits: 256}]
+- go: Enlarge
+  asm: VMOVDQA
+  in:  [{go: $t, bits: 128, overwriteElementBits: 16}]
+  out: [{go: $t, bits: 128, overwriteElementBits: 16, goBits: 256}]
+- go: Enlarge
+  asm: VMOVDQA
+  in:  [{go: $t, bits: 128, overwriteElementBits: 32}]
+  out: [{go: $t, bits: 128, overwriteElementBits: 32, goBits: 256}]
+- go: Enlarge
+  asm: VMOVDQA
+  in:  [{go: $t, bits: 128, overwriteElementBits: 64}]
+  out: [{go: $t, bits: 128, overwriteElementBits: 64, goBits: 256}]
+- go: Enlarge
+  asm: VMOVDQA
+  in:  [{go: $t, bits: 256, overwriteElementBits: 8}]
+  out: [{go: $t, bits: 256, overwriteElementBits: 8, goBits: 512}]
+- go: Enlarge
+  asm: VMOVDQA
+  in:  [{go: $t, bits: 256, overwriteElementBits: 16}]
+  out: [{go: $t, bits: 256, overwriteElementBits: 16, goBits: 512}]
+- go: Enlarge
+  asm: VMOVDQA
+  in:  [{go: $t, bits: 256, overwriteElementBits: 32}]
+  out: [{go: $t, bits: 256, overwriteElementBits: 32, goBits: 512}]
+- go: Enlarge
+  asm: VMOVDQA
+  in:  [{go: $t, bits: 256, overwriteElementBits: 64}]
+  out: [{go: $t, bits: 256, overwriteElementBits: 64, goBits: 512}]
+- go: Enlarge
+  asm: VMOVAP[SD]
+  inVariant: []
+  in:  [{go: $t, bits: 128}]
+  out: [{go: $t, bits: 128, goBits: 256}]
+- go: Enlarge
+  asm: VMOVAP[SD]
+  inVariant: []
+  in:  [{go: $t, bits: 256}]
+  out: [{go: $t, bits: 256, goBits: 512}]
+
+- go: LookupMod
   asm: "VPERM[BWDQ]|VPERMP[SD]"
   operandOrder: "21Type1"
   in:
@@ -370,7 +430,7 @@
   out:
   - go: $t
 
-- go: ConcatPermute
+- go: ConcatLookupMod
   asm: "VPERMI2[BWDQ]|VPERMI2P[SD]"
   # Because we are overwriting the receiver's type, we
   # have to move the receiver to be a parameter so that
@@ -392,18 +452,14 @@
   out:
   - go: $t
 
-# For now a non-public method because
-# (1) [OverwriteClass] must be set together with [OverwriteBase]
-# (2) "simdgen does not support [OverwriteClass] in inputs".
-# That means the signature is wrong.
 - go: blend
-  asm: VPBLENDVB
+  asm: VPBLENDVB|VBLENDVP[SD]
   zeroing: false
   in:
   - &v
     go: $t
     class: vreg
-    base: int
+    base: int|float
   - *v
   -
     class: vreg
@@ -419,7 +475,6 @@
   in:
   - &v
     go: $t
-    bits: 512
     class: vreg
     base: int
   - *v
@@ -571,7 +626,7 @@
     base: float
 
 # VPSHUFB for 128-bit byte shuffles will be picked with higher priority than VPERMB, given its lower CPU feature requirement. (It's AVX)
-- go: PermuteOrZero
+- go: LookupModOrZero
   asm: VPSHUFB
   in:
   - &128any
@@ -583,7 +638,7 @@
   out:
   - *128any
 
-- go: PermuteOrZeroGrouped
+- go: LookupModOrZeroGrouped
   asm: VPSHUFB
   in:
   - &256Or512any

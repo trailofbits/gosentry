@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//simdgen:category Mask
+//specgen:category Masks
 
 package spec
 
@@ -17,23 +17,23 @@ package spec
 // This type is known to specgen.
 type UintN uint64
 
-// MaskFromBits constructs a mask from a bitmap value. If bit i of y is set,
-// then mask element i of the result is set.
+// MaskFromBits returns bitmap x as a mask. If bit i of x is set, then mask
+// element i of the result is true.
 //
-//specgen:name {z}FromBits
+//specgen:name {{.z}}FromBits
 //specgen:require x=uint{zL}
 func MaskFromBits[E MaskElt, W FixedWidth](x UintN) (z Vec[E, W]) {
 	z = makeVec[E, W]()
 	for i := range z {
 		if x&(1<<i) != 0 {
-			z[i] = 1
+			z[i] = ^E(0)
 		}
 	}
 	return z
 }
 
-// MaskToBits constructs a bitmap from mask x, where bit i is set if mask
-// element i is set.
+// MaskToBits returns x as a bitmap, where bit i is set if mask element i is
+// true.
 //
 //specgen:name ToBits
 //specgen:require z=uint{xL}
@@ -46,10 +46,22 @@ func MaskToBits[E MaskElt, W FixedWidth](x Vec[E, W]) (z UintN) {
 	return z
 }
 
-// MaskToZ converts the mask to a vector, where element i is set to ^0 (all bits
-// set, e.g., -1) if mask element i is "true".
+// MaskAllTrue returns a mask where every element is true.
 //
-//specgen:name To{z}
+//specgen:name {{.z}}AllTrue
+//specgen:experiment
+func MaskAllTrue[E MaskElt, W Width]() (z Vec[E, W]) {
+	z = makeVec[E, W]()
+	for i := range z {
+		z[i] = ^E(0)
+	}
+	return z
+}
+
+// MaskToZ converts the mask to a vector, where element i is set to ^0 (all bits
+// set, e.g., -1) if mask element i is "true", and 0 otherwise.
+//
+//specgen:name To{{.z}}
 //specgen:require z=Int{xN}x{xL}
 func MaskToZ[E MaskElt, W Width, zE Ints](x Vec[E, W]) (z Vec[zE, W]) {
 	z = makeVec[zE, W]()
@@ -59,4 +71,29 @@ func MaskToZ[E MaskElt, W Width, zE Ints](x Vec[E, W]) (z Vec[zE, W]) {
 		}
 	}
 	return z
+}
+
+// All returns true when all positions in mask x are true.
+func All[E MaskElt, W Width](x Vec[E, W]) bool {
+	for _, elt := range x {
+		if elt == 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// Any returns true when any position in mask x is true.
+func Any[E MaskElt, W Width](x Vec[E, W]) bool {
+	for _, elt := range x {
+		if elt != 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// None returns true when no positions in mask x are set.
+func None[E MaskElt, W Width](x Vec[E, W]) bool {
+	return !Any(x)
 }

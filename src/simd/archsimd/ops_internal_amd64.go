@@ -4,72 +4,30 @@
 
 package archsimd
 
-/* blend */
-
-// blend blends two vectors based on mask values, choosing either
-// the first or the second based on whether the third is false or true
-//
-// Asm: VPBLENDVB, CPU Feature: AVX
-func (x Int8x16) blend(y Int8x16, mask Int8x16) Int8x16
-
-// blend blends two vectors based on mask values, choosing either
-// the first or the second based on whether the third is false or true
-//
-// Asm: VPBLENDVB, CPU Feature: AVX2
-func (x Int8x32) blend(y Int8x32, mask Int8x32) Int8x32
-
-/* blendMasked */
-
-// blendMasked blends two vectors based on mask values, choosing either
-// the first or the second based on whether the third is false or true
-//
-// This operation is applied selectively under a write mask.
-//
-// Asm: VPBLENDMB, CPU Feature: AVX512
-func (x Int8x64) blendMasked(y Int8x64, mask Mask8x64) Int8x64
-
-// blendMasked blends two vectors based on mask values, choosing either
-// the first or the second based on whether the third is false or true
-//
-// This operation is applied selectively under a write mask.
-//
-// Asm: VPBLENDMW, CPU Feature: AVX512
-func (x Int16x32) blendMasked(y Int16x32, mask Mask16x32) Int16x32
-
-// blendMasked blends two vectors based on mask values, choosing either
-// the first or the second based on whether the third is false or true
-//
-// This operation is applied selectively under a write mask.
-//
-// Asm: VPBLENDMD, CPU Feature: AVX512
-func (x Int32x16) blendMasked(y Int32x16, mask Mask32x16) Int32x16
-
-// blendMasked blends two vectors based on mask values, choosing either
-// the first or the second based on whether the third is false or true
-//
-// This operation is applied selectively under a write mask.
-//
-// Asm: VPBLENDMQ, CPU Feature: AVX512
-func (x Int64x8) blendMasked(y Int64x8, mask Mask64x8) Int64x8
-
 /* broadcast1To2 */
 
 // broadcast1To2 copies the lowest element of its input to all 2 elements of
 // the output vector.
 //
-// Asm: VPBROADCASTQ, CPU Feature: AVX2
+// Without AVX2, the compiler implements this with an AVX shuffle.
+//
+// Asm: VPBROADCASTQ, CPU Feature: AVX
 func (x Float64x2) broadcast1To2() Float64x2
 
 // broadcast1To2 copies the lowest element of its input to all 2 elements of
 // the output vector.
 //
-// Asm: VPBROADCASTQ, CPU Feature: AVX2
+// Without AVX2, the compiler implements this with an AVX shuffle.
+//
+// Asm: VPBROADCASTQ, CPU Feature: AVX
 func (x Int64x2) broadcast1To2() Int64x2
 
 // broadcast1To2 copies the lowest element of its input to all 2 elements of
 // the output vector.
 //
-// Asm: VPBROADCASTQ, CPU Feature: AVX2
+// Without AVX2, the compiler implements this with an AVX shuffle.
+//
+// Asm: VPBROADCASTQ, CPU Feature: AVX
 func (x Uint64x2) broadcast1To2() Uint64x2
 
 /* broadcast1To2Masked */
@@ -103,7 +61,9 @@ func (x Uint64x2) broadcast1To2Masked(mask Mask64x2) Uint64x2
 // broadcast1To4 copies the lowest element of its input to all 4 elements of
 // the output vector.
 //
-// Asm: VBROADCASTSS, CPU Feature: AVX2
+// Without AVX2, the compiler implements this with an AVX shuffle.
+//
+// Asm: VBROADCASTSS, CPU Feature: AVX
 func (x Float32x4) broadcast1To4() Float32x4
 
 // broadcast1To4 copies the lowest element of its input to all 4 elements of
@@ -115,7 +75,9 @@ func (x Float64x2) broadcast1To4() Float64x4
 // broadcast1To4 copies the lowest element of its input to all 4 elements of
 // the output vector.
 //
-// Asm: VPBROADCASTD, CPU Feature: AVX2
+// Without AVX2, the compiler implements this with an AVX shuffle.
+//
+// Asm: VPBROADCASTD, CPU Feature: AVX
 func (x Int32x4) broadcast1To4() Int32x4
 
 // broadcast1To4 copies the lowest element of its input to all 4 elements of
@@ -127,7 +89,9 @@ func (x Int64x2) broadcast1To4() Int64x4
 // broadcast1To4 copies the lowest element of its input to all 4 elements of
 // the output vector.
 //
-// Asm: VPBROADCASTD, CPU Feature: AVX2
+// Without AVX2, the compiler implements this with an AVX shuffle.
+//
+// Asm: VPBROADCASTD, CPU Feature: AVX
 func (x Uint32x4) broadcast1To4() Uint32x4
 
 // broadcast1To4 copies the lowest element of its input to all 4 elements of
@@ -203,7 +167,9 @@ func (x Float64x2) broadcast1To8() Float64x8
 // broadcast1To8 copies the lowest element of its input to all 8 elements of
 // the output vector.
 //
-// Asm: VPBROADCASTW, CPU Feature: AVX2
+// Without AVX2, the compiler implements this with an AVX shuffle.
+//
+// Asm: VPBROADCASTW, CPU Feature: AVX
 func (x Int16x8) broadcast1To8() Int16x8
 
 // broadcast1To8 copies the lowest element of its input to all 8 elements of
@@ -221,7 +187,9 @@ func (x Int64x2) broadcast1To8() Int64x8
 // broadcast1To8 copies the lowest element of its input to all 8 elements of
 // the output vector.
 //
-// Asm: VPBROADCASTW, CPU Feature: AVX2
+// Without AVX2, the compiler implements this with an AVX shuffle.
+//
+// Asm: VPBROADCASTW, CPU Feature: AVX
 func (x Uint16x8) broadcast1To8() Uint16x8
 
 // broadcast1To8 copies the lowest element of its input to all 8 elements of
@@ -313,7 +281,9 @@ func (x Float32x4) broadcast1To16() Float32x16
 // broadcast1To16 copies the lowest element of its input to all 16 elements of
 // the output vector.
 //
-// Asm: VPBROADCASTB, CPU Feature: AVX2
+// Without AVX2, the compiler implements this with an AVX shuffle.
+//
+// Asm: VPBROADCASTB, CPU Feature: AVX
 func (x Int8x16) broadcast1To16() Int8x16
 
 // broadcast1To16 copies the lowest element of its input to all 16 elements of
@@ -331,7 +301,9 @@ func (x Int32x4) broadcast1To16() Int32x16
 // broadcast1To16 copies the lowest element of its input to all 16 elements of
 // the output vector.
 //
-// Asm: VPBROADCASTB, CPU Feature: AVX2
+// Without AVX2, the compiler implements this with an AVX shuffle.
+//
+// Asm: VPBROADCASTB, CPU Feature: AVX
 func (x Uint8x16) broadcast1To16() Uint8x16
 
 // broadcast1To16 copies the lowest element of its input to all 16 elements of
@@ -505,7 +477,7 @@ func (x Uint8x16) broadcast1To64Masked(mask Mask8x16) Uint8x64
 // Bit 0 selects the low (0) or high (1) element of x and
 // bit 4 selects the low (0x00) or high (0x10) element of y.
 //
-// A non-constant value of xyHiLo may result in significantly worse performance for this operation.
+// Performance: A non-constant value of xyHiLo may result in significantly worse performance for this operation.
 //
 // Asm: VPCLMULQDQ, CPU Feature: AVXPCLMULQDQ
 func (x Uint64x2) carrylessMultiply(xyHiLo uint8, y Uint64x2) Uint64x2
@@ -517,7 +489,7 @@ func (x Uint64x2) carrylessMultiply(xyHiLo uint8, y Uint64x2) Uint64x2
 // Bit 0 selects the low (0) or high (1) elements of x's lanes and
 // bit 4 selects the low (0x00) or high (0x10) elements of y's lanes.
 //
-// A non-constant value of xyHiLo may result in significantly worse performance for this operation.
+// Performance: A non-constant value of xyHiLo may result in significantly worse performance for this operation.
 //
 // Asm: VPCLMULQDQ, CPU Feature: VPCLMULQDQ
 func (x Uint64x4) carrylessMultiply(xyHiLo uint8, y Uint64x4) Uint64x4
@@ -529,10 +501,46 @@ func (x Uint64x4) carrylessMultiply(xyHiLo uint8, y Uint64x4) Uint64x4
 // Bit 0 selects the low (0) or high (1) elements of x's lanes and
 // bit 4 selects the low (0x00) or high (0x10) elements of y's lanes.
 //
-// A non-constant value of xyHiLo may result in significantly worse performance for this operation.
+// Performance: A non-constant value of xyHiLo may result in significantly worse performance for this operation.
 //
 // Asm: VPCLMULQDQ, CPU Feature: AVX512VPCLMULQDQ
 func (x Uint64x8) carrylessMultiply(xyHiLo uint8, y Uint64x8) Uint64x8
+
+/* concatSaturateToInt8 */
+
+// concatSaturateToInt8 converts the element values of x and y to int8 with signed
+// saturation and packs them into the low and high halves of the result
+// (of each 128-bit group, for Grouped).
+//
+// Asm: VPACKSSWB, CPU Feature: AVX
+func (x Int16x8) concatSaturateToInt8(y Int16x8) Int8x16
+
+/* concatSaturateToInt8Grouped */
+
+// concatSaturateToInt8Grouped converts the element values of x and y to int8 with signed
+// saturation and packs them into the low and high halves of the result
+// (of each 128-bit group, for Grouped).
+//
+// Asm: VPACKSSWB, CPU Feature: AVX2
+func (x Int16x16) concatSaturateToInt8Grouped(y Int16x16) Int8x32
+
+/* concatSaturateToUint8 */
+
+// concatSaturateToUint8 converts the signed element values of x and y to uint8 with
+// saturation and packs them into the low and high halves of the result
+// (of each 128-bit group, for Grouped).
+//
+// Asm: VPACKUSWB, CPU Feature: AVX
+func (x Int16x8) concatSaturateToUint8(y Int16x8) Uint8x16
+
+/* concatSaturateToUint8Grouped */
+
+// concatSaturateToUint8Grouped converts the signed element values of x and y to uint8 with
+// saturation and packs them into the low and high halves of the result
+// (of each 128-bit group, for Grouped).
+//
+// Asm: VPACKUSWB, CPU Feature: AVX2
+func (x Int16x16) concatSaturateToUint8Grouped(y Int16x16) Uint8x32
 
 /* concatSelectedConstant */
 
@@ -542,7 +550,7 @@ func (x Uint64x8) carrylessMultiply(xyHiLo uint8, y Uint64x8) Uint64x8
 // For example, {0,1,2,3}.concatSelectedConstant(0b_11_01_00_10, {4,5,6,7}) returns
 // {2, 0, 5, 7} (don't forget that the binary constant is written big-endian).
 //
-// A non-constant value of h1h0l1l0 may result in significantly worse performance for this operation.
+// Performance: A non-constant value of h1h0l1l0 may result in significantly worse performance for this operation.
 //
 // Asm: VSHUFPS, CPU Feature: AVX
 func (x Float32x4) concatSelectedConstant(h1h0l1l0 uint8, y Float32x4) Float32x4
@@ -554,7 +562,7 @@ func (x Float32x4) concatSelectedConstant(h1h0l1l0 uint8, y Float32x4) Float32x4
 // returns {4,7}; bit 0, selecting from x, is zero, and selects 4, and bit 1,
 // selecting from y, is 1, and selects 7.
 //
-// A non-constant value of hilo may result in significantly worse performance for this operation.
+// Performance: A non-constant value of hilo may result in significantly worse performance for this operation.
 //
 // Asm: VSHUFPD, CPU Feature: AVX
 func (x Float64x2) concatSelectedConstant(hilo uint8, y Float64x2) Float64x2
@@ -565,7 +573,7 @@ func (x Float64x2) concatSelectedConstant(hilo uint8, y Float64x2) Float64x2
 // For example, {0,1,2,3}.concatSelectedConstant(0b_11_01_00_10, {4,5,6,7}) returns
 // {2, 0, 5, 7} (don't forget that the binary constant is written big-endian).
 //
-// A non-constant value of h1h0l1l0 may result in significantly worse performance for this operation.
+// Performance: A non-constant value of h1h0l1l0 may result in significantly worse performance for this operation.
 //
 // Asm: VSHUFPS, CPU Feature: AVX
 func (x Int32x4) concatSelectedConstant(h1h0l1l0 uint8, y Int32x4) Int32x4
@@ -577,7 +585,7 @@ func (x Int32x4) concatSelectedConstant(h1h0l1l0 uint8, y Int32x4) Int32x4
 // returns {4,7}; bit 0, selecting from x, is zero, and selects 4, and bit 1,
 // selecting from y, is 1, and selects 7.
 //
-// A non-constant value of hilo may result in significantly worse performance for this operation.
+// Performance: A non-constant value of hilo may result in significantly worse performance for this operation.
 //
 // Asm: VSHUFPD, CPU Feature: AVX
 func (x Int64x2) concatSelectedConstant(hilo uint8, y Int64x2) Int64x2
@@ -588,7 +596,7 @@ func (x Int64x2) concatSelectedConstant(hilo uint8, y Int64x2) Int64x2
 // For example, {0,1,2,3}.concatSelectedConstant(0b_11_01_00_10, {4,5,6,7}) returns
 // {2, 0, 5, 7} (don't forget that the binary constant is written big-endian).
 //
-// A non-constant value of h1h0l1l0 may result in significantly worse performance for this operation.
+// Performance: A non-constant value of h1h0l1l0 may result in significantly worse performance for this operation.
 //
 // Asm: VSHUFPS, CPU Feature: AVX
 func (x Uint32x4) concatSelectedConstant(h1h0l1l0 uint8, y Uint32x4) Uint32x4
@@ -600,7 +608,7 @@ func (x Uint32x4) concatSelectedConstant(h1h0l1l0 uint8, y Uint32x4) Uint32x4
 // returns {4,7}; bit 0, selecting from x, is zero, and selects 4, and bit 1,
 // selecting from y, is 1, and selects 7.
 //
-// A non-constant value of hilo may result in significantly worse performance for this operation.
+// Performance: A non-constant value of hilo may result in significantly worse performance for this operation.
 //
 // Asm: VSHUFPD, CPU Feature: AVX
 func (x Uint64x2) concatSelectedConstant(hilo uint8, y Uint64x2) Uint64x2
@@ -616,7 +624,7 @@ func (x Uint64x2) concatSelectedConstant(hilo uint8, y Uint64x2) Uint64x2
 // returns {2,0,5,7,10,8,13,15}
 // (don't forget that the binary constant is written big-endian).
 //
-// A non-constant value of h1h0l1l0 may result in significantly worse performance for this operation.
+// Performance: A non-constant value of h1h0l1l0 may result in significantly worse performance for this operation.
 //
 // Asm: VSHUFPS, CPU Feature: AVX
 func (x Float32x8) concatSelectedConstantGrouped(h1h0l1l0 uint8, y Float32x8) Float32x8
@@ -634,7 +642,7 @@ func (x Float32x8) concatSelectedConstantGrouped(h1h0l1l0 uint8, y Float32x8) Fl
 //
 // (don't forget that the binary constant is written big-endian).
 //
-// A non-constant value of h1h0l1l0 may result in significantly worse performance for this operation.
+// Performance: A non-constant value of h1h0l1l0 may result in significantly worse performance for this operation.
 //
 // Asm: VSHUFPS, CPU Feature: AVX512
 func (x Float32x16) concatSelectedConstantGrouped(h1h0l1l0 uint8, y Float32x16) Float32x16
@@ -653,7 +661,7 @@ func (x Float32x16) concatSelectedConstantGrouped(h1h0l1l0 uint8, y Float32x16) 
 // This differs from the same method applied to a 32x8 vector, where
 // the 8-bit constant performs the same selection on both subvectors.
 //
-// A non-constant value of hilos may result in significantly worse performance for this operation.
+// Performance: A non-constant value of hilos may result in significantly worse performance for this operation.
 //
 // Asm: VSHUFPD, CPU Feature: AVX
 func (x Float64x4) concatSelectedConstantGrouped(hilos uint8, y Float64x4) Float64x4
@@ -674,7 +682,7 @@ func (x Float64x4) concatSelectedConstantGrouped(hilos uint8, y Float64x4) Float
 // This differs from the same method applied to a 32x8 or 32x16 vector, where
 // the 8-bit constant performs the same selection on all the subvectors.
 //
-// A non-constant value of hilos may result in significantly worse performance for this operation.
+// Performance: A non-constant value of hilos may result in significantly worse performance for this operation.
 //
 // Asm: VSHUFPD, CPU Feature: AVX512
 func (x Float64x8) concatSelectedConstantGrouped(hilos uint8, y Float64x8) Float64x8
@@ -688,7 +696,7 @@ func (x Float64x8) concatSelectedConstantGrouped(hilos uint8, y Float64x8) Float
 // returns {2,0,5,7,10,8,13,15}
 // (don't forget that the binary constant is written big-endian).
 //
-// A non-constant value of h1h0l1l0 may result in significantly worse performance for this operation.
+// Performance: A non-constant value of h1h0l1l0 may result in significantly worse performance for this operation.
 //
 // Asm: VSHUFPS, CPU Feature: AVX
 func (x Int32x8) concatSelectedConstantGrouped(h1h0l1l0 uint8, y Int32x8) Int32x8
@@ -706,7 +714,7 @@ func (x Int32x8) concatSelectedConstantGrouped(h1h0l1l0 uint8, y Int32x8) Int32x
 //
 // (don't forget that the binary constant is written big-endian).
 //
-// A non-constant value of h1h0l1l0 may result in significantly worse performance for this operation.
+// Performance: A non-constant value of h1h0l1l0 may result in significantly worse performance for this operation.
 //
 // Asm: VSHUFPS, CPU Feature: AVX512
 func (x Int32x16) concatSelectedConstantGrouped(h1h0l1l0 uint8, y Int32x16) Int32x16
@@ -725,7 +733,7 @@ func (x Int32x16) concatSelectedConstantGrouped(h1h0l1l0 uint8, y Int32x16) Int3
 // This differs from the same method applied to a 32x8 vector, where
 // the 8-bit constant performs the same selection on both subvectors.
 //
-// A non-constant value of hilos may result in significantly worse performance for this operation.
+// Performance: A non-constant value of hilos may result in significantly worse performance for this operation.
 //
 // Asm: VSHUFPD, CPU Feature: AVX
 func (x Int64x4) concatSelectedConstantGrouped(hilos uint8, y Int64x4) Int64x4
@@ -746,7 +754,7 @@ func (x Int64x4) concatSelectedConstantGrouped(hilos uint8, y Int64x4) Int64x4
 // This differs from the same method applied to a 32x8 or 32x16 vector, where
 // the 8-bit constant performs the same selection on all the subvectors.
 //
-// A non-constant value of hilos may result in significantly worse performance for this operation.
+// Performance: A non-constant value of hilos may result in significantly worse performance for this operation.
 //
 // Asm: VSHUFPD, CPU Feature: AVX512
 func (x Int64x8) concatSelectedConstantGrouped(hilos uint8, y Int64x8) Int64x8
@@ -760,7 +768,7 @@ func (x Int64x8) concatSelectedConstantGrouped(hilos uint8, y Int64x8) Int64x8
 // returns {2,0,5,7,10,8,13,15}
 // (don't forget that the binary constant is written big-endian).
 //
-// A non-constant value of h1h0l1l0 may result in significantly worse performance for this operation.
+// Performance: A non-constant value of h1h0l1l0 may result in significantly worse performance for this operation.
 //
 // Asm: VSHUFPS, CPU Feature: AVX
 func (x Uint32x8) concatSelectedConstantGrouped(h1h0l1l0 uint8, y Uint32x8) Uint32x8
@@ -778,7 +786,7 @@ func (x Uint32x8) concatSelectedConstantGrouped(h1h0l1l0 uint8, y Uint32x8) Uint
 //
 // (don't forget that the binary constant is written big-endian).
 //
-// A non-constant value of h1h0l1l0 may result in significantly worse performance for this operation.
+// Performance: A non-constant value of h1h0l1l0 may result in significantly worse performance for this operation.
 //
 // Asm: VSHUFPS, CPU Feature: AVX512
 func (x Uint32x16) concatSelectedConstantGrouped(h1h0l1l0 uint8, y Uint32x16) Uint32x16
@@ -797,7 +805,7 @@ func (x Uint32x16) concatSelectedConstantGrouped(h1h0l1l0 uint8, y Uint32x16) Ui
 // This differs from the same method applied to a 32x8 vector, where
 // the 8-bit constant performs the same selection on both subvectors.
 //
-// A non-constant value of hilos may result in significantly worse performance for this operation.
+// Performance: A non-constant value of hilos may result in significantly worse performance for this operation.
 //
 // Asm: VSHUFPD, CPU Feature: AVX
 func (x Uint64x4) concatSelectedConstantGrouped(hilos uint8, y Uint64x4) Uint64x4
@@ -818,10 +826,42 @@ func (x Uint64x4) concatSelectedConstantGrouped(hilos uint8, y Uint64x4) Uint64x
 // This differs from the same method applied to a 32x8 or 32x16 vector, where
 // the 8-bit constant performs the same selection on all the subvectors.
 //
-// A non-constant value of hilos may result in significantly worse performance for this operation.
+// Performance: A non-constant value of hilos may result in significantly worse performance for this operation.
 //
 // Asm: VSHUFPD, CPU Feature: AVX512
 func (x Uint64x8) concatSelectedConstantGrouped(hilos uint8, y Uint64x8) Uint64x8
+
+/* onesCount */
+
+// onesCount counts the number of set bits in each element.
+//
+// Asm: VPOPCNTB, CPU Feature: AVX512BITALG
+func (x Int8x16) onesCount() Int8x16
+
+// onesCount counts the number of set bits in each element.
+//
+// Asm: VPOPCNTB, CPU Feature: AVX512BITALG
+func (x Int8x32) onesCount() Int8x32
+
+// onesCount counts the number of set bits in each element.
+//
+// Asm: VPOPCNTB, CPU Feature: AVX512BITALG
+func (x Int8x64) onesCount() Int8x64
+
+// onesCount counts the number of set bits in each element.
+//
+// Asm: VPOPCNTB, CPU Feature: AVX512BITALG
+func (x Uint8x16) onesCount() Uint8x16
+
+// onesCount counts the number of set bits in each element.
+//
+// Asm: VPOPCNTB, CPU Feature: AVX512BITALG
+func (x Uint8x32) onesCount() Uint8x32
+
+// onesCount counts the number of set bits in each element.
+//
+// Asm: VPOPCNTB, CPU Feature: AVX512BITALG
+func (x Uint8x64) onesCount() Uint8x64
 
 /* permuteScalars */
 
@@ -831,7 +871,7 @@ func (x Uint64x8) concatSelectedConstantGrouped(hilos uint8, y Uint64x8) Uint64x
 //
 // Indices is four 2-bit values packed into a byte, thus indices[0:2] is the first index.
 //
-// A non-constant value of indices may result in significantly worse performance for this operation.
+// Performance: A non-constant value of indices may result in significantly worse performance for this operation.
 //
 // Asm: VPSHUFD, CPU Feature: AVX
 func (x Int32x4) permuteScalars(indices uint8) Int32x4
@@ -842,7 +882,7 @@ func (x Int32x4) permuteScalars(indices uint8) Int32x4
 //
 // Indices is four 2-bit values packed into a byte, thus indices[0:2] is the first index.
 //
-// A non-constant value of indices may result in significantly worse performance for this operation.
+// Performance: A non-constant value of indices may result in significantly worse performance for this operation.
 //
 // Asm: VPSHUFD, CPU Feature: AVX
 func (x Uint32x4) permuteScalars(indices uint8) Uint32x4
@@ -856,7 +896,7 @@ func (x Uint32x4) permuteScalars(indices uint8) Uint32x4
 // Indices is four 2-bit values packed into a byte, thus indices[0:2] is the first index.
 // Each group is of size 128-bit.
 //
-// A non-constant value of indices may result in significantly worse performance for this operation.
+// Performance: A non-constant value of indices may result in significantly worse performance for this operation.
 //
 // Asm: VPSHUFD, CPU Feature: AVX2
 func (x Int32x8) permuteScalarsGrouped(indices uint8) Int32x8
@@ -868,7 +908,7 @@ func (x Int32x8) permuteScalarsGrouped(indices uint8) Int32x8
 // Indices is four 2-bit values packed into a byte, thus indices[0:2] is the first index.
 // Each group is of size 128-bit.
 //
-// A non-constant value of indices may result in significantly worse performance for this operation.
+// Performance: A non-constant value of indices may result in significantly worse performance for this operation.
 //
 // Asm: VPSHUFD, CPU Feature: AVX512
 func (x Int32x16) permuteScalarsGrouped(indices uint8) Int32x16
@@ -880,7 +920,7 @@ func (x Int32x16) permuteScalarsGrouped(indices uint8) Int32x16
 // Indices is four 2-bit values packed into a byte, thus indices[0:2] is the first index.
 // Each group is of size 128-bit.
 //
-// A non-constant value of indices may result in significantly worse performance for this operation.
+// Performance: A non-constant value of indices may result in significantly worse performance for this operation.
 //
 // Asm: VPSHUFD, CPU Feature: AVX2
 func (x Uint32x8) permuteScalarsGrouped(indices uint8) Uint32x8
@@ -892,7 +932,7 @@ func (x Uint32x8) permuteScalarsGrouped(indices uint8) Uint32x8
 // Indices is four 2-bit values packed into a byte, thus indices[0:2] is the first index.
 // Each group is of size 128-bit.
 //
-// A non-constant value of indices may result in significantly worse performance for this operation.
+// Performance: A non-constant value of indices may result in significantly worse performance for this operation.
 //
 // Asm: VPSHUFD, CPU Feature: AVX512
 func (x Uint32x16) permuteScalarsGrouped(indices uint8) Uint32x16
@@ -905,7 +945,7 @@ func (x Uint32x16) permuteScalarsGrouped(indices uint8) Uint32x16
 //
 // Indices is four 2-bit values packed into a byte, thus indices[0:2] is the first index.
 //
-// A non-constant value of indices may result in significantly worse performance for this operation.
+// Performance: A non-constant value of indices may result in significantly worse performance for this operation.
 //
 // Asm: VPSHUFHW, CPU Feature: AVX
 func (x Int16x8) permuteScalarsHi(indices uint8) Int16x8
@@ -916,7 +956,7 @@ func (x Int16x8) permuteScalarsHi(indices uint8) Int16x8
 //
 // Indices is four 2-bit values packed into a byte, thus indices[0:2] is the first index.
 //
-// A non-constant value of indices may result in significantly worse performance for this operation.
+// Performance: A non-constant value of indices may result in significantly worse performance for this operation.
 //
 // Asm: VPSHUFHW, CPU Feature: AVX
 func (x Uint16x8) permuteScalarsHi(indices uint8) Uint16x8
@@ -932,7 +972,7 @@ func (x Uint16x8) permuteScalarsHi(indices uint8) Uint16x8
 // Indices is four 2-bit values packed into a byte, thus indices[0:2] is the first index.
 // Each group is of size 128-bit.
 //
-// A non-constant value of indices may result in significantly worse performance for this operation.
+// Performance: A non-constant value of indices may result in significantly worse performance for this operation.
 //
 // Asm: VPSHUFHW, CPU Feature: AVX2
 func (x Int16x16) permuteScalarsHiGrouped(indices uint8) Int16x16
@@ -946,7 +986,7 @@ func (x Int16x16) permuteScalarsHiGrouped(indices uint8) Int16x16
 // Indices is four 2-bit values packed into a byte, thus indices[0:2] is the first index.
 // Each group is of size 128-bit.
 //
-// A non-constant value of indices may result in significantly worse performance for this operation.
+// Performance: A non-constant value of indices may result in significantly worse performance for this operation.
 //
 // Asm: VPSHUFHW, CPU Feature: AVX512
 func (x Int16x32) permuteScalarsHiGrouped(indices uint8) Int16x32
@@ -960,7 +1000,7 @@ func (x Int16x32) permuteScalarsHiGrouped(indices uint8) Int16x32
 // Indices is four 2-bit values packed into a byte, thus indices[0:2] is the first index.
 // Each group is of size 128-bit.
 //
-// A non-constant value of indices may result in significantly worse performance for this operation.
+// Performance: A non-constant value of indices may result in significantly worse performance for this operation.
 //
 // Asm: VPSHUFHW, CPU Feature: AVX2
 func (x Uint16x16) permuteScalarsHiGrouped(indices uint8) Uint16x16
@@ -974,7 +1014,7 @@ func (x Uint16x16) permuteScalarsHiGrouped(indices uint8) Uint16x16
 // Indices is four 2-bit values packed into a byte, thus indices[0:2] is the first index.
 // Each group is of size 128-bit.
 //
-// A non-constant value of indices may result in significantly worse performance for this operation.
+// Performance: A non-constant value of indices may result in significantly worse performance for this operation.
 //
 // Asm: VPSHUFHW, CPU Feature: AVX512
 func (x Uint16x32) permuteScalarsHiGrouped(indices uint8) Uint16x32
@@ -987,7 +1027,7 @@ func (x Uint16x32) permuteScalarsHiGrouped(indices uint8) Uint16x32
 //
 // Indices is four 2-bit values packed into a byte, thus indices[0:2] is the first index.
 //
-// A non-constant value of indices may result in significantly worse performance for this operation.
+// Performance: A non-constant value of indices may result in significantly worse performance for this operation.
 //
 // Asm: VPSHUFLW, CPU Feature: AVX
 func (x Int16x8) permuteScalarsLo(indices uint8) Int16x8
@@ -998,7 +1038,7 @@ func (x Int16x8) permuteScalarsLo(indices uint8) Int16x8
 //
 // Indices is four 2-bit values packed into a byte, thus indices[0:2] is the first index.
 //
-// A non-constant value of indices may result in significantly worse performance for this operation.
+// Performance: A non-constant value of indices may result in significantly worse performance for this operation.
 //
 // Asm: VPSHUFLW, CPU Feature: AVX
 func (x Uint16x8) permuteScalarsLo(indices uint8) Uint16x8
@@ -1013,7 +1053,7 @@ func (x Uint16x8) permuteScalarsLo(indices uint8) Uint16x8
 // Indices is four 2-bit values packed into a byte, thus indices[0:2] is the first index.
 // Each group is of size 128-bit.
 //
-// A non-constant value of indices may result in significantly worse performance for this operation.
+// Performance: A non-constant value of indices may result in significantly worse performance for this operation.
 //
 // Asm: VPSHUFLW, CPU Feature: AVX2
 func (x Int16x16) permuteScalarsLoGrouped(indices uint8) Int16x16
@@ -1026,7 +1066,7 @@ func (x Int16x16) permuteScalarsLoGrouped(indices uint8) Int16x16
 // Indices is four 2-bit values packed into a byte, thus indices[0:2] is the first index.
 // Each group is of size 128-bit.
 //
-// A non-constant value of indices may result in significantly worse performance for this operation.
+// Performance: A non-constant value of indices may result in significantly worse performance for this operation.
 //
 // Asm: VPSHUFLW, CPU Feature: AVX512
 func (x Int16x32) permuteScalarsLoGrouped(indices uint8) Int16x32
@@ -1039,7 +1079,7 @@ func (x Int16x32) permuteScalarsLoGrouped(indices uint8) Int16x32
 // Indices is four 2-bit values packed into a byte, thus indices[0:2] is the first index.
 // Each group is of size 128-bit.
 //
-// A non-constant value of indices may result in significantly worse performance for this operation.
+// Performance: A non-constant value of indices may result in significantly worse performance for this operation.
 //
 // Asm: VPSHUFLW, CPU Feature: AVX2
 func (x Uint16x16) permuteScalarsLoGrouped(indices uint8) Uint16x16
@@ -1052,17 +1092,209 @@ func (x Uint16x16) permuteScalarsLoGrouped(indices uint8) Uint16x16
 // Indices is four 2-bit values packed into a byte, thus indices[0:2] is the first index.
 // Each group is of size 128-bit.
 //
-// A non-constant value of indices may result in significantly worse performance for this operation.
+// Performance: A non-constant value of indices may result in significantly worse performance for this operation.
 //
 // Asm: VPSHUFLW, CPU Feature: AVX512
 func (x Uint16x32) permuteScalarsLoGrouped(indices uint8) Uint16x32
+
+/* saturateToInt8 */
+
+// saturateToInt8 converts element values with saturation, storing the results in
+// the low half of the result and zeroing the rest.
+//
+// Asm: VPMOVSWB, CPU Feature: AVX512
+func (x Int16x8) saturateToInt8() Int8x16
+
+// saturateToInt8 converts element values with saturation, storing the results in
+// the low half of the result and zeroing the rest.
+//
+// Asm: VPMOVSWB, CPU Feature: AVX512
+func (x Int16x16) saturateToInt8() Int8x32
+
+/* saturateToInt8Masked */
+
+// saturateToInt8Masked converts element values with saturation, storing the results in
+// the low half of the result and zeroing the rest.
+//
+// This operation is applied selectively under a write mask.
+//
+// Asm: VPMOVSWB, CPU Feature: AVX512
+func (x Int16x8) saturateToInt8Masked(mask Mask16x8) Int8x16
+
+// saturateToInt8Masked converts element values with saturation, storing the results in
+// the low half of the result and zeroing the rest.
+//
+// This operation is applied selectively under a write mask.
+//
+// Asm: VPMOVSWB, CPU Feature: AVX512
+func (x Int16x16) saturateToInt8Masked(mask Mask16x16) Int8x32
+
+/* saturateToInt16 */
+
+// saturateToInt16 converts element values with saturation, storing the results in
+// the low half of the result and zeroing the rest.
+//
+// Asm: VPMOVSDW, CPU Feature: AVX512
+func (x Int32x4) saturateToInt16() Int16x8
+
+// saturateToInt16 converts element values with saturation, storing the results in
+// the low half of the result and zeroing the rest.
+//
+// Asm: VPMOVSDW, CPU Feature: AVX512
+func (x Int32x8) saturateToInt16() Int16x16
+
+/* saturateToInt16Masked */
+
+// saturateToInt16Masked converts element values with saturation, storing the results in
+// the low half of the result and zeroing the rest.
+//
+// This operation is applied selectively under a write mask.
+//
+// Asm: VPMOVSDW, CPU Feature: AVX512
+func (x Int32x4) saturateToInt16Masked(mask Mask32x4) Int16x8
+
+// saturateToInt16Masked converts element values with saturation, storing the results in
+// the low half of the result and zeroing the rest.
+//
+// This operation is applied selectively under a write mask.
+//
+// Asm: VPMOVSDW, CPU Feature: AVX512
+func (x Int32x8) saturateToInt16Masked(mask Mask32x8) Int16x16
+
+/* saturateToInt32 */
+
+// saturateToInt32 converts element values with saturation, storing the results in
+// the low half of the result and zeroing the rest.
+//
+// Asm: VPMOVSQD, CPU Feature: AVX512
+func (x Int64x2) saturateToInt32() Int32x4
+
+// saturateToInt32 converts element values with saturation, storing the results in
+// the low half of the result and zeroing the rest.
+//
+// Asm: VPMOVSQD, CPU Feature: AVX512
+func (x Int64x4) saturateToInt32() Int32x8
+
+/* saturateToInt32Masked */
+
+// saturateToInt32Masked converts element values with saturation, storing the results in
+// the low half of the result and zeroing the rest.
+//
+// This operation is applied selectively under a write mask.
+//
+// Asm: VPMOVSQD, CPU Feature: AVX512
+func (x Int64x2) saturateToInt32Masked(mask Mask64x2) Int32x4
+
+// saturateToInt32Masked converts element values with saturation, storing the results in
+// the low half of the result and zeroing the rest.
+//
+// This operation is applied selectively under a write mask.
+//
+// Asm: VPMOVSQD, CPU Feature: AVX512
+func (x Int64x4) saturateToInt32Masked(mask Mask64x4) Int32x8
+
+/* saturateToUint8 */
+
+// saturateToUint8 converts element values with saturation, storing the results in
+// the low half of the result and zeroing the rest.
+//
+// Asm: VPMOVUSWB, CPU Feature: AVX512
+func (x Uint16x8) saturateToUint8() Uint8x16
+
+// saturateToUint8 converts element values with saturation, storing the results in
+// the low half of the result and zeroing the rest.
+//
+// Asm: VPMOVUSWB, CPU Feature: AVX512
+func (x Uint16x16) saturateToUint8() Uint8x32
+
+/* saturateToUint8Masked */
+
+// saturateToUint8Masked converts element values with saturation, storing the results in
+// the low half of the result and zeroing the rest.
+//
+// This operation is applied selectively under a write mask.
+//
+// Asm: VPMOVUSWB, CPU Feature: AVX512
+func (x Uint16x8) saturateToUint8Masked(mask Mask16x8) Uint8x16
+
+// saturateToUint8Masked converts element values with saturation, storing the results in
+// the low half of the result and zeroing the rest.
+//
+// This operation is applied selectively under a write mask.
+//
+// Asm: VPMOVUSWB, CPU Feature: AVX512
+func (x Uint16x16) saturateToUint8Masked(mask Mask16x16) Uint8x32
+
+/* saturateToUint16 */
+
+// saturateToUint16 converts element values with saturation, storing the results in
+// the low half of the result and zeroing the rest.
+//
+// Asm: VPMOVUSDW, CPU Feature: AVX512
+func (x Uint32x4) saturateToUint16() Uint16x8
+
+// saturateToUint16 converts element values with saturation, storing the results in
+// the low half of the result and zeroing the rest.
+//
+// Asm: VPMOVUSDW, CPU Feature: AVX512
+func (x Uint32x8) saturateToUint16() Uint16x16
+
+/* saturateToUint16Masked */
+
+// saturateToUint16Masked converts element values with saturation, storing the results in
+// the low half of the result and zeroing the rest.
+//
+// This operation is applied selectively under a write mask.
+//
+// Asm: VPMOVUSDW, CPU Feature: AVX512
+func (x Uint32x4) saturateToUint16Masked(mask Mask32x4) Uint16x8
+
+// saturateToUint16Masked converts element values with saturation, storing the results in
+// the low half of the result and zeroing the rest.
+//
+// This operation is applied selectively under a write mask.
+//
+// Asm: VPMOVUSDW, CPU Feature: AVX512
+func (x Uint32x8) saturateToUint16Masked(mask Mask32x8) Uint16x16
+
+/* saturateToUint32 */
+
+// saturateToUint32 converts element values with saturation, storing the results in
+// the low half of the result and zeroing the rest.
+//
+// Asm: VPMOVUSQD, CPU Feature: AVX512
+func (x Uint64x2) saturateToUint32() Uint32x4
+
+// saturateToUint32 converts element values with saturation, storing the results in
+// the low half of the result and zeroing the rest.
+//
+// Asm: VPMOVUSQD, CPU Feature: AVX512
+func (x Uint64x4) saturateToUint32() Uint32x8
+
+/* saturateToUint32Masked */
+
+// saturateToUint32Masked converts element values with saturation, storing the results in
+// the low half of the result and zeroing the rest.
+//
+// This operation is applied selectively under a write mask.
+//
+// Asm: VPMOVUSQD, CPU Feature: AVX512
+func (x Uint64x2) saturateToUint32Masked(mask Mask64x2) Uint32x4
+
+// saturateToUint32Masked converts element values with saturation, storing the results in
+// the low half of the result and zeroing the rest.
+//
+// This operation is applied selectively under a write mask.
+//
+// Asm: VPMOVUSQD, CPU Feature: AVX512
+func (x Uint64x4) saturateToUint32Masked(mask Mask64x4) Uint32x8
 
 /* tern */
 
 // tern performs a logical operation on three vectors based on the 8-bit truth table.
 // Bitwise, the result is equal to 1 & (table >> (x<<2 + y<<1 + z))
 //
-// A non-constant value of table may result in significantly worse performance for this operation.
+// Performance: A non-constant value of table may result in significantly worse performance for this operation.
 //
 // Asm: VPTERNLOGD, CPU Feature: AVX512
 func (x Int32x4) tern(table uint8, y Int32x4, z Int32x4) Int32x4
@@ -1070,7 +1302,7 @@ func (x Int32x4) tern(table uint8, y Int32x4, z Int32x4) Int32x4
 // tern performs a logical operation on three vectors based on the 8-bit truth table.
 // Bitwise, the result is equal to 1 & (table >> (x<<2 + y<<1 + z))
 //
-// A non-constant value of table may result in significantly worse performance for this operation.
+// Performance: A non-constant value of table may result in significantly worse performance for this operation.
 //
 // Asm: VPTERNLOGD, CPU Feature: AVX512
 func (x Int32x8) tern(table uint8, y Int32x8, z Int32x8) Int32x8
@@ -1078,7 +1310,7 @@ func (x Int32x8) tern(table uint8, y Int32x8, z Int32x8) Int32x8
 // tern performs a logical operation on three vectors based on the 8-bit truth table.
 // Bitwise, the result is equal to 1 & (table >> (x<<2 + y<<1 + z))
 //
-// A non-constant value of table may result in significantly worse performance for this operation.
+// Performance: A non-constant value of table may result in significantly worse performance for this operation.
 //
 // Asm: VPTERNLOGD, CPU Feature: AVX512
 func (x Int32x16) tern(table uint8, y Int32x16, z Int32x16) Int32x16
@@ -1086,7 +1318,7 @@ func (x Int32x16) tern(table uint8, y Int32x16, z Int32x16) Int32x16
 // tern performs a logical operation on three vectors based on the 8-bit truth table.
 // Bitwise, the result is equal to 1 & (table >> (x<<2 + y<<1 + z))
 //
-// A non-constant value of table may result in significantly worse performance for this operation.
+// Performance: A non-constant value of table may result in significantly worse performance for this operation.
 //
 // Asm: VPTERNLOGQ, CPU Feature: AVX512
 func (x Int64x2) tern(table uint8, y Int64x2, z Int64x2) Int64x2
@@ -1094,7 +1326,7 @@ func (x Int64x2) tern(table uint8, y Int64x2, z Int64x2) Int64x2
 // tern performs a logical operation on three vectors based on the 8-bit truth table.
 // Bitwise, the result is equal to 1 & (table >> (x<<2 + y<<1 + z))
 //
-// A non-constant value of table may result in significantly worse performance for this operation.
+// Performance: A non-constant value of table may result in significantly worse performance for this operation.
 //
 // Asm: VPTERNLOGQ, CPU Feature: AVX512
 func (x Int64x4) tern(table uint8, y Int64x4, z Int64x4) Int64x4
@@ -1102,7 +1334,7 @@ func (x Int64x4) tern(table uint8, y Int64x4, z Int64x4) Int64x4
 // tern performs a logical operation on three vectors based on the 8-bit truth table.
 // Bitwise, the result is equal to 1 & (table >> (x<<2 + y<<1 + z))
 //
-// A non-constant value of table may result in significantly worse performance for this operation.
+// Performance: A non-constant value of table may result in significantly worse performance for this operation.
 //
 // Asm: VPTERNLOGQ, CPU Feature: AVX512
 func (x Int64x8) tern(table uint8, y Int64x8, z Int64x8) Int64x8
@@ -1110,7 +1342,7 @@ func (x Int64x8) tern(table uint8, y Int64x8, z Int64x8) Int64x8
 // tern performs a logical operation on three vectors based on the 8-bit truth table.
 // Bitwise, the result is equal to 1 & (table >> (x<<2 + y<<1 + z))
 //
-// A non-constant value of table may result in significantly worse performance for this operation.
+// Performance: A non-constant value of table may result in significantly worse performance for this operation.
 //
 // Asm: VPTERNLOGD, CPU Feature: AVX512
 func (x Uint32x4) tern(table uint8, y Uint32x4, z Uint32x4) Uint32x4
@@ -1118,7 +1350,7 @@ func (x Uint32x4) tern(table uint8, y Uint32x4, z Uint32x4) Uint32x4
 // tern performs a logical operation on three vectors based on the 8-bit truth table.
 // Bitwise, the result is equal to 1 & (table >> (x<<2 + y<<1 + z))
 //
-// A non-constant value of table may result in significantly worse performance for this operation.
+// Performance: A non-constant value of table may result in significantly worse performance for this operation.
 //
 // Asm: VPTERNLOGD, CPU Feature: AVX512
 func (x Uint32x8) tern(table uint8, y Uint32x8, z Uint32x8) Uint32x8
@@ -1126,7 +1358,7 @@ func (x Uint32x8) tern(table uint8, y Uint32x8, z Uint32x8) Uint32x8
 // tern performs a logical operation on three vectors based on the 8-bit truth table.
 // Bitwise, the result is equal to 1 & (table >> (x<<2 + y<<1 + z))
 //
-// A non-constant value of table may result in significantly worse performance for this operation.
+// Performance: A non-constant value of table may result in significantly worse performance for this operation.
 //
 // Asm: VPTERNLOGD, CPU Feature: AVX512
 func (x Uint32x16) tern(table uint8, y Uint32x16, z Uint32x16) Uint32x16
@@ -1134,7 +1366,7 @@ func (x Uint32x16) tern(table uint8, y Uint32x16, z Uint32x16) Uint32x16
 // tern performs a logical operation on three vectors based on the 8-bit truth table.
 // Bitwise, the result is equal to 1 & (table >> (x<<2 + y<<1 + z))
 //
-// A non-constant value of table may result in significantly worse performance for this operation.
+// Performance: A non-constant value of table may result in significantly worse performance for this operation.
 //
 // Asm: VPTERNLOGQ, CPU Feature: AVX512
 func (x Uint64x2) tern(table uint8, y Uint64x2, z Uint64x2) Uint64x2
@@ -1142,7 +1374,7 @@ func (x Uint64x2) tern(table uint8, y Uint64x2, z Uint64x2) Uint64x2
 // tern performs a logical operation on three vectors based on the 8-bit truth table.
 // Bitwise, the result is equal to 1 & (table >> (x<<2 + y<<1 + z))
 //
-// A non-constant value of table may result in significantly worse performance for this operation.
+// Performance: A non-constant value of table may result in significantly worse performance for this operation.
 //
 // Asm: VPTERNLOGQ, CPU Feature: AVX512
 func (x Uint64x4) tern(table uint8, y Uint64x4, z Uint64x4) Uint64x4
@@ -1150,7 +1382,103 @@ func (x Uint64x4) tern(table uint8, y Uint64x4, z Uint64x4) Uint64x4
 // tern performs a logical operation on three vectors based on the 8-bit truth table.
 // Bitwise, the result is equal to 1 & (table >> (x<<2 + y<<1 + z))
 //
-// A non-constant value of table may result in significantly worse performance for this operation.
+// Performance: A non-constant value of table may result in significantly worse performance for this operation.
 //
 // Asm: VPTERNLOGQ, CPU Feature: AVX512
 func (x Uint64x8) tern(table uint8, y Uint64x8, z Uint64x8) Uint64x8
+
+/* truncToUint8 */
+
+// truncToUint8 truncates element values, storing the results in the low half of
+// the result and zeroing the rest.
+//
+// Asm: VPMOVWB, CPU Feature: AVX512
+func (x Uint16x8) truncToUint8() Uint8x16
+
+// truncToUint8 truncates element values, storing the results in the low half of
+// the result and zeroing the rest.
+//
+// Asm: VPMOVWB, CPU Feature: AVX512
+func (x Uint16x16) truncToUint8() Uint8x32
+
+/* truncToUint8Masked */
+
+// truncToUint8Masked truncates element values, storing the results in the low half of
+// the result and zeroing the rest.
+//
+// This operation is applied selectively under a write mask.
+//
+// Asm: VPMOVWB, CPU Feature: AVX512
+func (x Uint16x8) truncToUint8Masked(mask Mask16x8) Uint8x16
+
+// truncToUint8Masked truncates element values, storing the results in the low half of
+// the result and zeroing the rest.
+//
+// This operation is applied selectively under a write mask.
+//
+// Asm: VPMOVWB, CPU Feature: AVX512
+func (x Uint16x16) truncToUint8Masked(mask Mask16x16) Uint8x32
+
+/* truncToUint16 */
+
+// truncToUint16 truncates element values, storing the results in the low half of
+// the result and zeroing the rest.
+//
+// Asm: VPMOVDW, CPU Feature: AVX512
+func (x Uint32x4) truncToUint16() Uint16x8
+
+// truncToUint16 truncates element values, storing the results in the low half of
+// the result and zeroing the rest.
+//
+// Asm: VPMOVDW, CPU Feature: AVX512
+func (x Uint32x8) truncToUint16() Uint16x16
+
+/* truncToUint16Masked */
+
+// truncToUint16Masked truncates element values, storing the results in the low half of
+// the result and zeroing the rest.
+//
+// This operation is applied selectively under a write mask.
+//
+// Asm: VPMOVDW, CPU Feature: AVX512
+func (x Uint32x4) truncToUint16Masked(mask Mask32x4) Uint16x8
+
+// truncToUint16Masked truncates element values, storing the results in the low half of
+// the result and zeroing the rest.
+//
+// This operation is applied selectively under a write mask.
+//
+// Asm: VPMOVDW, CPU Feature: AVX512
+func (x Uint32x8) truncToUint16Masked(mask Mask32x8) Uint16x16
+
+/* truncToUint32 */
+
+// truncToUint32 truncates element values, storing the results in the low half of
+// the result and zeroing the rest.
+//
+// Asm: VPMOVQD, CPU Feature: AVX512
+func (x Uint64x2) truncToUint32() Uint32x4
+
+// truncToUint32 truncates element values, storing the results in the low half of
+// the result and zeroing the rest.
+//
+// Asm: VPMOVQD, CPU Feature: AVX512
+func (x Uint64x4) truncToUint32() Uint32x8
+
+/* truncToUint32Masked */
+
+// truncToUint32Masked truncates element values, storing the results in the low half of
+// the result and zeroing the rest.
+//
+// This operation is applied selectively under a write mask.
+//
+// Asm: VPMOVQD, CPU Feature: AVX512
+func (x Uint64x2) truncToUint32Masked(mask Mask64x2) Uint32x4
+
+// truncToUint32Masked truncates element values, storing the results in the low half of
+// the result and zeroing the rest.
+//
+// This operation is applied selectively under a write mask.
+//
+// Asm: VPMOVQD, CPU Feature: AVX512
+func (x Uint64x4) truncToUint32Masked(mask Mask64x4) Uint32x8

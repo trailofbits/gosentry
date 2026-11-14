@@ -1,0 +1,5 @@
+pkg testing, func LibAFLFuzzOneInput([]uint8)
+pkg testing, func LibAFLInit(string, func(*F)) error
+pkg testing, func LibAFLMarkGoInitDone()
+pkg testing, func LibAFLWaitForGoInit()
+pkg testing, func LibAFLWriteSeeds(string) error

@@ -256,17 +256,25 @@ const (
 	BIG_9  = 256 - 2
 	BIG_10 = 512 - 2
 	BIG_11 = 1024 - 2
-	BIG_12 = 2046
+	BIG_12 = 2048 - 2
 	BIG_16 = 32768 - 2
+	BIG_18 = 131072 - 2
 	BIG_32 = 2147483648 - 2
 )
 
 const (
 	// mark flags
-	LABEL  = 1 << 0
-	LEAF   = 1 << 1
-	SYNC   = 1 << 2
-	BRANCH = 1 << 3
+	LABEL = 1 << iota
+	LEAF
+	SYNC
+	BRANCH
+
+	// branchLoopHead marks loop entry.
+	// Used to insert padding for under-aligned loops.
+	branchLoopHead
+
+	// p expands to multiple instructions and uses REGTMP.
+	USES_REG_TMP
 )
 
 // Arrangement for Loong64 SIMD instructions
@@ -299,7 +307,7 @@ const (
 
 // bits 0-4 indicates register: Vn or Xn
 // bits 5-9 indicates arrangement: <T>
-// bits 10 indicates SMID type: 0: LSX, 1: LASX
+// bits 10 indicates SIMD type: 0: LSX, 1: LASX
 const (
 	REG_ARNG = obj.RBaseLOONG64 + (1 << 12) + (iota << 11) // Vn.<T>
 	REG_ELEM                                               // Vn.<T>[index]
@@ -413,6 +421,7 @@ const (
 	C_SOREG_11 // An $n+reg memory arg where n is a 11 bit signed offset
 	C_SOREG_12 // An $n+reg memory arg where n is a 12 bit signed offset
 	C_SOREG_16 // An $n+reg memory arg where n is a 16 bit signed offset
+	C_SOREG_18 // An $n+reg memory arg where n is a 18 bit signed offset
 	C_LOREG_32 // An $n+reg memory arg where n is a 32 bit signed offset
 	C_LOREG_64 // An $n+reg memory arg where n is a 64 bit signed offset
 	C_ROFF     // register offset

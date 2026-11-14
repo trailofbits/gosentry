@@ -8,6 +8,7 @@ import (
 	"math"
 	"reflect"
 	"slices"
+	"strings"
 )
 
 func TestLibAFLMarshalUnmarshal_OneArgBytesPassThrough(t *T) {
@@ -49,6 +50,25 @@ func TestLibAFLMarshalUnmarshal_OneArgStringPassThrough(t *T) {
 	got := args[0].Interface().(string)
 	if got != values[0].(string) {
 		t.Fatalf("round-trip mismatch: got %q want %q", got, values[0].(string))
+	}
+}
+
+func TestLibAFLMarshalUnmarshal_VarintBoundary(t *T) {
+	value := strings.Repeat("x", 128)
+	types := []reflect.Type{reflect.TypeFor[string](), reflect.TypeFor[bool]()}
+	encoded, ok := libaflMarshalInputs([]any{value, true}, types)
+	if !ok {
+		t.Fatal("marshal failed")
+	}
+	if !slices.Equal(encoded[:2], []byte{0x80, 0x01}) {
+		t.Fatalf("length prefix = %x, want 8001", encoded[:2])
+	}
+	args := libaflUnmarshalArgs(encoded, types)
+	if got := args[0].Interface().(string); got != value {
+		t.Fatalf("string round-trip mismatch: got %q", got)
+	}
+	if got := args[1].Interface().(bool); !got {
+		t.Fatal("bool round-trip mismatch")
 	}
 }
 

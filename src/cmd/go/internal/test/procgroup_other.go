@@ -1,3 +1,7 @@
+// Copyright 2026 Kevin Valerio. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 //go:build !unix
 
 package test
@@ -21,4 +25,3 @@ func signalCmdProcessGroup(cmd *exec.Cmd, sig os.Signal) error {
 	}
 	return cmd.Process.Signal(sig)
 }
-

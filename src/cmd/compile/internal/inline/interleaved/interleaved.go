@@ -34,7 +34,6 @@ func DevirtualizeAndInlinePackage(pkg *ir.Package, profile *pgoir.Profile) {
 				devirtualize.ProfileGuided(fn, profile)
 			}
 		})
-		ir.CurFunc = nil
 	}
 
 	if base.Flag.LowerL != 0 {
@@ -99,7 +98,7 @@ func DevirtualizeAndInlinePackage(pkg *ir.Package, profile *pgoir.Profile) {
 			for _, fn := range list {
 				s := inlState[fn]
 
-				ir.WithFunc(fn, func() {
+				ir.WithPos(fn, func() {
 					l1 := len(s.parens)
 					l0 := 0
 
@@ -135,8 +134,6 @@ func DevirtualizeAndInlinePackage(pkg *ir.Package, profile *pgoir.Profile) {
 		}
 	})
 
-	ir.CurFunc = nil
-
 	if base.Flag.LowerL != 0 {
 		if base.Debug.DumpInlFuncProps != "" {
 			inlheur.DumpFuncProps(nil, base.Debug.DumpInlFuncProps)
@@ -157,7 +154,7 @@ func DevirtualizeAndInlinePackage(pkg *ir.Package, profile *pgoir.Profile) {
 // DevirtualizeAndInlineFunc interleaves devirtualization and inlining
 // on a single function.
 func DevirtualizeAndInlineFunc(fn *ir.Func, profile *pgoir.Profile) {
-	ir.WithFunc(fn, func() {
+	ir.WithPos(fn, func() {
 		if base.Flag.LowerL != 0 {
 			if inlheur.Enabled() && !fn.Wrapper() {
 				inlheur.ScoreCalls(fn)
@@ -210,7 +207,7 @@ func (s *inlClosureState) resolve(state *devirtualize.State, i int) (*ir.Func, i
 	if !ok { // previously inlined
 		return nil, -1
 	}
-	devirtualize.StaticCall(state, call)
+	devirtualize.StaticCall(s.fn, state, call)
 	if callee := inline.InlineCallTarget(s.fn, call, s.profile); callee != nil {
 		for len(s.resolved) <= i {
 			s.resolved = append(s.resolved, nil)
@@ -327,7 +324,7 @@ func (s *inlClosureState) unparenthesize() {
 func (s *inlClosureState) fixpoint() bool {
 	changed := false
 	var state devirtualize.State
-	ir.WithFunc(s.fn, func() {
+	ir.WithPos(s.fn, func() {
 		done := false
 		for !done {
 			done = true

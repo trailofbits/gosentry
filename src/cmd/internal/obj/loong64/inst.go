@@ -42,7 +42,6 @@ const (
 	ALU52ID
 	APCALAU12I
 	APCADDU12I
-	AJIRL
 	ABGE
 	ABLT
 	ABLTU
@@ -525,6 +524,15 @@ const (
 	AXVSLTWU
 	AXVSLTVU
 
+	AVMSKLTZB
+	AVMSKLTZH
+	AVMSKLTZW
+	AVMSKLTZV
+	AXVMSKLTZB
+	AXVMSKLTZH
+	AXVMSKLTZW
+	AXVMSKLTZV
+
 	// LSX and LASX integer div and mod instructions
 	AVDIVB
 	AVDIVH
@@ -957,3 +965,8 @@ const (
 	AJAL = obj.ACALL
 	ARET = obj.ARET
 )
+
+var unaryDst = map[obj.As]bool{
+	AJMP: true,
+	AJAL: true,
+}

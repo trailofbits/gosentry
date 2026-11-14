@@ -45,6 +45,7 @@ func TestStdlib(t *testing.T) {
 	}
 
 	testenv.MustHaveGoBuild(t)
+	t.Parallel()
 
 	// Collect non-test files.
 	dirFiles := make(map[string][]string)
@@ -181,7 +182,7 @@ func firstComment(filename string) string {
 
 	var first string
 	var s scanner.Scanner
-	s.Init(fset.AddFile("", fset.Base(), n), src[:n], nil /* ignore errors */, scanner.ScanComments)
+	s.Init(testFSet.AddFile("", testFSet.Base(), n), src[:n], nil /* ignore errors */, scanner.ScanComments)
 	for {
 		_, tok, lit := s.Scan()
 		switch tok {
@@ -418,7 +419,13 @@ func typecheckFiles(path string, filenames []string, importer Importer) (*Packag
 		},
 		Importer: importer,
 	}
-	info := Info{Uses: make(map[*ast.Ident]Object)}
+	info := Info{
+		Defs:      make(map[*ast.Ident]Object),
+		Uses:      make(map[*ast.Ident]Object),
+		Implicits: make(map[ast.Node]Object),
+		Types:     make(map[ast.Expr]TypeAndValue),
+		Scopes:    make(map[ast.Node]*Scope),
+	}
 	pkg, _ := conf.Check(path, fset, files, &info)
 	err := errors.Join(errs...)
 	if err != nil {
@@ -426,6 +433,9 @@ func typecheckFiles(path string, filenames []string, importer Importer) (*Packag
 	}
 
 	// Perform checks of API invariants.
+	if invErrs := checkInvariants(pkg, &info, false); len(invErrs) > 0 {
+		return pkg, fmt.Errorf("invariant failure: %v", errors.Join(invErrs...))
+	}
 
 	// All Objects have a package, except predeclared ones.
 	errorError := Universe.Lookup("error").Type().Underlying().(*Interface).ExplicitMethod(0) // (error).Error

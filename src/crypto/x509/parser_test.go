@@ -11,6 +11,7 @@ import (
 	"crypto/rand"
 	"crypto/x509/pkix"
 	"encoding/asn1"
+	"encoding/hex"
 	"encoding/pem"
 	"os"
 	"reflect"
@@ -314,6 +315,88 @@ func TestParseNameConstraintsExtensionEmptySubtrees(t *testing.T) {
 	}
 }
 
+func TestParseExtensionTrailingData(t *testing.T) {
+	// extnValue is the DER encoding of a single value (RFC 5280, Section
+	// 4.1), so bytes after the top-level value are rejected. Unknown
+	// elements inside a SEQUENCE (RFC 5280, Appendix B) stay tolerated.
+	tests := []struct {
+		name  string
+		value []byte
+		parse func([]byte) error
+		want  string
+	}{
+		{
+			name:  "KeyUsage",
+			value: []byte{0x03, 0x02, 0x07, 0x80},
+			parse: func(der []byte) error { _, err := parseKeyUsageExtension(der); return err },
+			want:  "x509: trailing data after key usage",
+		},
+		{
+			name:  "BasicConstraints",
+			value: []byte{0x30, 0x03, 0x01, 0x01, 0xff},
+			parse: func(der []byte) error { _, _, err := parseBasicConstraintsExtension(der); return err },
+			want:  "x509: trailing data after basic constraints",
+		},
+		{
+			name:  "SubjectAltName",
+			value: []byte{0x30, 0x05, 0x82, 0x03, 'a', 'b', 'c'},
+			parse: func(der []byte) error { _, _, _, _, err := parseSANExtension(der); return err },
+			want:  "x509: trailing data after subject alternative names",
+		},
+		{
+			name:  "ExtKeyUsage",
+			value: []byte{0x30, 0x0a, 0x06, 0x08, 0x2b, 0x06, 0x01, 0x05, 0x05, 0x07, 0x03, 0x01},
+			parse: func(der []byte) error { _, _, err := parseExtKeyUsageExtension(der); return err },
+			want:  "x509: trailing data after extended key usages",
+		},
+		{
+			name:  "CertificatePolicies",
+			value: []byte{0x30, 0x08, 0x30, 0x06, 0x06, 0x04, 0x55, 0x1d, 0x20, 0x00},
+			parse: func(der []byte) error { _, err := parseCertificatePoliciesExtension(der); return err },
+			want:  "x509: trailing data after certificate policies",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if err := test.parse(test.value); err != nil {
+				t.Fatalf("parse(valid) = %v, want nil", err)
+			}
+			trailing := append(append([]byte{}, test.value...), 0x00)
+			if err := test.parse(trailing); err == nil || err.Error() != test.want {
+				t.Errorf("parse(trailing) = %v, want %q", err, test.want)
+			}
+		})
+	}
+
+	// An unknown element inside the BasicConstraints SEQUENCE is still accepted.
+	extensible := []byte{0x30, 0x05, 0x01, 0x01, 0xff, 0x05, 0x00}
+	if _, _, err := parseBasicConstraintsExtension(extensible); err != nil {
+		t.Errorf("parseBasicConstraintsExtension(extensible) = %v, want nil", err)
+	}
+}
+
+func TestParseCertificateExtensionTrailingData(t *testing.T) {
+	k, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl := &Certificate{
+		ExtraExtensions: []pkix.Extension{{
+			Id:       asn1.ObjectIdentifier{2, 5, 29, 19},
+			Critical: true,
+			Value:    []byte{0x30, 0x03, 0x01, 0x01, 0xff, 0x00},
+		}},
+	}
+	der, err := CreateCertificate(rand.Reader, tmpl, tmpl, &k.PublicKey, k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "x509: trailing data after basic constraints"
+	if _, err := ParseCertificate(der); err == nil || err.Error() != want {
+		t.Errorf("ParseCertificate() = %v, want %q", err, want)
+	}
+}
+
 func TestDomainNameValid(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
@@ -475,5 +558,177 @@ OjUhiZoowYvborSS1EBK
 	}
 	if !bytes.Equal(got, cert.RawSubject) {
 		t.Errorf("unexpected marshaled RDNSequence: got %x, want %x", got, cert.RawSubject)
+	}
+}
+
+func TestParseAITrailingData(t *testing.T) {
+	var b cryptobyte.Builder
+	b.AddASN1ObjectIdentifier(oidPublicKeyRSA)
+	b.AddASN1NULL()
+	good, err := b.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := parseAI(good); err != nil {
+		t.Fatalf("parseAI(valid) = %v, want nil", err)
+	}
+	// A second element after the parameters.
+	bad := append(append([]byte{}, good...), 0x05, 0x00)
+	want := "x509: trailing data after AlgorithmIdentifier parameters"
+	if _, err := parseAI(bad); err == nil || err.Error() != want {
+		t.Errorf("parseAI(trailing) = %v, want %q", err, want)
+	}
+}
+
+func TestParsePKIXPublicKeyRSATrailingData(t *testing.T) {
+	spki := func(mod func(*cryptobyte.Builder)) []byte {
+		var b cryptobyte.Builder
+		b.AddASN1(cryptobyte_asn1.SEQUENCE, func(b *cryptobyte.Builder) {
+			b.AddASN1(cryptobyte_asn1.SEQUENCE, func(b *cryptobyte.Builder) {
+				b.AddASN1ObjectIdentifier(oidPublicKeyRSA)
+				b.AddASN1NULL()
+			})
+			var key cryptobyte.Builder
+			mod(&key)
+			keyBytes, err := key.Bytes()
+			if err != nil {
+				t.Fatal(err)
+			}
+			b.AddASN1BitString(keyBytes)
+		})
+		out, err := b.Bytes()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	pub := &testPrivateKey.PublicKey
+	rsaPublicKey := func(b *cryptobyte.Builder, extra func(*cryptobyte.Builder)) {
+		b.AddASN1(cryptobyte_asn1.SEQUENCE, func(b *cryptobyte.Builder) {
+			b.AddASN1BigInt(pub.N)
+			b.AddASN1Int64(int64(pub.E))
+			if extra != nil {
+				extra(b)
+			}
+		})
+	}
+
+	valid := spki(func(b *cryptobyte.Builder) { rsaPublicKey(b, nil) })
+	if _, err := ParsePKIXPublicKey(valid); err != nil {
+		t.Fatalf("ParsePKIXPublicKey(valid) = %v, want nil", err)
+	}
+
+	tests := []struct {
+		name string
+		der  []byte
+		want string
+	}{
+		{
+			name: "element after the public exponent",
+			der:  spki(func(b *cryptobyte.Builder) { rsaPublicKey(b, (*cryptobyte.Builder).AddASN1NULL) }),
+			want: "x509: trailing data after RSA public exponent",
+		},
+		{
+			name: "element after the RSAPublicKey SEQUENCE",
+			der: spki(func(b *cryptobyte.Builder) {
+				rsaPublicKey(b, nil)
+				b.AddASN1NULL()
+			}),
+			want: "x509: trailing data after RSA public key",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := ParsePKIXPublicKey(test.der); err == nil || err.Error() != test.want {
+				t.Errorf("ParsePKIXPublicKey() = %v, want %q", err, test.want)
+			}
+		})
+	}
+}
+
+func TestParsePublicKeyECDSATrailingData(t *testing.T) {
+	// The parameters value reaching parsePublicKey is always a single DER
+	// element, so this is a defense-in-depth check on the function itself.
+	k, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	point, err := k.PublicKey.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyInfo := func(params []byte) *publicKeyInfo {
+		return &publicKeyInfo{
+			Algorithm: pkix.AlgorithmIdentifier{Algorithm: oidPublicKeyECDSA, Parameters: asn1.RawValue{FullBytes: params}},
+			PublicKey: asn1.BitString{Bytes: point, BitLength: len(point) * 8},
+		}
+	}
+	var b cryptobyte.Builder
+	b.AddASN1ObjectIdentifier(oidNamedCurveP256)
+	good, err := b.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := parsePublicKey(keyInfo(good)); err != nil {
+		t.Fatalf("parsePublicKey(valid) = %v, want nil", err)
+	}
+	bad := append(append([]byte{}, good...), 0x05, 0x00)
+	want := "x509: trailing data after ECDSA parameters"
+	if _, err := parsePublicKey(keyInfo(bad)); err == nil || err.Error() != want {
+		t.Errorf("parsePublicKey(trailing) = %v, want %q", err, want)
+	}
+}
+
+const (
+	// We cannot produce these certificates via CreateCertificate, because we disallow
+	// malformed SANs, so these are certificates that were created with those fixes
+	// reverted
+	emptyDNSNameSANCert      = "308201143081baa00302010202143b93828a1bdfe0d58b1c8280e509f253bc3d29db300a06082a8648ce3d0403023000301e170d3236313131323137343832385a170d3236313131323139343832385a30003059301306072a8648ce3d020106082a8648ce3d03010703420004e47115a86516d53af048a0e05742d7eef3a38273e1fea5d01bb364738031f56cff680b55d956cc42e715c5bd3e7992016541239b99fba00354684a37cd772bf7a3123010300e0603551d110101ff040430028200300a06082a8648ce3d0403020349003046022100f3439b3838ba3752a118de067a2ccdff7c4c17fde636d8c8429b4271b98c0054022100b7e3c226bee8f496bbe699ec2256887e20074c9dd298756d489e01eff3a55898"
+	emptyEmailAddressSANCert = "308201133081baa003020102021407d2d80b7f6a834cb80a58da1b0f5855b98587b8300a06082a8648ce3d0403023000301e170d3236313131323137343832385a170d3236313131323139343832385a30003059301306072a8648ce3d020106082a8648ce3d03010703420004e47115a86516d53af048a0e05742d7eef3a38273e1fea5d01bb364738031f56cff680b55d956cc42e715c5bd3e7992016541239b99fba00354684a37cd772bf7a3123010300e0603551d110101ff040430028100300a06082a8648ce3d040302034800304502201a7309abaa49fefcb3d3b0b02a732095a706d456bdb0361cbc756a04d074900302210083861879b8880219afe3f7f0fea5be3617f7796ad9449c569a276c7dd26d65b2"
+	emptyURISANCert          = "308201133081baa0030201020214673942134706890cea7b72303991f8afdd5e3c08300a06082a8648ce3d0403023000301e170d3236313131323137343832385a170d3236313131323139343832385a30003059301306072a8648ce3d020106082a8648ce3d03010703420004e47115a86516d53af048a0e05742d7eef3a38273e1fea5d01bb364738031f56cff680b55d956cc42e715c5bd3e7992016541239b99fba00354684a37cd772bf7a3123010300e0603551d110101ff040430028600300a06082a8648ce3d0403020348003045022100edb7aa8a789e3bea33381bd461b9a519e69270f22f4f8571db507ef791c1c215022057f5da31ac98f6b19ffcfe46b9fab17b5d5007f76d6d9e93d399f854da4dbc07"
+	emptyIPAddressSANCert    = "308201123081baa003020102021425aa76073c95c7dc5b6c00d232be2101f60d95d4300a06082a8648ce3d0403023000301e170d3236313131323139303731355a170d3236313131323231303731355a30003059301306072a8648ce3d020106082a8648ce3d0301070342000424e6876a0d4e60c42c0332e5499e6313ca6764d9b0b804245d54cb35f11eb28a239b6ba1133950ce317ca4acb5407cc288d81aaa82c5252eff54755bc3e7677aa3123010300e0603551d110101ff040430028700300a06082a8648ce3d040302034700304402207ada2a67956f5f87549965a70b5c1beaf13a51fc3f2e12a9bf241d9dc7be50cb022000b7529462df14c74fa526f78e28aa809910fc05dca9b66480ca8030445edb26"
+)
+
+func TestEmptySANEntries(t *testing.T) {
+	testcases := map[string]string{
+		"dNSName":                   emptyDNSNameSANCert,
+		"rfc822Name":                emptyEmailAddressSANCert,
+		"uniformResourceIdentifier": emptyURISANCert,
+		"iPAddress":                 emptyIPAddressSANCert,
+	}
+
+	for sanType, certHexDER := range testcases {
+		t.Run(sanType, func(t *testing.T) {
+			certDER, err := hex.DecodeString(certHexDER)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			c, err := ParseCertificate(certDER)
+			if err != nil {
+				if sanType == "iPAddress" {
+					const want = "x509: cannot parse IP address of length 0"
+					if err == nil || err.Error() != want {
+						t.Fatalf("ParseCertificate() error = %v, want %q", err, want)
+					}
+					return
+				}
+				t.Error(err)
+			}
+
+			sanLen := 0
+			switch sanType {
+			case "dNSName":
+				sanLen = len(c.DNSNames)
+			case "rfc822Name":
+				sanLen = len(c.EmailAddresses)
+			case "uniformResourceIdentifier":
+				sanLen = len(c.URIs)
+			}
+
+			if sanLen != 0 {
+				t.Errorf("unexpected number of sans: want 0, got %d", sanLen)
+			}
+		})
 	}
 }

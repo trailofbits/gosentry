@@ -33,6 +33,47 @@ func TestConcatOdd(t *testing.T) {
 	testUint64x2Binary(t, archsimd.Uint64x2.ConcatOdd, deinterleaveSlice[uint64](128, true))
 }
 
+func TestConcatAddPairs(t *testing.T) {
+	testFloat32x4Binary(t, archsimd.Float32x4.ConcatAddPairs, concatAddPairsSlice[float32])
+	testFloat64x2Binary(t, archsimd.Float64x2.ConcatAddPairs, concatAddPairsSlice[float64])
+
+	testInt8x16Binary(t, archsimd.Int8x16.ConcatAddPairs, concatAddPairsSlice[int8])
+	testInt16x8Binary(t, archsimd.Int16x8.ConcatAddPairs, concatAddPairsSlice[int16])
+	testInt32x4Binary(t, archsimd.Int32x4.ConcatAddPairs, concatAddPairsSlice[int32])
+	testInt64x2Binary(t, archsimd.Int64x2.ConcatAddPairs, concatAddPairsSlice[int64])
+
+	testUint8x16Binary(t, archsimd.Uint8x16.ConcatAddPairs, concatAddPairsSlice[uint8])
+	testUint16x8Binary(t, archsimd.Uint16x8.ConcatAddPairs, concatAddPairsSlice[uint16])
+	testUint32x4Binary(t, archsimd.Uint32x4.ConcatAddPairs, concatAddPairsSlice[uint32])
+	testUint64x2Binary(t, archsimd.Uint64x2.ConcatAddPairs, concatAddPairsSlice[uint64])
+}
+
+func TestConcatMaxPairs(t *testing.T) {
+	testFloat32x4Binary(t, archsimd.Float32x4.ConcatMaxPairs, concatMaxPairsSlice[float32])
+	testFloat64x2Binary(t, archsimd.Float64x2.ConcatMaxPairs, concatMaxPairsSlice[float64])
+
+	testInt8x16Binary(t, archsimd.Int8x16.ConcatMaxPairs, concatMaxPairsSlice[int8])
+	testInt16x8Binary(t, archsimd.Int16x8.ConcatMaxPairs, concatMaxPairsSlice[int16])
+	testInt32x4Binary(t, archsimd.Int32x4.ConcatMaxPairs, concatMaxPairsSlice[int32])
+
+	testUint8x16Binary(t, archsimd.Uint8x16.ConcatMaxPairs, concatMaxPairsSlice[uint8])
+	testUint16x8Binary(t, archsimd.Uint16x8.ConcatMaxPairs, concatMaxPairsSlice[uint16])
+	testUint32x4Binary(t, archsimd.Uint32x4.ConcatMaxPairs, concatMaxPairsSlice[uint32])
+}
+
+func TestConcatMinPairs(t *testing.T) {
+	testFloat32x4Binary(t, archsimd.Float32x4.ConcatMinPairs, concatMinPairsSlice[float32])
+	testFloat64x2Binary(t, archsimd.Float64x2.ConcatMinPairs, concatMinPairsSlice[float64])
+
+	testInt8x16Binary(t, archsimd.Int8x16.ConcatMinPairs, concatMinPairsSlice[int8])
+	testInt16x8Binary(t, archsimd.Int16x8.ConcatMinPairs, concatMinPairsSlice[int16])
+	testInt32x4Binary(t, archsimd.Int32x4.ConcatMinPairs, concatMinPairsSlice[int32])
+
+	testUint8x16Binary(t, archsimd.Uint8x16.ConcatMinPairs, concatMinPairsSlice[uint8])
+	testUint16x8Binary(t, archsimd.Uint16x8.ConcatMinPairs, concatMinPairsSlice[uint16])
+	testUint32x4Binary(t, archsimd.Uint32x4.ConcatMinPairs, concatMinPairsSlice[uint32])
+}
+
 func TestInterleaveEven(t *testing.T) {
 	testInt8x16Binary(t, archsimd.Int8x16.InterleaveEven, transposeSlice[int8](128, false))
 	testInt16x8Binary(t, archsimd.Int16x8.InterleaveEven, transposeSlice[int16](128, false))
@@ -77,16 +118,17 @@ func TestInterleaveHiARM64(t *testing.T) {
 	testUint64x2Binary(t, archsimd.Uint64x2.InterleaveHi, interleaveSlice[uint64](128, true))
 }
 
+// TestOrNot tests x.Or(y.Not()), which the compiler folds into VORN.
 func TestOrNot(t *testing.T) {
-	testInt8x16Binary(t, archsimd.Int8x16.OrNot, orNotSlice[int8])
-	testInt16x8Binary(t, archsimd.Int16x8.OrNot, orNotSlice[int16])
-	testInt32x4Binary(t, archsimd.Int32x4.OrNot, orNotSlice[int32])
-	testInt64x2Binary(t, archsimd.Int64x2.OrNot, orNotSlice[int64])
+	testInt8x16Binary(t, func(x, y archsimd.Int8x16) archsimd.Int8x16 { return x.Or(y.Not()) }, orNotSlice[int8])
+	testInt16x8Binary(t, func(x, y archsimd.Int16x8) archsimd.Int16x8 { return x.Or(y.Not()) }, orNotSlice[int16])
+	testInt32x4Binary(t, func(x, y archsimd.Int32x4) archsimd.Int32x4 { return x.Or(y.Not()) }, orNotSlice[int32])
+	testInt64x2Binary(t, func(x, y archsimd.Int64x2) archsimd.Int64x2 { return x.Or(y.Not()) }, orNotSlice[int64])
 
-	testUint8x16Binary(t, archsimd.Uint8x16.OrNot, orNotSlice[uint8])
-	testUint16x8Binary(t, archsimd.Uint16x8.OrNot, orNotSlice[uint16])
-	testUint32x4Binary(t, archsimd.Uint32x4.OrNot, orNotSlice[uint32])
-	testUint64x2Binary(t, archsimd.Uint64x2.OrNot, orNotSlice[uint64])
+	testUint8x16Binary(t, func(x, y archsimd.Uint8x16) archsimd.Uint8x16 { return x.Or(y.Not()) }, orNotSlice[uint8])
+	testUint16x8Binary(t, func(x, y archsimd.Uint16x8) archsimd.Uint16x8 { return x.Or(y.Not()) }, orNotSlice[uint16])
+	testUint32x4Binary(t, func(x, y archsimd.Uint32x4) archsimd.Uint32x4 { return x.Or(y.Not()) }, orNotSlice[uint32])
+	testUint64x2Binary(t, func(x, y archsimd.Uint64x2) archsimd.Uint64x2 { return x.Or(y.Not()) }, orNotSlice[uint64])
 }
 
 func cmtst[T integer](x, y T) bool {

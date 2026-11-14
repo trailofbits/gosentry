@@ -27,6 +27,7 @@ func (check *Checker) overflow(x *operand, opPos token.Pos) {
 		//           moment we don't have the (go/constant) API for that.
 		//           See also TODO in go/constant/value.go.
 		check.error(atPos(opPos), InvalidConstVal, "constant result is not representable")
+		x.invalidate() // go.dev/issue/81628
 		return
 	}
 
@@ -34,7 +35,7 @@ func (check *Checker) overflow(x *operand, opPos token.Pos) {
 	// their type after each constant operation.
 	// x.typ cannot be a type parameter (type
 	// parameters cannot be constant types).
-	if isTyped(x.typ()) {
+	if x.isTyped() {
 		check.representable(x, x.typ().Underlying().(*Basic))
 		return
 	}
@@ -47,7 +48,7 @@ func (check *Checker) overflow(x *operand, opPos token.Pos) {
 			op += " "
 		}
 		check.errorf(atPos(opPos), InvalidConstVal, "constant %soverflow", op)
-		x.val = constant.MakeUnknown()
+		x.invalidate() // go.dev/issue/81628
 		return
 	}
 
@@ -57,7 +58,7 @@ func (check *Checker) overflow(x *operand, opPos token.Pos) {
 		len := constant.StringLen(x.val)
 		if len > maxLen {
 			check.errorf(atPos(opPos), InvalidConstVal, "constant string too long (%d bytes > %d bytes)", len, maxLen)
-			x.val = constant.MakeUnknown()
+			x.invalidate() // go.dev/issue/81628
 			return
 		}
 	}
@@ -76,6 +77,10 @@ func (check *Checker) overflow(x *operand, opPos token.Pos) {
 // (indirectly) through an exported API call (AssignableTo, ConvertibleTo)
 // because we don't need the Checker's config for those calls.
 func representableConst(x constant.Value, check *Checker, typ *Basic, rounded *constant.Value) bool {
+	if !isConstType(typ) {
+		return false
+	}
+
 	if x.Kind() == constant.Unknown {
 		return true // avoid follow-up errors
 	}
@@ -285,6 +290,9 @@ func (check *Checker) representation(x *operand, typ *Basic) (constant.Value, Co
 	}
 	return v, 0
 }
+
+// TODO(gri) There is overlap with the code and error messages here
+//           and in conversions.go. Should simplify.
 
 func (check *Checker) invalidConversion(code Code, x *operand, target Type) {
 	msg := "cannot convert %s to type %s"

@@ -75,7 +75,7 @@ func TestConstantMultiplies(t *testing.T) {
 	}
 	fmt.Fprintf(&code, "}\n")
 
-	fmt.Printf("CODE:\n%s\n", string(code.Bytes()))
+	t.Logf("CODE:\n%s\n", string(code.Bytes()))
 
 	// Make test file
 	tmpdir := t.TempDir()
@@ -85,7 +85,7 @@ func TestConstantMultiplies(t *testing.T) {
 		t.Fatalf("write file failed: %v", err)
 	}
 
-	cmd := testenv.Command(t, testenv.GoToolPath(t), "run", src)
+	cmd := testenv.Command(t, testenv.GoToolPath(t), "run", "-gcflags=-overflowdetect=false", src)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("go run failed: %v\n%s", err, out)

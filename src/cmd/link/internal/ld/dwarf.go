@@ -69,6 +69,13 @@ type dwctxt struct {
 	dwmu *sync.Mutex
 }
 
+type dwarfTrampoline struct {
+	sym     loader.Sym
+	target  loader.Sym
+	addend  int64
+	ownerCU *sym.CompilationUnit
+}
+
 // dwSym wraps a loader.Sym; this type is meant to obey the interface
 // rules for dwarf.Sym from the cmd/internal/dwarf package. DwDie and
 // DwAttr objects contain references to symbols via this type.
@@ -934,14 +941,14 @@ func (d *dwctxt) synthesizemaptypes(ctxt *Link, die *dwarf.DWDie) {
 }
 
 func (d *dwctxt) synthesizechantypes(ctxt *Link, die *dwarf.DWDie) {
-	sudog := walktypedef(d.findprotodie(ctxt, "type:runtime.sudog"))
+	waitingG := walktypedef(d.findprotodie(ctxt, "type:runtime.waitingG"))
 	waitq := walktypedef(d.findprotodie(ctxt, "type:runtime.waitq"))
 	hchan := walktypedef(d.findprotodie(ctxt, "type:runtime.hchan"))
-	if sudog == nil || waitq == nil || hchan == nil {
+	if waitingG == nil || waitq == nil || hchan == nil {
 		return
 	}
 
-	sudogsize := int(getattr(sudog, dwarf.DW_AT_byte_size).Value)
+	waitingGSize := int(getattr(waitingG, dwarf.DW_AT_byte_size).Value)
 
 	for ; die != nil; die = die.Link {
 		if die.Abbrev != dwarf.DW_ABRV_CHANTYPE {
@@ -952,11 +959,11 @@ func (d *dwctxt) synthesizechantypes(ctxt *Link, die *dwarf.DWDie) {
 		elemname := tname[5:]
 		elemtype := d.walksymtypedef(d.defgotype(d.lookupOrDiag(tname)))
 
-		// sudog<T>
-		dwss := d.mkinternaltype(ctxt, dwarf.DW_ABRV_STRUCTTYPE, "sudog", elemname, "", func(dws *dwarf.DWDie) {
-			d.copychildren(ctxt, dws, sudog)
+		// waitingG<T>
+		dwss := d.mkinternaltype(ctxt, dwarf.DW_ABRV_STRUCTTYPE, "waitingG", elemname, "", func(dws *dwarf.DWDie) {
+			d.copychildren(ctxt, dws, waitingG)
 			d.substitutetype(dws, "elem", d.defptrto(elemtype))
-			newattr(dws, dwarf.DW_AT_byte_size, dwarf.DW_CLS_CONSTANT, int64(sudogsize), nil)
+			newattr(dws, dwarf.DW_AT_byte_size, dwarf.DW_CLS_CONSTANT, int64(waitingGSize), nil)
 		})
 
 		// waitq<T>
@@ -1039,6 +1046,74 @@ func (d *dwctxt) calcCompUnitRanges() {
 			prevUnit = unit
 		}
 		unit.PCs[len(unit.PCs)-1].End = sval - u0val + int64(len(d.ldr.Data(sym)))
+	}
+}
+
+// synthesizeTrampolineDIEs adds source-less subprogram DIEs for linker-created
+// trampolines with statically addressable targets. The target relationship is
+// recorded when the trampoline is created instead of being reconstructed from
+// its name or instruction sequence.
+func (d *dwctxt) synthesizeTrampolineDIEs() {
+	if len(d.linkctxt.dwarfTrampolines) == 0 {
+		return
+	}
+
+	touchedUnits := make(map[*sym.CompilationUnit]bool)
+	for _, trampoline := range d.linkctxt.dwarfTrampolines {
+		switch d.ldr.SymType(trampoline.target) {
+		case sym.SDYNIMPORT, sym.SUNDEFEXT:
+			continue
+		}
+		unit := trampoline.ownerCU
+		if unit == nil || unit.DWInfo == nil || len(unit.Textp) == 0 {
+			continue
+		}
+
+		size := int64(len(d.ldr.Data(trampoline.sym)))
+		if size == 0 {
+			continue
+		}
+		// Include the loader symbol index in the internal DIE symbol name.
+		// Each DIE needs distinct storage in .debug_info.
+		die := d.newdie(unit.DWInfo, dwarf.DW_ABRV_LINKER_TRAMPOLINE, fmt.Sprintf("trampoline.%d", trampoline.sym))
+		newattr(die, dwarf.DW_AT_low_pc, dwarf.DW_CLS_ADDRESS, 0, dwSym(trampoline.sym))
+		newattr(die, dwarf.DW_AT_high_pc, dwarf.DW_CLS_CONSTANT, size, nil)
+		// Preserve the exact branch destination. For targets such as the Duff
+		// routines this can be an address inside, rather than at the entry of,
+		// the target subprogram.
+		newattr(die, dwarf.DW_AT_trampoline, dwarf.DW_CLS_ADDRESS, trampoline.addend, dwSym(trampoline.target))
+
+		base := loader.Sym(unit.Textp[0])
+		start := d.ldr.SymValue(trampoline.sym) - d.ldr.SymValue(base)
+		end := start + size
+		covered := false
+		for _, pcRange := range unit.PCs {
+			if pcRange.Start <= start && end <= pcRange.End {
+				covered = true
+				break
+			}
+		}
+		if !covered {
+			unit.PCs = append(unit.PCs, dwarf.Range{Start: start, End: end})
+			touchedUnits[unit] = true
+		}
+	}
+
+	for unit := range touchedUnits {
+		slices.SortFunc(unit.PCs, func(a, b dwarf.Range) int {
+			return cmp.Compare(a.Start, b.Start)
+		})
+		merged := unit.PCs[:0]
+		for _, pcRange := range unit.PCs {
+			if len(merged) == 0 || merged[len(merged)-1].End < pcRange.Start {
+				merged = append(merged, pcRange)
+				continue
+			}
+			if pcRange.End > merged[len(merged)-1].End {
+				merged[len(merged)-1].End = pcRange.End
+			}
+		}
+		unit.PCs = merged
 	}
 }
 
@@ -1445,6 +1520,7 @@ func (d *dwctxt) writeframes(fs loader.Sym) dwarfSecInfo {
 	fsu.SetType(sym.SDWARFSECT)
 	isdw64 := isDwarf64(d.linkctxt)
 	haslr := d.linkctxt.Arch.HasLR
+	retPCSize := int64(d.arch.RegSize)
 
 	// Length field is 4 bytes on Dwarf32 and 12 bytes on Dwarf64
 	lengthFieldSize := int64(4)
@@ -1480,11 +1556,11 @@ func (d *dwctxt) writeframes(fs loader.Sym) dwarfSecInfo {
 		dwarf.Uleb128put(d, fsd, int64(thearch.Dwarfregsp)) // ...of the platform's SP register...
 		dwarf.Uleb128put(d, fsd, int64(0))                  // ...is CFA+0.
 	} else {
-		dwarf.Uleb128put(d, fsd, int64(d.arch.PtrSize)) // ...plus the word size (because the call instruction implicitly adds one word to the frame).
+		dwarf.Uleb128put(d, fsd, retPCSize) // ...plus the return PC slot size.
 
-		fsu.AddUint8(dwarf.DW_CFA_offset_extended)                           // The previous value...
-		dwarf.Uleb128put(d, fsd, int64(thearch.Dwarfreglr))                  // ...of the return address...
-		dwarf.Uleb128put(d, fsd, int64(-d.arch.PtrSize)/dataAlignmentFactor) // ...is saved at [CFA - (PtrSize/4)].
+		fsu.AddUint8(dwarf.DW_CFA_offset_extended)               // The previous value...
+		dwarf.Uleb128put(d, fsd, int64(thearch.Dwarfreglr))      // ...of the return address...
+		dwarf.Uleb128put(d, fsd, -retPCSize/dataAlignmentFactor) // ...is saved below the CFA.
 	}
 
 	pad := int64(cieReserve) + lengthFieldSize - int64(len(d.ldr.Data(fs)))
@@ -1534,7 +1610,7 @@ func (d *dwctxt) writeframes(fs loader.Sym) dwarfSecInfo {
 			spdelta := int64(pcsp.Value)
 			if !haslr {
 				// Return address has been pushed onto stack.
-				spdelta += int64(d.arch.PtrSize)
+				spdelta += retPCSize
 			}
 
 			if haslr && !fi.TopFrame() {
@@ -1710,6 +1786,52 @@ func (d *dwctxt) writegdbscript() dwarfSecInfo {
 	gs.AddUint8(GdbScriptPythonFileId)
 	gs.Addstring(gdbscript)
 	return dwarfSecInfo{syms: []loader.Sym{gs.Sym()}}
+}
+
+// writearanges emits the .debug_aranges section.
+//
+// When resolving an address to a compilation unit, LLDB first consults
+// .debug_aranges, and usually falls back to scanning .debug_info compilation
+// units. On Mach-O, for split DWARF (MH_DSYM files), LLDB relies solely on
+// .debug_aranges, though (as dsymutil emits .debug_aranges). See:
+// https://github.com/swiftlang/llvm-project/blob/332fb9240ce149f53de72910ef5da0e89f34e932/lldb/source/Plugins/ObjectFile/Mach-O/ObjectFileMachO.cpp#L5830-L5834
+// https://github.com/swiftlang/llvm-project/blob/332fb9240ce149f53de72910ef5da0e89f34e932/lldb/source/Plugins/SymbolFile/DWARF/DWARFDebugInfo.cpp#L56-L72
+func (d *dwctxt) writearanges() dwarfSecInfo {
+	s := d.ldr.CreateSymForUpdate(".debug_aranges", 0)
+	s.SetType(sym.SDWARFSECT)
+	// The first tuple is aligned to a multiple of the size of a single tuple
+	// (twice the size of an address).
+	headersize := int(Rnd(4+2+4+1+1, int64(d.arch.PtrSize*2))) // don't count unit_length field itself
+
+	for _, u := range d.linkctxt.compUnits {
+		if len(u.PCs) == 0 {
+			continue
+		}
+		base := u.Textp[0]
+
+		// Write .debug_aranges Header + entry (sec 6.1.2)
+		unitlength := uint32(headersize) + uint32(len(u.PCs)+1)*2*uint32(d.arch.PtrSize) - 4
+		s.AddUint32(d.arch, unitlength) // unit_length (*)
+		s.AddUint16(d.arch, 2)          // dwarf version (appendix F)
+
+		d.addDwarfAddrRef(s, d.dtolsym(u.DWInfo.Sym))
+
+		s.AddUint8(uint8(d.arch.PtrSize)) // address_size
+		s.AddUint8(0)                     // segment_size
+		padding := headersize - (4 + 2 + 4 + 1 + 1)
+		s.AddBytes(zeros[:padding])
+
+		for _, r := range u.PCs {
+			s.AddAddrPlus(d.arch, base, r.Start)
+			s.AddUintXX(d.arch, uint64(r.End-r.Start), d.arch.PtrSize)
+		}
+		s.AddUintXX(d.arch, 0, d.arch.PtrSize)
+		s.AddUintXX(d.arch, 0, d.arch.PtrSize)
+	}
+	if s.Size() == 0 {
+		return dwarfSecInfo{}
+	}
+	return dwarfSecInfo{syms: []loader.Sym{s.Sym()}}
 }
 
 // FIXME: might be worth looking replacing this map with a function
@@ -1908,7 +2030,7 @@ func dwarfGenerateDebugInfo(ctxt *Link) {
 	prototypedies = map[string]*dwarf.DWDie{
 		"type:runtime.stringStructDWARF":             nil,
 		"type:runtime.slice":                         nil,
-		"type:runtime.sudog":                         nil,
+		"type:runtime.waitingG":                      nil,
 		"type:runtime.waitq":                         nil,
 		"type:runtime.hchan":                         nil,
 		"type:internal/runtime/maps.Map":             nil,
@@ -2190,6 +2312,7 @@ func (d *dwctxt) dwarfGenerateDebugSyms() {
 	abbrevSec := d.writeabbrev()
 	dwarfp = append(dwarfp, abbrevSec)
 	d.calcCompUnitRanges()
+	d.synthesizeTrampolineDIEs()
 	slices.SortFunc(d.linkctxt.compUnits, compilationUnitByStartPCCmp)
 
 	// newdie adds DIEs to the *beginning* of the parent's DIE list.
@@ -2358,6 +2481,12 @@ func (d *dwctxt) dwarfGenerateDebugSyms() {
 	dwarfp = append(dwarfp, rangesSec)
 	if buildcfg.Experiment.Dwarf5 {
 		dwarfp = append(dwarfp, addrSec)
+	}
+	if *FlagSplitDWARF && d.linkctxt.IsInternal() {
+		arangesSec := d.writearanges()
+		if arangesSec.secSym() != 0 {
+			dwarfp = append(dwarfp, arangesSec)
+		}
 	}
 
 	// Check to make sure we haven't listed any symbols more than once

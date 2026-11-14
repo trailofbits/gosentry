@@ -119,7 +119,6 @@ var bootstrapDirs = []string{
 	"cmd/vendor/golang.org/x/mod/sumdb/dirhash",
 	"cmd/vendor/golang.org/x/mod/zip",
 	"cmd/vendor/golang.org/x/sync/semaphore",
-	"cmd/vendor/golang.org/x/tools/go/analysis",
 	"compress/flate",
 	"compress/zlib",
 	"container/heap",
@@ -212,6 +211,16 @@ func bootstrapBuildTools() {
 		}
 	}
 
+	// Unset GOWASM before invoking the bootstrap toolchain, which may not
+	// recognize newly added GOWASM features.
+	// This must happen before the "go env GOVERSION" check below (rather than
+	// in the os.Setenv block further down) because cmd/go eagerly parses
+	// GOWASM in internal/buildcfg at startup and "go env" calls
+	// buildcfg.Check(), which exits with a fatal error on unknown GOWASM
+	// values.
+	defer os.Setenv("GOWASM", os.Getenv("GOWASM"))
+	os.Setenv("GOWASM", "")
+
 	// check bootstrap version.
 	ver := run(pathf("%s/bin", goroot_bootstrap), CheckExit, pathf("%s/bin/go", goroot_bootstrap), "env", "GOVERSION")
 	// go env GOVERSION output like "go1.22.6\n" or "devel go1.24-ffb3e574 Thu Aug 29 20:16:26 2024 +0000\n".
@@ -237,6 +246,7 @@ func bootstrapBuildTools() {
 	xmkdirall(base)
 
 	// Copy source code into $GOROOT/pkg/bootstrap and rewrite import paths.
+	copySpan := startSpan("copy bootstrap sources")
 	minBootstrapVers := requiredBootstrapVersion(goModVersion()) // require the minimum required go version to build this go version in the go.mod file
 	writefile("module bootstrap\ngo "+minBootstrapVers+"\n", pathf("%s/%s", base, "go.mod"), 0)
 	for _, dir := range bootstrapDirs {
@@ -282,6 +292,7 @@ func bootstrapBuildTools() {
 			return nil
 		})
 	}
+	copySpan.done()
 
 	// Set up environment for invoking Go bootstrap toolchains go command.
 	// GOROOT points at Go bootstrap GOROOT,
@@ -289,7 +300,8 @@ func bootstrapBuildTools() {
 	// GOBIN is empty, so that binaries are installed to GOPATH/bin,
 	// and GOOS, GOHOSTOS, GOARCH, and GOHOSTOS are empty,
 	// so that Go bootstrap toolchain builds whatever kind of binary it knows how to build.
-	// Restore GOROOT, GOPATH, and GOBIN when done.
+	// Set GOFIPS140=off to work with the purego build tag.
+	// Restore GOROOT, GOPATH, GOBIN, and GOFIPS140 when done.
 	// Don't bother with GOOS, GOHOSTOS, GOARCH, and GOHOSTARCH,
 	// because setup will take care of those when bootstrapBuildTools returns.
 
@@ -301,6 +313,9 @@ func bootstrapBuildTools() {
 
 	defer os.Setenv("GOBIN", os.Getenv("GOBIN"))
 	os.Setenv("GOBIN", "")
+
+	defer os.Setenv("GOFIPS140", os.Getenv("GOFIPS140"))
+	os.Setenv("GOFIPS140", "off")
 
 	os.Setenv("GOOS", gohostos)
 	os.Setenv("GOHOSTOS", "")
@@ -322,10 +337,14 @@ func bootstrapBuildTools() {
 	if tool := os.Getenv("GOBOOTSTRAP_TOOLEXEC"); tool != "" {
 		cmd = append(cmd, "-toolexec="+tool)
 	}
+	cmd = append(cmd, maybeTraceFlag("toolchain1")...)
 	cmd = append(cmd, "bootstrap/cmd/...")
+	toolchain1Span := startSpan("toolchain1")
 	run(base, ShowOutput|CheckExit, cmd...)
+	toolchain1Span.done()
 
 	// Copy binaries into tool binary directory.
+	copyBinSpan := startSpan("copy toolchain1 binaries")
 	for _, name := range bootstrapDirs {
 		if !strings.HasPrefix(name, "cmd/") {
 			continue
@@ -339,6 +358,7 @@ func bootstrapBuildTools() {
 			copyfile(pathf("%s/%s%s", tooldir, tool, exe), pathf("%s/bin/%s%s", workspace, name, exe), writeExec)
 		}
 	}
+	copyBinSpan.done()
 
 	if vflag > 0 {
 		xprintf("\n")

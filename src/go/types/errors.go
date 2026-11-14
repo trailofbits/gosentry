@@ -113,8 +113,9 @@ func (err *error_) report() {
 	// follow-on errors which don't add useful information. Only
 	// exclude them if these strings are not at the beginning,
 	// and only if we have at least one error already reported.
+	// Never filter Test errors as they are important for debugging.
 	check := err.check
-	if check.firstErr != nil {
+	if check.firstErr != nil && err.code != Test {
 		// It is sufficient to look at the first sub-error only.
 		msg := err.desc[0].msg
 		if strings.Index(msg, "invalid operand") > 0 || strings.Index(msg, "invalid type") > 0 {
@@ -255,6 +256,13 @@ func (check *Checker) versionErrorf(at positioner, v goVersion, format string, a
 	err := check.newError(UnsupportedFeature)
 	err.addf(at, "%s requires %s or later", msg, v)
 	err.report()
+}
+
+func (check *Checker) internalErrorf(at positioner, format string, args ...any) {
+	if at == nil {
+		at = atPos(nopos)
+	}
+	check.errorf(at, InvalidSyntaxTree, "internal error: "+format, args...)
 }
 
 // atPos wraps a token.Pos to implement the positioner interface.

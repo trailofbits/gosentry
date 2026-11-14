@@ -9,6 +9,7 @@ package http
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/url"
@@ -60,8 +61,8 @@ func init() {
 }
 
 func CondSkipHTTP2(t testing.TB) {
-	if omitBundledHTTP2 {
-		t.Skip("skipping HTTP/2 test when nethttpomithttp2 build tag in use")
+	if omitHTTP2Server || omitHTTP2Client {
+		t.Skip("skipping HTTP/2 test when HTTP/2 server or client is omitted by build tag")
 	}
 }
 
@@ -73,14 +74,6 @@ var (
 func SetReadLoopBeforeNextReadHook(f func()) {
 	unnilTestHook(&f)
 	testHookReadLoopBeforeNextRead = f
-}
-
-// SetPendingDialHooks sets the hooks that run before and after handling
-// pending dials.
-func SetPendingDialHooks(before, after func()) {
-	unnilTestHook(&before)
-	unnilTestHook(&after)
-	testHookPrePendingDial, testHookPostPendingDial = before, after
 }
 
 func SetTestHookServerServe(fn func(*Server, net.Listener)) { testHookServerServe = fn }
@@ -105,119 +98,10 @@ func ResetCachedEnvironment() {
 	resetProxyConfig()
 }
 
-func (t *Transport) IdleConnKeysForTesting() (keys []string) {
-	keys = make([]string, 0)
-	t.idleMu.Lock()
-	defer t.idleMu.Unlock()
-	for key := range t.idleConn {
-		keys = append(keys, key.String())
-	}
-	slices.Sort(keys)
-	return
-}
-
-func (t *Transport) IdleConnKeyCountForTesting() int {
-	t.idleMu.Lock()
-	defer t.idleMu.Unlock()
-	return len(t.idleConn)
-}
-
-func (t *Transport) IdleConnStrsForTesting() []string {
-	var ret []string
-	t.idleMu.Lock()
-	defer t.idleMu.Unlock()
-	for _, conns := range t.idleConn {
-		for _, pc := range conns {
-			if pc.conn == nil {
-				continue
-			}
-			ret = append(ret, pc.conn.LocalAddr().String()+"/"+pc.conn.RemoteAddr().String())
-		}
-	}
-	if t.h2Transport != nil {
-		ret = append(ret, t.h2Transport.IdleConnStrsForTesting()...)
-	}
-	slices.Sort(ret)
-	return ret
-}
-
-func (t *Transport) IdleConnCountForTesting(scheme, addr string) int {
-	t.idleMu.Lock()
-	defer t.idleMu.Unlock()
-	key := connectMethodKey{"", scheme, addr, false}
-	cacheKey := key.String()
-	for k, conns := range t.idleConn {
-		if k.String() == cacheKey {
-			return len(conns)
-		}
-	}
-	return 0
-}
-
-func (t *Transport) IdleConnWaitMapSizeForTesting() int {
-	t.idleMu.Lock()
-	defer t.idleMu.Unlock()
-	return len(t.idleConnWait)
-}
-
-func (t *Transport) IsIdleForTesting() bool {
-	t.idleMu.Lock()
-	defer t.idleMu.Unlock()
-	return t.closeIdle
-}
-
-func (t *Transport) QueueForIdleConnForTesting() {
-	t.queueForIdleConn(nil)
-}
-
-// PutIdleTestConn reports whether it was able to insert a fresh
-// persistConn for scheme, addr into the idle connection pool.
-func (t *Transport) PutIdleTestConn(scheme, addr string) bool {
-	c, _ := net.Pipe()
-	key := connectMethodKey{"", scheme, addr, false}
-
-	if t.MaxConnsPerHost > 0 {
-		// Transport is tracking conns-per-host.
-		// Increment connection count to account
-		// for new persistConn created below.
-		t.connsPerHostMu.Lock()
-		if t.connsPerHost == nil {
-			t.connsPerHost = make(map[connectMethodKey]int)
-		}
-		t.connsPerHost[key]++
-		t.connsPerHostMu.Unlock()
-	}
-
-	return t.tryPutIdleConn(&persistConn{
-		t:        t,
-		conn:     c,                   // dummy
-		closech:  make(chan struct{}), // so it can be closed
-		cacheKey: key,
-	}) == nil
-}
-
-// PutIdleTestConnH2 reports whether it was able to insert a fresh
-// HTTP/2 persistConn for scheme, addr into the idle connection pool.
-func (t *Transport) PutIdleTestConnH2(scheme, addr string, alt RoundTripper) bool {
-	key := connectMethodKey{"", scheme, addr, false}
-
-	if t.MaxConnsPerHost > 0 {
-		// Transport is tracking conns-per-host.
-		// Increment connection count to account
-		// for new persistConn created below.
-		t.connsPerHostMu.Lock()
-		if t.connsPerHost == nil {
-			t.connsPerHost = make(map[connectMethodKey]int)
-		}
-		t.connsPerHost[key]++
-		t.connsPerHostMu.Unlock()
-	}
-
-	return t.tryPutIdleConn(&persistConn{
-		t:        t,
-		alt:      alt,
-		cacheKey: key,
-	}) == nil
+func (t *Transport) PoolEntryCountForTesting() int {
+	t.pool.mu.Lock()
+	defer t.pool.mu.Unlock()
+	return len(t.pool.ents)
 }
 
 // All test hooks must be non-nil so they can be called directly,
@@ -270,13 +154,14 @@ func (r *Request) ExportIsReplayable() bool { return r.isReplayable() }
 // that it's doing so. This is to simulate the server closing connections
 // on the Transport.
 func ExportCloseTransportConnsAbruptly(tr *Transport) {
-	tr.idleMu.Lock()
-	for _, pcs := range tr.idleConn {
-		for _, pc := range pcs {
-			pc.conn.Close()
+	tr.pool.mu.Lock()
+	pcs := slices.Collect(tr.pool.lru.all())
+	tr.pool.mu.Unlock()
+	for _, pconn := range pcs {
+		if c := pconn.cc.NetConn(); c != nil {
+			c.Close()
 		}
 	}
-	tr.idleMu.Unlock()
 }
 
 // ResponseWriterConnForTesting returns w's underlying connection, if w
@@ -290,9 +175,7 @@ func ResponseWriterConnForTesting(w ResponseWriter) (c net.Conn, ok bool) {
 
 func init() {
 	// Set the default rstAvoidanceDelay to the minimum possible value to shake
-	// out tests that unexpectedly depend on it. Such tests should use
-	// runTimeSensitiveTest and SetRSTAvoidanceDelay to explicitly raise the delay
-	// if needed.
+	// out tests that unexpectedly depend on it.
 	rstAvoidanceDelay = 1 * time.Nanosecond
 }
 
@@ -309,4 +192,26 @@ func SetRSTAvoidanceDelay(t *testing.T, d time.Duration) {
 // SetHTTP3 adds or removes HTTP/3 from p.
 func (p *Protocols) SetHTTP3(ok bool) {
 	p.setHTTP3(ok)
+}
+
+type remapHTTP3Dialer struct {
+	http3Transport
+	closeIdleConnectionser
+	remap func(string) string
+}
+
+func (d remapHTTP3Dialer) DialClientConn(ctx context.Context, addr string, proxy *url.URL, tlsConfig *tls.Config, hook func() error) (RoundTripper, error) {
+	return d.http3Transport.DialClientConn(ctx, d.remap(addr), proxy, tlsConfig, hook)
+}
+
+func (t *Transport) HTTP3Transport() http3Transport {
+	return t.h3Transport
+}
+
+func (t *Transport) SetHTTP3DialAddrForTesting(remap func(string) string) {
+	t.h3Transport = remapHTTP3Dialer{
+		http3Transport:         t.h3Transport,
+		closeIdleConnectionser: t.h3Transport.(closeIdleConnectionser),
+		remap:                  remap,
+	}
 }

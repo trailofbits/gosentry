@@ -18,7 +18,6 @@ package uuid
 
 import (
 	"bytes"
-	"cmp"
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
@@ -41,7 +40,7 @@ type UUID [16]byte
 //	urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6
 //	f81d4fae7dec11d0a76500a0c91e6bf6
 //
-// Alphabetic characters in the hexadecimal digits may be any case.
+// Alphabetic characters may be any case.
 func Parse(s string) (UUID, error) {
 	var u UUID
 	err := u.UnmarshalText([]byte(s))
@@ -93,7 +92,8 @@ func Max() UUID {
 //
 // It uses the lowercase hex-and-dash representation defined in RFC 9562.
 func (u UUID) String() string {
-	b, _ := u.MarshalText()
+	var buf [36]byte
+	b, _ := u.AppendText(buf[:0])
 	return string(b)
 }
 
@@ -106,14 +106,17 @@ func (u UUID) MarshalText() ([]byte, error) {
 // AppendText implements the [encoding.TextAppender] interface.
 // The encoding is the same as returned by [UUID.String]
 func (u UUID) AppendText(b []byte) ([]byte, error) {
+	var buf [32]byte
+	hex.Encode(buf[:], u[:])
+	const placeholder = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+	b = append(b, placeholder...)
 	off := len(b)
-	b = append(b, "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"...)
-	dst := b[off:]
-	hex.Encode(dst[0:8], u[0:4])
-	hex.Encode(dst[9:13], u[4:6])
-	hex.Encode(dst[14:18], u[6:8])
-	hex.Encode(dst[19:23], u[8:10])
-	hex.Encode(dst[24:36], u[10:16])
+	dst := b[off-len(placeholder) : off : off] // Eliminate bounds checks.
+	copy(dst[:8], buf[:8])
+	copy(dst[9:13], buf[8:12])
+	copy(dst[14:18], buf[12:16])
+	copy(dst[19:23], buf[16:20])
+	copy(dst[24:36], buf[20:])
 	return b, nil
 }
 
@@ -126,7 +129,7 @@ func (u *UUID) UnmarshalText(b []byte) error {
 	switch len(b) {
 	case len("urn:uuid:") + 36:
 		// urn:uuid:00000000-0000-0000-0000-000000000000
-		b = bytes.TrimPrefix(b, []byte("urn:uuid:"))
+		b = trimASCIIFoldPrefix(b, []byte("urn:uuid:"))
 	case 2 + 36:
 		// {00000000-0000-0000-0000-000000000000}
 		b = bytes.TrimPrefix(b, []byte("{"))
@@ -146,19 +149,13 @@ func (u *UUID) UnmarshalText(b []byte) error {
 	if b[8] != '-' || b[13] != '-' || b[18] != '-' || b[23] != '-' {
 		return errInvalid
 	}
-	if _, err := hex.Decode(dst[0:4], b[0:8]); err != nil {
-		return errInvalid
-	}
-	if _, err := hex.Decode(dst[4:6], b[9:13]); err != nil {
-		return errInvalid
-	}
-	if _, err := hex.Decode(dst[6:8], b[14:18]); err != nil {
-		return errInvalid
-	}
-	if _, err := hex.Decode(dst[8:10], b[19:23]); err != nil {
-		return errInvalid
-	}
-	if _, err := hex.Decode(dst[10:16], b[24:36]); err != nil {
+	var buf [32]byte
+	copy(buf[0:8], b[0:8])
+	copy(buf[8:12], b[9:13])
+	copy(buf[12:16], b[14:18])
+	copy(buf[16:20], b[19:23])
+	copy(buf[20:32], b[24:36])
+	if _, err := hex.Decode(dst[:], buf[:]); err != nil {
 		return errInvalid
 	}
 	*u = dst
@@ -175,12 +172,7 @@ func (u *UUID) UnmarshalText(b []byte) error {
 //
 // [Section 6.11 of RFC 9562]: https://www.rfc-editor.org/rfc/rfc9562#section-6.11
 func (u UUID) Compare(v UUID) int {
-	for i := range u {
-		if c := cmp.Compare(u[i], v[i]); c != 0 {
-			return c
-		}
-	}
-	return 0
+	return bytes.Compare(u[:], v[:])
 }
 
 // NewV4 returns a new version 4 UUID.
@@ -270,4 +262,23 @@ func (u *UUID) setVersion(version byte) {
 
 func (u *UUID) setVariant(variant byte) {
 	u[8] = (u[8] & 0b0011_1111) | (variant << 6)
+}
+
+func trimASCIIFoldPrefix(s, prefix []byte) []byte {
+	if len(s) < len(prefix) {
+		return s
+	}
+	for i := range len(prefix) {
+		if asciiLower(s[i]) != asciiLower(prefix[i]) {
+			return s
+		}
+	}
+	return s[len(prefix):]
+}
+
+func asciiLower(b byte) byte {
+	if 'A' <= b && b <= 'Z' {
+		return b + ('a' - 'A')
+	}
+	return b
 }

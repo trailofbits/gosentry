@@ -75,8 +75,7 @@ func greaterInt8sNoinline(a, b archsimd.Int8s) archsimd.Mask8s { return a.Greate
 
 // TestGreaterSVEMaskRoundTrip returns a mask across a non-inlined call, exercising
 // the predicate memory round-trip (PSTR to return it, PLDR to reload it) that the
-// mask ABI relies on. It then stores the mask, reloads it with LoadMask8s, and
-// checks both agree with a > b lane by lane.
+// mask ABI relies on, and checks it against a > b lane by lane.
 func TestGreaterSVEMaskRoundTrip(t *testing.T) {
 	if !archsimd.ARM64.SVE() {
 		t.Skip("no sve")
@@ -88,21 +87,16 @@ func TestGreaterSVEMaskRoundTrip(t *testing.T) {
 	}
 	var z archsimd.Int8s
 	m := greaterInt8sNoinline(archsimd.LoadInt8s(a[:]), archsimd.LoadInt8s(b[:]))
-	bits := make([]uint16, sveMaskUint16s)
-	m.Store(bits)
-
-	reloaded := make([]uint16, sveMaskUint16s)
-	archsimd.LoadMask8s(bits).Store(reloaded)
-
+	bits := maskBits(m)
 	for i := 0; i < z.Len(); i++ {
 		want := a[i] > b[i]
-		got := bits[i/16]>>uint(i%16)&1 == 1
+		got := bits>>i&1 == 1
 		if got != want {
 			t.Errorf("lane %d: got %v, want %v (a=%d b=%d)", i, got, want, a[i], b[i])
 		}
-		if reloaded[i/16] != bits[i/16] {
-			t.Errorf("LoadMask8s round-trip mismatch at uint16 %d: %#x vs %#x", i/16, reloaded[i/16], bits[i/16])
-		}
+	}
+	if bits>>z.Len() != 0 {
+		t.Errorf("bits beyond the vector length are set: %#x", bits)
 	}
 }
 
@@ -174,8 +168,14 @@ func TestSubSaturatedSVE(t *testing.T) {
 	}
 	testInt8sBinary(t, archsimd.Int8s.SubSaturated, subSaturatedSlice[int8])
 	testInt16sBinary(t, archsimd.Int16s.SubSaturated, subSaturatedSlice[int16])
-	testInt32sBinary(t, archsimd.Int32s.SubSaturated, subSaturatedSlice[int32])
-	testInt64sBinary(t, archsimd.Int64s.SubSaturated, subSaturatedSlice[int64])
+	if inQEMU() {
+		// qemu-aarch64 (as of 11.1) miscomputes SVE SQSUB on 32- and
+		// 64-bit elements.
+		t.Log("skipping Int32s and Int64s: qemu-aarch64 miscomputes SVE SQSUB on 32- and 64-bit elements")
+	} else {
+		testInt32sBinary(t, archsimd.Int32s.SubSaturated, subSaturatedSlice[int32])
+		testInt64sBinary(t, archsimd.Int64s.SubSaturated, subSaturatedSlice[int64])
+	}
 	testUint8sBinary(t, archsimd.Uint8s.SubSaturated, subSaturatedSlice[uint8])
 	testUint16sBinary(t, archsimd.Uint16s.SubSaturated, subSaturatedSlice[uint16])
 	testUint32sBinary(t, archsimd.Uint32s.SubSaturated, subSaturatedSlice[uint32])
@@ -223,6 +223,44 @@ func TestStringSVE(t *testing.T) {
 
 //go:noinline
 func keepAliveInt8s(archsimd.Int8s) {}
+
+// namedMask8s and maxVia pass masks through types other than archsimd.Mask8s
+// itself: a defined type, and the GC shape of a generic instantiation. Both
+// must use the memory ABI of the mask they are made from, to agree with the
+// concrete functions they call and to reach a P register when used.
+type namedMask8s archsimd.Mask8s
+
+//go:noinline
+func greaterNamed(x, y archsimd.Int8s) namedMask8s { return namedMask8s(x.Greater(y)) }
+
+//go:noinline
+func maxVia[M archsimd.Mask8s](greater func(x, y archsimd.Int8s) M, x, y archsimd.Int8s) archsimd.Int8s {
+	return x.IfElse(archsimd.Mask8s(greater(x, y)), y)
+}
+
+func TestMaskABISVE(t *testing.T) {
+	if !archsimd.ARM64.SVE() {
+		t.Skip("no sve")
+	}
+	n := archsimd.Int8s{}.Len()
+	xs, ys := make([]int8, n), make([]int8, n)
+	for i := range xs {
+		xs[i], ys[i] = int8(i%5), int8(i%3)
+	}
+	x, y := archsimd.LoadInt8s(xs), archsimd.LoadInt8s(ys)
+	check := func(name string, v archsimd.Int8s) {
+		t.Helper()
+		got := make([]int8, n)
+		v.Store(got)
+		for i := range got {
+			if want := max(xs[i], ys[i]); got[i] != want {
+				t.Errorf("%s: lane %d = %d, want %d", name, i, got[i], want)
+			}
+		}
+	}
+	check("generic", maxVia(archsimd.Int8s.Greater, x, y))
+	check("named", x.IfElse(archsimd.Mask8s(greaterNamed(x, y)), y))
+}
 
 // TestIfElseSVE checks IfElse and Masked, and that the merging peephole keeps
 // the same semantics whether or not it fires: x.Add(y).IfElse(m, x) folds into a
@@ -295,6 +333,26 @@ func TestIfElseSVE(t *testing.T) {
 		return 0
 	})
 
+	// The two merges below differ only in which source the inactive lanes
+	// keep. The merging machine op pins its result to that source and is not
+	// commutative, or CSE — which canonicalizes the args of a commutative op —
+	// would conflate the two values and give one of them the wrong else
+	// operand.
+	keepX := x.Add(y).IfElse(m, x)
+	keepY := y.Add(x).IfElse(m, y)
+	check("Add.IfElse cse keepX", keepX, func(i int, active bool) int8 {
+		if active {
+			return xs[i] + ys[i]
+		}
+		return xs[i]
+	})
+	check("Add.IfElse cse keepY", keepY, func(i int, active bool) int8 {
+		if active {
+			return xs[i] + ys[i]
+		}
+		return ys[i]
+	})
+
 	// SUB is not commutative, so only an "else" operand that is the destructive
 	// one — the minuend — folds into the merging-predicated instruction.
 	check("Sub.IfElse(x)", x.Sub(y).IfElse(m, x), func(i int, active bool) int8 {
@@ -333,23 +391,37 @@ func TestIfElseSVE(t *testing.T) {
 		}
 		return v
 	}
-	check("Abs.IfElse(z)", x.Abs().IfElse(m, z), func(i int, active bool) int8 {
+	check("Abs.IfElse(z)", x.Abs().ConvertToInt8().IfElse(m, z), func(i int, active bool) int8 {
 		if active {
 			return absLane(xs[i])
 		}
 		return zs[i]
 	})
-	check("Abs.IfElse(x)", x.Abs().IfElse(m, x), func(i int, active bool) int8 {
+	check("Abs.IfElse(x)", x.Abs().ConvertToInt8().IfElse(m, x), func(i int, active bool) int8 {
 		if active {
 			return absLane(xs[i])
 		}
 		return xs[i]
 	})
-	check("Abs.Masked", x.Abs().Masked(m), func(i int, active bool) int8 {
+	check("Abs.Masked", x.Abs().Masked(m).ConvertToInt8(), func(i int, active bool) int8 {
 		if active {
 			return absLane(xs[i])
 		}
 		return 0
+	})
+
+	var scalar int8 = 42
+	check("BroadcastConst.IfElse(z)", archsimd.BroadcastInt8s(7).IfElse(m, z), func(i int, active bool) int8 {
+		if active {
+			return 7
+		}
+		return zs[i]
+	})
+	check("BroadcastGp.IfElse(z)", archsimd.BroadcastInt8s(scalar).IfElse(m, z), func(i int, active bool) int8 {
+		if active {
+			return scalar
+		}
+		return zs[i]
 	})
 
 	// The prefixed path with every operand still live afterwards, so the
@@ -381,4 +453,52 @@ func TestIfElseSVE(t *testing.T) {
 			t.Errorf("x clobbered by MOVPRFX: lane %d = %d, want %d", i, got[i], xs[i])
 		}
 	}
+}
+
+// TestMaskAllTrueSVE checks the all-true mask constructors: a select under an
+// all-true mask returns its first operand in every lane, at each lane width.
+func TestMaskAllTrueSVE(t *testing.T) {
+	if !archsimd.ARM64.SVE() {
+		t.Skip("no sve")
+	}
+	check := func(name string, n int, sel func(i int) (got, want any)) {
+		t.Helper()
+		for i := 0; i < n; i++ {
+			if got, want := sel(i); got != want {
+				t.Errorf("%s: lane %d = %v, want %v", name, i, got, want)
+			}
+		}
+	}
+
+	xs8, ys8 := make([]int8, archsimd.Int8s{}.Len()), make([]int8, archsimd.Int8s{}.Len())
+	for i := range xs8 {
+		xs8[i], ys8[i] = int8(i+1), int8(-i-1)
+	}
+	g8 := make([]int8, len(xs8))
+	archsimd.LoadInt8s(xs8).IfElse(archsimd.Mask8sAllTrue(), archsimd.LoadInt8s(ys8)).Store(g8)
+	check("Mask8sAllTrue", len(xs8), func(i int) (any, any) { return g8[i], xs8[i] })
+
+	xs16, ys16 := make([]int16, archsimd.Int16s{}.Len()), make([]int16, archsimd.Int16s{}.Len())
+	for i := range xs16 {
+		xs16[i], ys16[i] = int16(i+1), int16(-i-1)
+	}
+	g16 := make([]int16, len(xs16))
+	archsimd.LoadInt16s(xs16).IfElse(archsimd.Mask16sAllTrue(), archsimd.LoadInt16s(ys16)).Store(g16)
+	check("Mask16sAllTrue", len(xs16), func(i int) (any, any) { return g16[i], xs16[i] })
+
+	xs32, ys32 := make([]int32, archsimd.Int32s{}.Len()), make([]int32, archsimd.Int32s{}.Len())
+	for i := range xs32 {
+		xs32[i], ys32[i] = int32(i+1), int32(-i-1)
+	}
+	g32 := make([]int32, len(xs32))
+	archsimd.LoadInt32s(xs32).IfElse(archsimd.Mask32sAllTrue(), archsimd.LoadInt32s(ys32)).Store(g32)
+	check("Mask32sAllTrue", len(xs32), func(i int) (any, any) { return g32[i], xs32[i] })
+
+	xs64, ys64 := make([]int64, archsimd.Int64s{}.Len()), make([]int64, archsimd.Int64s{}.Len())
+	for i := range xs64 {
+		xs64[i], ys64[i] = int64(i+1), int64(-i-1)
+	}
+	g64 := make([]int64, len(xs64))
+	archsimd.LoadInt64s(xs64).IfElse(archsimd.Mask64sAllTrue(), archsimd.LoadInt64s(ys64)).Store(g64)
+	check("Mask64sAllTrue", len(xs64), func(i int) (any, any) { return g64[i], xs64[i] })
 }

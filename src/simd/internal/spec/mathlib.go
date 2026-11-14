@@ -96,6 +96,66 @@ func addSaturatedSSS64(x, y int64) int64 {
 	return sum
 }
 
+// subSaturated returns (x - y), saturated to the range of T.
+func subSaturated[T Ints | Uints](x, y T) T {
+	if isSigned[T]() {
+		return saturateS[T](subSaturatedSSS64(int64(x), int64(y)))
+	}
+	diff, borrow := bits.Sub64(uint64(x), uint64(y), 0)
+	if borrow > 0 {
+		return minVal[T]()
+	}
+	return saturateU[T](diff)
+}
+
+func subSaturatedSSS64(x, y int64) int64 {
+	sub := x - y
+
+	// Overflow can only happen if x and y have different signs, and the result has a
+	// different sign than x.
+	//
+	// (x ^ y) & (x ^ sub) checks if the sign bit of x matches neither y nor sub.
+	if (x^y)&(x^sub) < 0 {
+		if x >= 0 {
+			return math.MaxInt64
+		}
+		return math.MinInt64
+	}
+
+	return sub
+}
+
+// scaleSaturated returns x * 2^s, saturated to the range of T.
+func scaleSaturated[T Ints | Uints, S Ints | int](x T, s S) T {
+	n := S(elemBits[T]())
+	if s < 0 {
+		if s <= -n {
+			if isSigned[T]() && x < 0 {
+				return ^T(0)
+			}
+			return 0
+		}
+		return x >> uint(-s)
+	}
+	if s >= n {
+		if x == 0 {
+			return 0
+		}
+		if isSigned[T]() && x < 0 {
+			return minVal[T]()
+		}
+		return maxVal[T]()
+	}
+	res := x << uint(s)
+	if res>>uint(s) != x {
+		if isSigned[T]() && x < 0 {
+			return minVal[T]()
+		}
+		return maxVal[T]()
+	}
+	return res
+}
+
 func mulSaturatedUSS[X Uints, Y Ints](x X, y Y) Y {
 	// Expand to 64 bits and perform saturated multiplication
 	z := mulSaturatedUSS64(uint64(x), int64(y))
@@ -133,4 +193,55 @@ func mulSaturatedUSS64(x uint64, y int64) int64 {
 		}
 		return -int64(lo)
 	}
+}
+
+// mulHigh returns the high half of the exact double-width product of x and y.
+func mulHigh[E Ints | Uints](x, y E) E {
+	n := elemBits[E]()
+	if n < 64 {
+		// The product fits in 64 bits.
+		if isSigned[E]() {
+			return E((int64(x) * int64(y)) >> n)
+		}
+		return E((uint64(x) * uint64(y)) >> n)
+	}
+	hi, _ := bits.Mul64(uint64(x), uint64(y))
+	if isSigned[E]() {
+		// Convert the unsigned high half to the signed one: as unsigned, a
+		// negative operand v stands for v + 2⁶⁴, which adds the other operand
+		// to the high half.
+		if x < 0 {
+			hi -= uint64(y)
+		}
+		if y < 0 {
+			hi -= uint64(x)
+		}
+	}
+	return E(hi)
+}
+
+// clmul computes the carryless multiplication of a and b, returning the result
+// split into high and low halves.
+func clmul[E Uints](a, b E) (hi, lo E) {
+	n := elemBits[E]()
+	for i := range uint(n) {
+		if (a>>i)&1 == 1 {
+			// In Go, b >> n is 0 for an n-bit unsigned integer, so when i == 0,
+			// b >> (n - 0) evaluates to 0 while b << 0 leaves b unshifted.
+			lo ^= b << i
+			hi ^= b >> (uint(n) - i)
+		}
+	}
+	return
+}
+
+// fma returns x*y + z computed with a single rounding.
+func fma[E Floats](x, y, z E) E {
+	switch xx := any(x).(type) {
+	case float32:
+		return E(math.FMA32(xx, float32(y), float32(z)))
+	case float64:
+		return E(math.FMA(xx, float64(y), float64(z)))
+	}
+	panic("unreachable")
 }

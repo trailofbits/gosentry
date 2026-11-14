@@ -269,6 +269,19 @@ var ArchWasm = &Arch{
 	RegSize:        8,
 	MinLC:          1,
 	Alignment:      1,
+	CanMergeLoads:  true,
+	HasLR:          false,
+	FixedFrameSize: 0,
+}
+
+var ArchWasm32 = &Arch{
+	Name:           "wasm32",
+	Family:         Wasm,
+	ByteOrder:      binary.LittleEndian,
+	PtrSize:        4,
+	RegSize:        8,
+	MinLC:          1,
+	Alignment:      1,
 	CanMergeLoads:  false,
 	HasLR:          false,
 	FixedFrameSize: 0,

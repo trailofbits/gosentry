@@ -182,7 +182,8 @@ func genIndexedOperand(op ssaop.Op, base, idx int16) obj.Addr {
 	return mop
 }
 
-const simdSVEVectorLengthScaled int16 = -32768
+// simdSVEVectorLengthScaled marks a VL-scaled displacement ("#imm, mul vl").
+const simdSVEVectorLengthScaled = arm64.SIMDSVEVectorLengthScaled
 
 // simdRegArng encodes ssa value's register with specified simd arrangement
 func simdRegArng(reg int16, arng int16) int16 {
@@ -653,17 +654,12 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 			v.Fatalf("load flags not implemented: %v", v.LongString())
 			return
 		}
+		p := s.Prog(loadByType(v.Type))
+		ssagen.AddrAuto(&p.From, v.Args[0])
+		p.To.Type = obj.TYPE_REG
 		if v.Type.IsSIMD() && (v.Type.Size() == 32 || v.Type.Size() == 8) {
-			// SVE Z/P reload: reach the slot through a register.
-			from := sveStackAddr(s, v.Args[0])
-			p := s.Prog(loadByType(v.Type))
-			p.From = from
-			p.To.Type = obj.TYPE_REG
 			p.To.Reg = pzreg(v.Reg())
 		} else {
-			p := s.Prog(loadByType(v.Type))
-			ssagen.AddrAuto(&p.From, v.Args[0])
-			p.To.Type = obj.TYPE_REG
 			p.To.Reg = v.Reg()
 		}
 	case ssaop.OpStoreReg:
@@ -671,19 +667,14 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 			v.Fatalf("store flags not implemented: %v", v.LongString())
 			return
 		}
+		p := s.Prog(storeByType(v.Type))
+		p.From.Type = obj.TYPE_REG
 		if v.Type.IsSIMD() && (v.Type.Size() == 32 || v.Type.Size() == 8) {
-			// SVE Z/P spill: reach the slot through a register.
-			to := sveStackAddr(s, v)
-			p := s.Prog(storeByType(v.Type))
-			p.From.Type = obj.TYPE_REG
 			p.From.Reg = pzreg(v.Args[0].Reg())
-			p.To = to
 		} else {
-			p := s.Prog(storeByType(v.Type))
-			p.From.Type = obj.TYPE_REG
 			p.From.Reg = v.Args[0].Reg()
-			ssagen.AddrAuto(&p.To, v)
 		}
+		ssagen.AddrAuto(&p.To, v)
 	case ssaop.OpArgIntReg, ssaop.OpArgFloatReg:
 		ssagen.CheckArgReg(v)
 		// The assembler needs to wrap the entry safepoint/stack growth code with spill/unspill
@@ -714,9 +705,9 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 				}
 			}
 			reg := a.Reg
-			if a.Type.IsSIMD() && (a.Type.Size() == 32 || a.Type.Size() == 8) {
+			if a.Type.IsSIMD() && a.Type.Size() == 32 {
+				// SVE argument: the assembler materializes the slot through REGTMP.
 				reg = pzreg(reg)
-				addr.Scale = simdSVEVectorLengthScaled
 			}
 			// Pass the spill/unspill information along to the assembler.
 			s.FuncInfo().AddSpill(obj.RegSpill{Reg: reg, Addr: addr, Unspill: loadByType(a.Type), Spill: storeByType(a.Type)})
@@ -810,6 +801,30 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		p.To.Reg = v.Args[0].Reg()
 		p.To.Scale = simdSVEVectorLengthScaled
 		ssagen.AddAux(&p.To, v)
+	case ssaop.OpARM64PPNEXTB:
+		simdPNext(s, v, arm64.ARNG_B)
+	case ssaop.OpARM64PPNEXTH:
+		simdPNext(s, v, arm64.ARNG_H)
+	case ssaop.OpARM64PPNEXTS:
+		simdPNext(s, v, arm64.ARNG_S)
+	case ssaop.OpARM64PPNEXTD:
+		simdPNext(s, v, arm64.ARNG_D)
+	case ssaop.OpARM64PBICSB:
+		// PBICS P2.B, P1.B, P0.Z, P3.B: P3 = P1 AND NOT P2 on the lanes of P0.
+		p := s.Prog(v.Op.Asm())
+		p.From.Type = obj.TYPE_REG
+		p.From.Reg = pregArng(v.Args[2].Reg(), arm64.ARNG_B)
+		p.AddRestSourceReg(pregArng(v.Args[1].Reg(), arm64.ARNG_B))
+		p.AddRestSourceReg(pregMask(v.Args[0].Reg(), arm64.PRED_Z))
+		p.To.Type = obj.TYPE_REG
+		p.To.Reg = pregArng(v.Reg0(), arm64.ARNG_B)
+	case ssaop.OpARM64PPTEST:
+		// PPTEST P1.B, P0: flags from the lanes of P1 that P0 governs.
+		p := s.Prog(v.Op.Asm())
+		p.From.Type = obj.TYPE_REG
+		p.From.Reg = pregArng(v.Args[1].Reg(), arm64.ARNG_B)
+		p.To.Type = obj.TYPE_REG
+		p.To.Reg = v.Args[0].Reg()
 	case ssaop.OpARM64PPFALSEB:
 		// Zero value of a mask: every lane false, e.g. PPFALSE P0.B.
 		p := s.Prog(v.Op.Asm())
@@ -817,11 +832,13 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		p.To.Reg = pregArng(v.Reg(), arm64.ARNG_B)
 	case ssaop.OpARM64ZDUPBconst:
 		// Broadcast an 8-bit immediate to every byte lane (ZeroSIMD uses [0]).
-		p := s.Prog(v.Op.Asm())
-		p.From.Type = obj.TYPE_CONST
-		p.From.Offset = v.AuxInt
-		p.To.Type = obj.TYPE_REG
-		p.To.Reg = zregArng(v.Reg(), arm64.ARNG_B)
+		simdZDupConst(s, v, arm64.ARNG_B)
+	case ssaop.OpARM64ZDUPHconst:
+		simdZDupConst(s, v, arm64.ARNG_H)
+	case ssaop.OpARM64ZDUPSconst:
+		simdZDupConst(s, v, arm64.ARNG_S)
+	case ssaop.OpARM64ZDUPDconst:
+		simdZDupConst(s, v, arm64.ARNG_D)
 	case ssaop.OpARM64RDVL:
 		// Read the vector length in bytes into a GP register, e.g. RDVL $1, R0.
 		p := s.Prog(v.Op.Asm())
@@ -829,6 +846,54 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		p.From.Offset = v.AuxInt
 		p.To.Type = obj.TYPE_REG
 		p.To.Reg = v.Reg()
+	case ssaop.OpARM64ZDUPB:
+		simdZDupGp(s, v, arm64.ARNG_B)
+	case ssaop.OpARM64ZDUPH:
+		simdZDupGp(s, v, arm64.ARNG_H)
+	case ssaop.OpARM64ZDUPS:
+		simdZDupGp(s, v, arm64.ARNG_S)
+	case ssaop.OpARM64ZDUPD:
+		simdZDupGp(s, v, arm64.ARNG_D)
+	case ssaop.OpARM64ZDUPIB:
+		simdZDupIndexed(s, v, arm64.ARNG_B)
+	case ssaop.OpARM64ZDUPIH:
+		simdZDupIndexed(s, v, arm64.ARNG_H)
+	case ssaop.OpARM64ZDUPIS:
+		simdZDupIndexed(s, v, arm64.ARNG_S)
+	case ssaop.OpARM64ZDUPID:
+		simdZDupIndexed(s, v, arm64.ARNG_D)
+	case ssaop.OpARM64ZCPYBconst:
+		simdZCpyConst(s, v, arm64.ARNG_B)
+	case ssaop.OpARM64ZCPYHconst:
+		simdZCpyConst(s, v, arm64.ARNG_H)
+	case ssaop.OpARM64ZCPYSconst:
+		simdZCpyConst(s, v, arm64.ARNG_S)
+	case ssaop.OpARM64ZCPYDconst:
+		simdZCpyConst(s, v, arm64.ARNG_D)
+	case ssaop.OpARM64ZCPYMergingBconst:
+		simdZCpyMergingConst(s, v, arm64.ARNG_B)
+	case ssaop.OpARM64ZCPYMergingHconst:
+		simdZCpyMergingConst(s, v, arm64.ARNG_H)
+	case ssaop.OpARM64ZCPYMergingSconst:
+		simdZCpyMergingConst(s, v, arm64.ARNG_S)
+	case ssaop.OpARM64ZCPYMergingDconst:
+		simdZCpyMergingConst(s, v, arm64.ARNG_D)
+	case ssaop.OpARM64ZCPYMergingB:
+		simdZCpyMergingGp(s, v, arm64.ARNG_B)
+	case ssaop.OpARM64ZCPYMergingH:
+		simdZCpyMergingGp(s, v, arm64.ARNG_H)
+	case ssaop.OpARM64ZCPYMergingS:
+		simdZCpyMergingGp(s, v, arm64.ARNG_S)
+	case ssaop.OpARM64ZCPYMergingD:
+		simdZCpyMergingGp(s, v, arm64.ARNG_D)
+	case ssaop.OpARM64ZCPYIMergingB:
+		simdZCpyMergingVec(s, v, arm64.ARNG_B)
+	case ssaop.OpARM64ZCPYIMergingH:
+		simdZCpyMergingVec(s, v, arm64.ARNG_H)
+	case ssaop.OpARM64ZCPYIMergingS:
+		simdZCpyMergingVec(s, v, arm64.ARNG_S)
+	case ssaop.OpARM64ZCPYIMergingD:
+		simdZCpyMergingVec(s, v, arm64.ARNG_D)
 	case ssaop.OpARM64ZSELB:
 		simdZ2kv(s, v, arm64.ARNG_B)
 	case ssaop.OpARM64ZSELH:
@@ -2104,20 +2169,6 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 	}
 }
 
-// sveStackAddr materializes the byte address of SVE stack slot into REGTMP and
-// returns a memory operand addressing it with a zero VL-scaled offset. SVE Z/P
-// loads and stores only support VL-scaled immediate addressing, so a fixed byte
-// frame offset — which is not a compile-time multiple of the runtime VL and can
-// exceed the ±256-VL immediate range — must be reached through a register.
-func sveStackAddr(s *ssagen.State, slot *ssa.Value) obj.Addr {
-	p := s.Prog(arm64.AMOVD)
-	ssagen.AddrAuto(&p.From, slot)
-	p.From.Type = obj.TYPE_ADDR // MOVD $slot(SP), REGTMP: address of the slot
-	p.To.Type = obj.TYPE_REG
-	p.To.Reg = arm64.REGTMP
-	return obj.Addr{Type: obj.TYPE_MEM, Reg: arm64.REGTMP, Scale: simdSVEVectorLengthScaled}
-}
-
 // simdZ21 emits an unpredicated SVE binary Z-register instruction with the given
 // element arrangement, e.g. ZADD Z2.B, Z0.B, Z1.B.
 func simdZ21(s *ssagen.State, v *ssa.Value, arng int16) *obj.Prog {
@@ -2127,6 +2178,94 @@ func simdZ21(s *ssagen.State, v *ssa.Value, arng int16) *obj.Prog {
 	p.AddRestSourceReg(zregArng(v.Args[0].Reg(), arng)) // Zn
 	p.To.Type = obj.TYPE_REG
 	p.To.Reg = zregArng(v.Reg(), arng) // Zd
+	return p
+}
+
+// simdZDupConst emits an SVE broadcast of a signed 8-bit immediate to every
+// lane with the given element arrangement, e.g. ZDUP $5, Z0.H.
+func simdZDupConst(s *ssagen.State, v *ssa.Value, arng int16) *obj.Prog {
+	p := s.Prog(v.Op.Asm())
+	p.From.Type = obj.TYPE_CONST
+	p.From.Offset = v.AuxInt
+	p.To.Type = obj.TYPE_REG
+	p.To.Reg = zregArng(v.Reg(), arng)
+	return p
+}
+
+// simdZDupGp emits an SVE broadcast of a general register to every lane with
+// the given element arrangement, e.g. ZDUPW R0, Z0.B.
+func simdZDupGp(s *ssagen.State, v *ssa.Value, arng int16) *obj.Prog {
+	p := s.Prog(v.Op.Asm())
+	p.From.Type = obj.TYPE_REG
+	p.From.Reg = v.Args[0].Reg()
+	p.To.Type = obj.TYPE_REG
+	p.To.Reg = zregArng(v.Reg(), arng)
+	return p
+}
+
+// simdZDupIndexed emits an SVE broadcast of element auxint of a vector
+// register to every lane, e.g. ZDUP Z0.S[0], Z1.S.
+func simdZDupIndexed(s *ssagen.State, v *ssa.Value, arng int16) *obj.Prog {
+	p := s.Prog(v.Op.Asm())
+	p.From.Type = obj.TYPE_REG
+	p.From.Reg = zregArngElem(v.Args[0].Reg(), arng)
+	p.From.Index = int16(v.AuxInt)
+	p.To.Type = obj.TYPE_REG
+	p.To.Reg = zregArng(v.Reg(), arng)
+	return p
+}
+
+// simdZCpyConst emits a zeroing-predicated SVE broadcast of a signed 8-bit
+// immediate, e.g. ZCPY $5, P0.Z, Z0.H.
+func simdZCpyConst(s *ssagen.State, v *ssa.Value, arng int16) *obj.Prog {
+	p := s.Prog(v.Op.Asm())
+	p.From.Type = obj.TYPE_CONST
+	p.From.Offset = v.AuxInt
+	p.AddRestSourceReg(pregMask(v.Args[0].Reg(), arm64.PRED_Z))
+	p.To.Type = obj.TYPE_REG
+	p.To.Reg = zregArng(v.Reg(), arng)
+	return p
+}
+
+// simdZCpyMergingConst emits a merging-predicated SVE broadcast of a signed
+// 8-bit immediate, e.g. ZCPY $5, P0.M, Z0.H. SSA provides arg0=the value the
+// inactive lanes keep (pinned to the destination by resultInArg0) and
+// arg1=the governing predicate.
+func simdZCpyMergingConst(s *ssagen.State, v *ssa.Value, arng int16) *obj.Prog {
+	p := s.Prog(v.Op.Asm())
+	p.From.Type = obj.TYPE_CONST
+	p.From.Offset = v.AuxInt
+	p.AddRestSourceReg(pregMask(v.Args[1].Reg(), arm64.PRED_M))
+	p.To.Type = obj.TYPE_REG
+	p.To.Reg = zregArng(v.Reg(), arng)
+	return p
+}
+
+// simdZCpyMergingGp emits a merging-predicated SVE broadcast of a general
+// register, e.g. ZCPYW R0, P0.M, Z0.B. SSA provides arg0=the value the
+// inactive lanes keep (pinned to the destination by resultInArg0),
+// arg1=scalar, and arg2=the governing predicate.
+func simdZCpyMergingGp(s *ssagen.State, v *ssa.Value, arng int16) *obj.Prog {
+	p := s.Prog(v.Op.Asm())
+	p.From.Type = obj.TYPE_REG
+	p.From.Reg = v.Args[1].Reg()
+	p.AddRestSourceReg(pregMask(v.Args[2].Reg(), arm64.PRED_M))
+	p.To.Type = obj.TYPE_REG
+	p.To.Reg = zregArng(v.Reg(), arng)
+	return p
+}
+
+// simdZCpyMergingVec emits a merging-predicated SVE broadcast of element 0 of
+// a SIMD/FP register, e.g. ZCPYS V1, P0.M, Z0.S. SSA provides arg0=the value
+// the inactive lanes keep (pinned to the destination by resultInArg0),
+// arg1=scalar, and arg2=the governing predicate.
+func simdZCpyMergingVec(s *ssagen.State, v *ssa.Value, arng int16) *obj.Prog {
+	p := s.Prog(v.Op.Asm())
+	p.From.Type = obj.TYPE_REG
+	p.From.Reg = v.Args[1].Reg() - arm64.REG_F0 + arm64.REG_V0
+	p.AddRestSourceReg(pregMask(v.Args[2].Reg(), arm64.PRED_M))
+	p.To.Type = obj.TYPE_REG
+	p.To.Reg = zregArng(v.Reg(), arng)
 	return p
 }
 
@@ -2196,6 +2335,81 @@ func simdZkv(s *ssagen.State, v *ssa.Value, arng int16) *obj.Prog {
 	return sveUnaryPred(s, v, arng, v.Args[0].Reg(), v.Args[1].Reg(), arm64.PRED_M)
 }
 
+// simdZkfp emits an SVE reduction across the lanes of arg0 that arg1 governs
+// into a floating-point scalar register, e.g. ZFADDVS Z0.S, P0, V1. The
+// scalar is the low lane of the vector register with the same number, which
+// is where a float value lives.
+func simdZkfp(s *ssagen.State, v *ssa.Value, arng int16) *obj.Prog {
+	p := s.Prog(v.Op.Asm())
+	p.From.Type = obj.TYPE_REG
+	p.From.Reg = zregArng(v.Args[0].Reg(), arng) // Zn
+	p.AddRestSourceReg(v.Args[1].Reg())          // Pg, unqualified
+	p.To.Type = obj.TYPE_REG
+	p.To.Reg = v.Reg() - arm64.REG_F0 + arm64.REG_V0 // Vd
+	return p
+}
+
+// simdZ11Imm emits an unpredicated SVE operation on one vector and the
+// immediate in the aux, e.g. ZLSL $3, Z0.S, Z1.S.
+func simdZ11Imm(s *ssagen.State, v *ssa.Value, arng int16) *obj.Prog {
+	p := s.Prog(v.Op.Asm())
+	p.From.Type = obj.TYPE_CONST
+	p.From.Offset = int64(v.AuxUInt8())
+	p.AddRestSourceReg(zregArng(v.Args[0].Reg(), arng)) // Zn
+	p.To.Type = obj.TYPE_REG
+	p.To.Reg = zregArng(v.Reg(), arng) // Zd
+	return p
+}
+
+// simdZkvPredImm emits the predicated form of an SVE operation on one vector
+// and the immediate in the aux, e.g. ZLSL $3, Z0.S, P0.M, Z0.S. It is
+// destructive, so resultInArg0 has already put the destination in arg0.
+func simdZkvPredImm(s *ssagen.State, v *ssa.Value, arng int16) *obj.Prog {
+	d := v.Reg()
+	if d != v.Args[0].Reg() {
+		v.Fatalf("destination is not arg0 of destructive op %v", v.Op)
+	}
+	p := s.Prog(v.Op.Asm())
+	p.From.Type = obj.TYPE_CONST
+	p.From.Offset = int64(v.AuxUInt8())
+	p.AddRestSourceReg(zregArng(d, arng))                       // Zdn
+	p.AddRestSourceReg(pregMask(v.Args[1].Reg(), arm64.PRED_M)) // Pg/M
+	p.To.Type = obj.TYPE_REG
+	p.To.Reg = zregArng(d, arng) // Zdn
+	return p
+}
+
+// simdZ21Wide emits an unpredicated SVE "wide elements" operation, whose
+// second source has 64-bit elements, e.g. ZLSL Z2.D, Z0.S, Z1.S: each element
+// of arg0 is combined with the 64-bit element of arg1 that overlaps it.
+func simdZ21Wide(s *ssagen.State, v *ssa.Value, arng int16) *obj.Prog {
+	p := s.Prog(v.Op.Asm())
+	p.From.Type = obj.TYPE_REG
+	p.From.Reg = zregArng(v.Args[1].Reg(), arm64.ARNG_D) // Zm
+	p.AddRestSourceReg(zregArng(v.Args[0].Reg(), arng))  // Zn
+	p.To.Type = obj.TYPE_REG
+	p.To.Reg = zregArng(v.Reg(), arng) // Zd
+	return p
+}
+
+// simdZ2kvPredWide emits the predicated form of an SVE "wide elements"
+// operation, e.g. ZLSL Z1.D, Z0.S, P0.M, Z0.S. It is destructive and not
+// commutative, so resultInArg0 has already put the destination in arg0.
+func simdZ2kvPredWide(s *ssagen.State, v *ssa.Value, arng int16) *obj.Prog {
+	d := v.Reg()
+	if d != v.Args[0].Reg() {
+		v.Fatalf("destination is not arg0 of destructive op %v", v.Op)
+	}
+	p := s.Prog(v.Op.Asm())
+	p.From.Type = obj.TYPE_REG
+	p.From.Reg = zregArng(v.Args[1].Reg(), arm64.ARNG_D)        // Zm
+	p.AddRestSourceReg(zregArng(d, arng))                       // Zdn
+	p.AddRestSourceReg(pregMask(v.Args[2].Reg(), arm64.PRED_M)) // Pg/M
+	p.To.Type = obj.TYPE_REG
+	p.To.Reg = zregArng(d, arng) // Zdn
+	return p
+}
+
 // simdZ2kvPredResultInArg0 emits the merging form of a predicated SVE unary
 // operation, e.g. ZABS Z1.B, P0.M, Z0.B. SSA provides arg0=the value the
 // inactive lanes keep, arg1=x, arg2=mask, and resultInArg0 puts that value in
@@ -2213,6 +2427,25 @@ func sveUnaryPred(s *ssagen.State, v *ssa.Value, arng int16, zn, pg int16, qual 
 	p.AddRestSourceReg(pregMask(pg, qual)) // Pg/M or Pg/Z
 	p.To.Type = obj.TYPE_REG
 	p.To.Reg = zregArng(v.Reg(), arng) // Zd
+	return p
+}
+
+// simdZ3kvPredAcc emits a predicated SVE accumulating operation, e.g.
+// ZFMLA Zm.S, Zn.S, P0.M, Zda.S. SSA provides arg0=the accumulator, arg1=x,
+// arg2=y, arg3=the governing predicate; the accumulator is the register the
+// instruction merges into, so resultInArg0 pins the destination to it.
+//
+// This helper is only for <Zda>-style operations, whose destination is not
+// repeated in the assembly: it emits one more distinct register than the
+// <Zdn>-destructive helpers (simdZ2kvPred, simdZ3kvPredResultInArg0) do.
+func simdZ3kvPredAcc(s *ssagen.State, v *ssa.Value, arng int16) *obj.Prog {
+	p := s.Prog(v.Op.Asm())
+	p.From.Type = obj.TYPE_REG
+	p.From.Reg = zregArng(v.Args[2].Reg(), arng)                // Zm
+	p.AddRestSourceReg(zregArng(v.Args[1].Reg(), arng))         // Zn
+	p.AddRestSourceReg(pregMask(v.Args[3].Reg(), arm64.PRED_M)) // Pg/M
+	p.To.Type = obj.TYPE_REG
+	p.To.Reg = zregArng(v.Reg(), arng) // Zda
 	return p
 }
 
@@ -2256,6 +2489,19 @@ func simdZ3kvPredResultInArg0(s *ssagen.State, v *ssa.Value, arng int16) *obj.Pr
 	p.AddRestSourceReg(pregMask(pg, arm64.PRED_M)) // Pg/M
 	p.To.Type = obj.TYPE_REG
 	p.To.Reg = zregArng(d, arng) // Zdn
+	return p
+}
+
+// simdPNext emits a PNEXT with the given element arrangement, e.g.
+// PPNEXT P0.H, P1, P0.H. SSA provides arg0=the predicate the destination
+// overwrites (resultInArg0) and arg1=the candidate lanes.
+func simdPNext(s *ssagen.State, v *ssa.Value, arng int16) *obj.Prog {
+	p := s.Prog(v.Op.Asm())
+	p.From.Type = obj.TYPE_REG
+	p.From.Reg = pregArng(v.Args[0].Reg(), arng)
+	p.AddRestSourceReg(v.Args[1].Reg())
+	p.To.Type = obj.TYPE_REG
+	p.To.Reg = pregArng(v.Reg(), arng)
 	return p
 }
 
@@ -2573,6 +2819,17 @@ func zregArng(r int16, arng int16) int16 {
 	if r >= arm64.REG_F0 && r <= arm64.REG_F31 &&
 		arng >= arm64.ARNG_B && arng <= arm64.ARNG_Q {
 		return arm64.REG_ZARNG + (r - arm64.REG_F0) | (arng << 5)
+	}
+	panic("Bad Z reg with arrangement")
+}
+
+// zregArngElem is the element-indexed counterpart of zregArng: it encodes
+// Zn.<T> ready for an index (Zn.<T>[i], with the index carried separately in
+// the operand's Index field).
+func zregArngElem(r int16, arng int16) int16 {
+	if r >= arm64.REG_F0 && r <= arm64.REG_F31 &&
+		arng >= arm64.ARNG_B && arng <= arm64.ARNG_Q {
+		return arm64.REG_ZARNGELEM + (r - arm64.REG_F0) | (arng << 5)
 	}
 	panic("Bad Z reg with arrangement")
 }

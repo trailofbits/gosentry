@@ -391,32 +391,54 @@ func (p *maybeTraceableChan) get() *hchan {
 	return (*hchan)(p.maybeTraceablePtr.get())
 }
 
-// sudog (pseudo-g) represents a g in a wait list, such as for sending/receiving
-// on a channel.
+// waitingGType describes which type of synchronization primitive a waitingG is
+// used with.
+type waitingGType uint8
+
+const (
+	waitingGTypeNone waitingGType = iota
+
+	// Channel operations, including select.
+	waitingGTypeChan
+
+	// semaphores (semacquire, which transitively includes sync.Mutex/RWMutex).
+	waitingGTypeSema
+
+	// sync.Cond, via runtime.notifyList.
+	waitingGTypeCond
+)
+
+// waitingG represents a g on a wait list of a synchronization primitive:
+// either a channel, semaphore (including sync.Mutex) or notifyList
+// (sync.Cond).
 //
-// sudog is necessary because the g ↔ synchronization object relation
+// waitingG is necessary because the g ↔ synchronization object relation
 // is many-to-many. A g can be on many wait lists, so there may be
-// many sudogs for one g; and many gs may be waiting on the same
-// synchronization object, so there may be many sudogs for one object.
+// many waitingGs for one g; and many gs may be waiting on the same
+// synchronization object, so there may be many waitingGs for one object.
 //
-// sudogs are allocated from a special pool. Use acquireSudog and
-// releaseSudog to allocate and free them.
-type sudog struct {
-	// The following fields are protected by the hchan.lock of the
-	// channel this sudog is blocking on. shrinkstack depends on
-	// this for sudogs involved in channel ops.
+// waitingGs are allocated from a special pool. Use acquireWaitingG and
+// releaseWaitingG to allocate and free them.
+type waitingG struct {
+	// Which type of waitingG is this. Immutable after allocation.
+	typ waitingGType
+
+	// For channels, the following fields are protected by the
+	// hchan.lock of the channel this waitingG is blocking on. shrinkstack
+	// depends on this for waitingGs involved in channel ops.
+	//
+	// For semaphores, all fields are only accessed when holding a semaRoot
+	// lock.
 
 	g *g
 
-	next *sudog
-	prev *sudog
+	next *waitingG
+	prev *waitingG
 
 	elem maybeTraceablePtr // data element (may point to stack)
 
 	// The following fields are never accessed concurrently.
 	// For channels, waitlink is only accessed by g.
-	// For semaphores, all fields (including the ones above)
-	// are only accessed when holding a semaRoot lock.
 
 	acquiretime int64
 	releasetime int64
@@ -439,9 +461,9 @@ type sudog struct {
 	// in the second entry in the list.)
 	waiters uint16
 
-	parent   *sudog             // semaRoot binary tree
-	waitlink *sudog             // g.waiting list or semaRoot
-	waittail *sudog             // semaRoot
+	parent   *waitingG          // semaRoot binary tree
+	waitlink *waitingG          // g.waiting list or semaRoot
+	waittail *waitingG          // semaRoot
 	c        maybeTraceableChan // channel
 }
 
@@ -460,6 +482,51 @@ type libcall struct {
 type stack struct {
 	lo uintptr
 	hi uintptr
+}
+
+// A stackOff is a position on a goroutine's stack, recorded as its distance
+// below the top of the stack (gp.stack.hi).
+//
+// Stack copying preserves the distance from every stack address to the top of
+// the stack, so unlike an address, a stackOff remains valid across stack copies
+// without any adjustment. And unlike a pointer, it does not keep stack objects
+// alive during stack scanning.
+type stackOff uintptr
+
+// toStackOff returns the stackOff of addr, which must be on gp's stack
+// (or exactly gp.stack.hi, which can be a frame boundary). It throws if addr
+// isn't, which catches addresses taken on the wrong goroutine or left stale by
+// a stack move.
+//
+// This must be nosplit: callers pass absolute stack addresses, which a stack
+// move in this function's prologue would leave stale.
+//
+//go:nosplit
+func (gp *g) toStackOff(addr uintptr) stackOff {
+	if addr < gp.stack.lo || addr > gp.stack.hi {
+		badStackOff(gp, addr)
+	}
+	return stackOff(gp.stack.hi - addr)
+}
+
+// badStackOff reports a toStackOff of an address that is not on gp's stack.
+// It is out of line to keep toStackOff inlinable.
+//
+//go:noinline
+func badStackOff(gp *g, addr uintptr) {
+	print("runtime: address ", hex(addr), " not on goroutine ", gp.goid, " stack [", hex(gp.stack.lo), ", ", hex(gp.stack.hi), "]\n")
+	throw("toStackOff: address not on stack")
+}
+
+// fromStackOff returns the current address of off on gp's stack. The result is
+// only valid until gp's stack next moves.
+//
+// This must be nosplit for the same reason as toStackOff: callers may have
+// loaded other absolute stack addresses to compare against the result.
+//
+//go:nosplit
+func (gp *g) fromStackOff(off stackOff) uintptr {
+	return gp.stack.hi - uintptr(off)
 }
 
 // heldLockInfo gives info on a held lock and the rank of that lock
@@ -493,7 +560,7 @@ type g struct {
 	// parameter would be difficult to find. It is currently used
 	// in four ways:
 	// 1. When a channel operation wakes up a blocked goroutine, it sets param to
-	//    point to the sudog of the completed blocking operation.
+	//    point to the waitingG of the completed blocking operation.
 	// 2. By gcAssistAlloc1 to signal back to its caller that the goroutine completed
 	//    the GC cycle. It is unsafe to do so in any other way, because the goroutine's
 	//    stack may have moved in the meantime.
@@ -503,7 +570,7 @@ type g struct {
 	//    param may point to a savedOpenDeferState.
 	param        unsafe.Pointer
 	atomicstatus atomic.Uint32
-	stackLock    uint32 // sigprof/scang lock; TODO: fold in to atomicstatus
+	wasmCont     wasmContPerG // GOWASM=stackswitch only; fills the padding before goid
 	goid         uint64
 	schedlink    guintptr
 	waitsince    int64      // approx time when the g become blocked
@@ -547,23 +614,41 @@ type g struct {
 	ditWanted       bool // set if g wants to be executed with DIT enabled
 	syncSafePoint   bool // set if g is stopped at a synchronous safe point.
 	runningCleanups atomic.Bool
-	sig             uint32
-	secret          int32 // current nesting of runtime/secret.Do calls.
-	writebuf        []byte
-	sigcode0        uintptr
-	sigcode1        uintptr
-	sigpc           uintptr
-	parentGoid      uint64          // goid of goroutine that created this goroutine
-	gopc            uintptr         // pc of go statement that created this goroutine
-	ancestors       *[]ancestorInfo // ancestor information goroutine(s) that created this goroutine (only used if debug.tracebackancestors)
-	startpc         uintptr         // pc of goroutine function
-	racectx         uintptr
-	waiting         *sudog         // sudog structures this g is waiting on (that have a valid elem ptr); in lock order
-	cgoCtxt         []uintptr      // cgo traceback context
-	labels          unsafe.Pointer // profiler labels
-	timer           *timer         // cached timer for time.Sleep
-	sleepWhen       int64          // when to sleep until
-	selectDone      atomic.Uint32  // are we participating in a select and did someone win the race?
+
+	// waiting references the synchronization primitives that g is
+	// currently or soon waiting on.
+	//
+	// For waitingGTypeChan: waiting.elem refers to the src/dst location
+	// for the channel operation. waitingG.waitlink forms a linked list of
+	// channels the G is waiting on (that have a valid elem pointer), in
+	// lock order.
+	//
+	// For waitingGTypeSema: waiting.elem refers to the semaphore the G is
+	// waiting on.
+	//
+	// For waitingGTypeCond: waiting.elem refers to the notifyList the G is
+	// waiting on.
+	//
+	// Note that waiting need not be set atomically with parking. Thus the
+	// G may be preempted with waiting set.
+	waiting *waitingG
+
+	sig        uint32
+	secret     int32 // current nesting of runtime/secret.Do calls.
+	writebuf   []byte
+	sigcode0   uintptr
+	sigcode1   uintptr
+	sigpc      uintptr
+	parentGoid uint64          // goid of goroutine that created this goroutine
+	gopc       uintptr         // pc of go statement that created this goroutine
+	ancestors  *[]ancestorInfo // ancestor information goroutine(s) that created this goroutine (only used if debug.tracebackancestors)
+	startpc    uintptr         // pc of goroutine function
+	racectx    uintptr
+	cgoCtxt    []uintptr      // cgo traceback context
+	labels     unsafe.Pointer // profiler labels
+	timer      *timer         // cached timer for time.Sleep
+	sleepWhen  int64          // when to sleep until
+	selectDone atomic.Uint32  // are we participating in a select and did someone win the race?
 
 	// goroutineProfiled indicates the status of this goroutine's stack for the
 	// current in-progress goroutine profile
@@ -575,6 +660,10 @@ type g struct {
 	// xRegs stores the extended register state if this G has been
 	// asynchronously preempted.
 	xRegs xRegPerG
+
+	// valgrind is the Valgrind state of this G's stack. It is empty
+	// unless the runtime is built with Valgrind support (see valgrind.go).
+	valgrind valgrindPerG
 
 	// Per-G tracer state.
 	trace gTraceState
@@ -589,10 +678,6 @@ type g struct {
 	// and check for debt in the malloc hot path. The assist ratio
 	// determines how this corresponds to scan work debt.
 	gcAssistBytes int64
-
-	// valgrindStackID is used to track what memory is used for stacks when a program is
-	// built with the "valgrind" build tag, otherwise it is unused.
-	valgrindStackID uintptr
 }
 
 // gTrackingPeriod is the number of transitions out of _Grunning between
@@ -677,6 +762,7 @@ type m struct {
 	lockedInt       uint32      // tracking for internal lockOSThread
 	mWaitList       mWaitList   // list of runtime lock waiters
 	ditEnabled      bool        // set if DIT is currently enabled on this M
+	syncIOWorker    bool        // dedicated Windows synchronous pipe I/O worker; immutable after startup
 
 	mLockProfile mLockProfile // fields relating to runtime.lock contention
 	profStack    []uintptr    // used for memory/block/mutex stack traces
@@ -822,8 +908,8 @@ type p struct {
 	// Available G's (status == Gdead)
 	gFree gList
 
-	sudogcache []*sudog
-	sudogbuf   [128]*sudog
+	waitingGCache []*waitingG
+	waitingGBuf   [128]*waitingG
 
 	// Cache of mspan objects from the heap.
 	mspancache struct {
@@ -981,9 +1067,9 @@ type schedt struct {
 		noStack gList // Gs without stacks
 	}
 
-	// Central cache of sudog structs.
-	sudoglock  mutex
-	sudogcache *sudog
+	// Central cache of waitingG structs.
+	waitingGLock  mutex
+	waitingGCache *waitingG
 
 	// Central pool of available defer structs.
 	deferlock mutex
@@ -993,7 +1079,9 @@ type schedt struct {
 	// m.exited is set. Linked through m.freelink.
 	freem *m
 
-	gcwaiting  atomic.Bool // gc is waiting to run
+	// gcwaiting indicates that the gc is waiting to run. When runqgrab delays
+	// before stealing runnext, platforms with futex sleep on this address.
+	gcwaiting  gcWaitingWord
 	stopwait   int32
 	stopnote   note
 	sysmonwait atomic.Bool
@@ -1056,6 +1144,31 @@ type schedt struct {
 	// goroutinesCreated (plus the value of goroutinesCreated on each P in allp)
 	// is the sum of all goroutines created by the program.
 	goroutinesCreated atomic.Uint64
+}
+
+// gcWaitingWord is an atomic boolean, whose address is also available as a
+// *uint32 for futexsleep.
+type gcWaitingWord struct {
+	val uint32
+}
+
+//go:nosplit
+func (p *gcWaitingWord) Store(v bool) {
+	var val uint32
+	if v {
+		val = 1
+	}
+	atomic.Store(&p.val, val)
+}
+
+//go:nosplit
+func (p *gcWaitingWord) Load() bool {
+	return atomic.Load(&p.val) != 0
+}
+
+//go:nosplit
+func (p *gcWaitingWord) Addr() *uint32 {
+	return &p.val
 }
 
 // Values for the flags field of a sigTabT.
@@ -1172,10 +1285,17 @@ type _defer struct {
 //
 // A _panic value must only ever live on the stack.
 //
-// The gopanicFP and link fields are stack pointers, but don't need special
-// handling during stack growth: because they are pointer-typed and
-// _panic values only live on the stack, regular stack pointer
-// adjustment takes care of them.
+// The link, deferBitsPtr, and slotsPtr fields are stack pointers, but
+// don't need special handling during stack growth: because they are
+// pointer-typed and _panic values only live on the stack, regular stack
+// pointer adjustment takes care of them.
+//
+// startSP, sp, and fp record frame boundaries. These are stackOffs rather
+// than pointers because a frame boundary is often also the address of a
+// stack object (for example, on amd64, a caller's SP is the address of the
+// stack arguments it passes to its callee), and a pointer would keep that
+// object alive after it is dead. See go.dev/issue/82394 and
+// go.dev/issue/82917.
 type _panic struct {
 	arg  any     // argument to panic
 	link *_panic // link to earlier panic
@@ -1183,12 +1303,12 @@ type _panic struct {
 	// startPC and startSP track where _panic.start was called.
 	// (These are the SP and PC of the gopanic frame itself.)
 	startPC uintptr
-	startSP unsafe.Pointer
+	startSP stackOff
 
 	// The current stack frame that we're running deferred calls for.
 	pc uintptr
-	sp unsafe.Pointer
-	fp unsafe.Pointer
+	sp stackOff
+	fp stackOff
 
 	// retpc stores the PC where the panic should jump back to, if the
 	// function last returned by _panic.nextDefer() recovers the panic.
@@ -1197,6 +1317,8 @@ type _panic struct {
 	// Extra state for handling open-coded defers.
 	deferBitsPtr *uint8
 	slotsPtr     unsafe.Pointer
+
+	recoverAtToken *recoverAtToken // identify this panic to gorecoverat
 
 	recovered   bool // whether this panic has been recovered
 	repanicked  bool // whether this panic repanicked

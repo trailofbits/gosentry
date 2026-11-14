@@ -299,6 +299,33 @@ func subSlice[T number](x, y []T) []T {
 	return map2[T](sub)(x, y)
 }
 
+func concatAddPairsSlice[T number](a, b []T) []T {
+	r := make([]T, len(a))
+	for i := range len(a) / 2 {
+		r[i] = a[2*i] + a[2*i+1]
+		r[i+len(a)/2] = b[2*i] + b[2*i+1]
+	}
+	return r
+}
+
+func concatMaxPairsSlice[T number](a, b []T) []T {
+	r := make([]T, len(a))
+	for i := range len(a) / 2 {
+		r[i] = max(a[2*i], a[2*i+1])
+		r[i+len(a)/2] = max(b[2*i], b[2*i+1])
+	}
+	return r
+}
+
+func concatMinPairsSlice[T number](a, b []T) []T {
+	r := make([]T, len(a))
+	for i := range len(a) / 2 {
+		r[i] = min(a[2*i], a[2*i+1])
+		r[i+len(a)/2] = min(b[2*i], b[2*i+1])
+	}
+	return r
+}
+
 func maxSlice[T number](x, y []T) []T {
 	return map2[T](max_)(x, y)
 }
@@ -391,6 +418,29 @@ func negSlice[T number](x []T) []T {
 
 func absSlice[T number](x []T) []T {
 	return map1[T](abs)(x)
+}
+
+func onesCountSlice[T integer](x []T) []T {
+	return map1[T](onesCount)(x)
+}
+
+// intDiv divides like SVE SDIV/UDIV, where Go's operator would panic:
+// division by zero yields zero, and the minimum signed value divided by -1
+// yields itself.
+func intDiv[T integer](x, y T) T {
+	if y == 0 {
+		return 0
+	}
+	if isSignedInt[T]() && y+1 == 0 {
+		// x / -1 is -x, and Go's negation already wraps the minimum value
+		// onto itself the way the instruction does.
+		return -x
+	}
+	return x / y
+}
+
+func intDivSlice[T integer](x, y []T) []T {
+	return map2[T](intDiv)(x, y)
 }
 
 // isSignedInt reports whether T is a signed integer type.
@@ -553,6 +603,14 @@ func transposeSlice[T number](laneBits int, odd bool) func(x, y []T) []T {
 	})
 }
 
+// hiToLoSlice moves the high half of x to the low half and zeroes the high
+// half.
+func hiToLoSlice[T number](x []T) []T {
+	out := make([]T, len(x))
+	copy(out, x[len(x)/2:])
+	return out
+}
+
 func sqrtSlice[T float](x []T) []T {
 	return map1[T](sqrt)(x)
 }
@@ -683,8 +741,8 @@ func shiftBy[T integer](x T, amt int8) T {
 	return x
 }
 
-// shiftSaturatingSigned shifts x by signed amount with signed saturation on overflow.
-func shiftSaturatingSigned[T signed](x T, amt int8) T {
+// scaleSaturatingSigned shifts x by signed amount with signed saturation on overflow.
+func scaleSaturatingSigned[T signed](x T, amt int8) T {
 	a := int(amt)
 	if a > 0 {
 		r := x << uint(a)
@@ -703,8 +761,8 @@ func shiftSaturatingSigned[T signed](x T, amt int8) T {
 	return x
 }
 
-// shiftSaturatingUnsigned shifts x by signed amount with unsigned saturation on overflow.
-func shiftSaturatingUnsigned[T unsigned](x T, amt int8) T {
+// scaleSaturatingUnsigned shifts x by signed amount with unsigned saturation on overflow.
+func scaleSaturatingUnsigned[T unsigned](x T, amt int8) T {
 	a := int(amt)
 	if a > 0 {
 		r := x << uint(a)
@@ -735,16 +793,16 @@ func shiftMixedSlice[D integer, S integer](x []D, y []S) []D {
 	return r
 }
 
-// shiftSaturatingSignedSlice applies saturating shift element-wise (same-type).
-func shiftSaturatingSignedSlice[T signed](x, y []T) []T {
-	return map2(func(a, b T) T { return shiftSaturatingSigned(a, shiftAmount(b)) })(x, y)
+// scaleSaturatingSignedSlice applies saturating shift element-wise (same-type).
+func scaleSaturatingSignedSlice[T signed](x, y []T) []T {
+	return map2(func(a, b T) T { return scaleSaturatingSigned(a, shiftAmount(b)) })(x, y)
 }
 
-// shiftSaturatingUnsignedSlice applies saturating shift element-wise (mixed-type).
-func shiftSaturatingUnsignedSlice[D unsigned, S integer](x []D, y []S) []D {
+// scaleSaturatingUnsignedSlice applies saturating shift element-wise (mixed-type).
+func scaleSaturatingUnsignedSlice[D unsigned, S integer](x []D, y []S) []D {
 	r := make([]D, len(x))
 	for i := range r {
-		r[i] = shiftSaturatingUnsigned(x[i], shiftAmount(y[i]))
+		r[i] = scaleSaturatingUnsigned(x[i], shiftAmount(y[i]))
 	}
 	return r
 }
@@ -764,12 +822,12 @@ func shiftRightByConstSlice[T integer](x []T, amt uint64) []T {
 
 // shiftLeftSaturatingByConstSlice shifts all elements left by constant amount with signed saturation.
 func shiftLeftSaturatingByConstSlice[T signed](x []T, amt uint64) []T {
-	return map1(func(a T) T { return shiftSaturatingSigned(a, int8(amt)) })(x)
+	return map1(func(a T) T { return scaleSaturatingSigned(a, int8(amt)) })(x)
 }
 
 // shiftLeftSaturatingUByConstSlice shifts all elements left by constant amount with unsigned saturation.
 func shiftLeftSaturatingUByConstSlice[T unsigned](x []T, amt uint64) []T {
-	return map1(func(a T) T { return shiftSaturatingUnsigned(a, int8(amt)) })(x)
+	return map1(func(a T) T { return scaleSaturatingUnsigned(a, int8(amt)) })(x)
 }
 
 // shiftAllLeftSlice shifts all elements left by the same amount.

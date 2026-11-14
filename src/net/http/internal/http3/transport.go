@@ -30,11 +30,11 @@ type transport struct {
 	opts TransportOpts
 
 	mu sync.Mutex // Guards fields below.
-	// endpoint is the QUIC endpoint used by connections created by the
+	// lazyEndpoint is the QUIC endpoint used by connections created by the
 	// transport. If CloseIdleConnections is called when activeConns is empty,
-	// endpoint will be unset. If unset, endpoint will be initialized by any
+	// it will be unset. If unset, it will be initialized by any
 	// call to dial.
-	endpoint      *quic.Endpoint
+	lazyEndpoint  *quic.Endpoint
 	activeConns   map[*clientConn]struct{}
 	inFlightDials int
 }
@@ -50,6 +50,17 @@ func (t netHTTPTransport) Registered(tr1 *http.Transport) {
 	t.transport.tr1 = tr1
 }
 
+func (t netHTTPTransport) Close() error {
+	t.mu.Lock()
+	endpoint := t.lazyEndpoint
+	t.lazyEndpoint = nil
+	t.mu.Unlock()
+	if endpoint == nil {
+		return nil
+	}
+	return endpoint.Close(canceledCtx)
+}
+
 // RoundTrip is defined since Transport.RegisterProtocol takes in a
 // RoundTripper. However, this method will never be used as net/http's
 // dialClientConner interface does not have a RoundTrip method and will only
@@ -58,7 +69,26 @@ func (t netHTTPTransport) RoundTrip(*http.Request) (*http.Response, error) {
 	panic("netHTTPTransport.RoundTrip should never be called")
 }
 
-func (t netHTTPTransport) DialClientConn(ctx context.Context, addr string, _ *url.URL, tlsConfig *tls.Config, stateHook func()) (http.RoundTripper, error) {
+// DialClientConn creates a new client connection to address.
+//
+// If proxy is non-nil, the connection should use the provided proxy.
+// If HTTP/3 proxies are not supported, DialClientConn should return
+// an error wrapping [errors.ErrUnsupported].
+//
+// The RoundTripper returned by DialClientConn must also implement the
+// http.genericClientConn interface.
+//
+// The client connection should arrange to call internalStateHook
+// when the connection closes, when requests complete, and when the
+// connection concurrency limit changes.
+//
+// The client connection must call the internal state hook when
+// the connection state changes asynchronously, such as when a request completes.
+//
+// The internal state hook need not be called after synchronous changes
+// to the state: Close, Reserve, Release, and RoundTrip calls
+// which don't start a request do not need to call the hook.
+func (t netHTTPTransport) DialClientConn(ctx context.Context, addr string, _ *url.URL, tlsConfig *tls.Config, stateHook func() error) (http.RoundTripper, error) {
 	return t.transport.dial(ctx, addr, tlsConfig, stateHook)
 }
 
@@ -109,7 +139,7 @@ func (tr *transport) decInFlightDials() {
 	tr.inFlightDials--
 }
 
-func (tr *transport) initEndpoint() (err error) {
+func (tr *transport) endpoint() (_ *quic.Endpoint, err error) {
 	tr.mu.Lock()
 	defer tr.mu.Unlock()
 	// This might cause rare issues on Darwin. Unlike Linux, Darwin kernel
@@ -137,36 +167,37 @@ func (tr *transport) initEndpoint() (err error) {
 	// dual-stack binding to avoid this issue, and high socket churn is
 	// probably uncommon for regular use cases. However, finding a workaround
 	// for this eventually would be ideal.
-	if tr.endpoint == nil {
+	if tr.lazyEndpoint == nil {
 		quicConfig := newQUICConfig(tr.opts.QUICConfig, tr.tr1.TLSClientConfig)
 		if tr.opts.ListenQUIC != nil {
-			tr.endpoint, err = tr.opts.ListenQUIC(":0", quicConfig)
+			tr.lazyEndpoint, err = tr.opts.ListenQUIC(":0", quicConfig)
 		} else if tr.opts.ListenPacket != nil {
 			var conn net.PacketConn
 			conn, err = tr.opts.ListenPacket("udp", ":0")
 			if err != nil {
-				return err
+				return nil, err
 			}
-			tr.endpoint, err = quic.NewEndpoint(conn, quicConfig)
+			tr.lazyEndpoint, err = quic.NewEndpoint(conn, quicConfig)
 			if err != nil {
 				conn.Close()
 			}
 		} else {
-			tr.endpoint, err = quic.Listen("udp", ":0", quicConfig)
+			tr.lazyEndpoint, err = quic.Listen("udp", ":0", quicConfig)
 		}
 	}
-	return err
+	return tr.lazyEndpoint, err
 }
 
 // dial creates a new HTTP/3 client connection.
-func (tr *transport) dial(ctx context.Context, target string, tlsConfig *tls.Config, stateHook func()) (*clientConn, error) {
+func (tr *transport) dial(ctx context.Context, target string, tlsConfig *tls.Config, stateHook func() error) (*clientConn, error) {
 	tr.incInFlightDials()
 	defer tr.decInFlightDials()
 
-	if err := tr.initEndpoint(); err != nil {
+	endpoint, err := tr.endpoint()
+	if err != nil {
 		return nil, err
 	}
-	qconn, err := tr.endpoint.Dial(ctx, "udp", target, newQUICConfig(tr.opts.QUICConfig, tlsConfig))
+	qconn, err := endpoint.Dial(ctx, "udp", target, newQUICConfig(tr.opts.QUICConfig, tlsConfig))
 	if err != nil {
 		return nil, err
 	}
@@ -182,11 +213,11 @@ func (tr *transport) dial(ctx context.Context, target string, tlsConfig *tls.Con
 func (tr *transport) CloseIdleConnections() {
 	tr.mu.Lock()
 	defer tr.mu.Unlock()
-	if tr.endpoint == nil || len(tr.activeConns) > 0 || tr.inFlightDials > 0 {
+	if tr.lazyEndpoint == nil || len(tr.activeConns) > 0 || tr.inFlightDials > 0 {
 		return
 	}
-	tr.endpoint.Close(canceledCtx)
-	tr.endpoint = nil
+	tr.lazyEndpoint.Close(canceledCtx)
+	tr.lazyEndpoint = nil
 }
 
 // A clientConn is a client HTTP/3 connection.
@@ -207,7 +238,7 @@ type clientConn struct {
 	active   int
 	closed   bool
 
-	stateHook func()
+	stateHook func() error
 }
 
 func (tr *transport) registerConn(cc *clientConn) {
@@ -219,11 +250,20 @@ func (tr *transport) registerConn(cc *clientConn) {
 func (tr *transport) unregisterConn(cc *clientConn) {
 	tr.mu.Lock()
 	defer tr.mu.Unlock()
-	delete(tr.activeConns, cc)
-	close(cc.unregistered)
+	if _, ok := tr.activeConns[cc]; ok {
+		delete(tr.activeConns, cc)
+		close(cc.unregistered)
+	}
 }
 
-func (tr *transport) newClientConn(ctx context.Context, qconn *quic.Conn, stateHook func()) (*clientConn, error) {
+func (tr *transport) maxResponseHeaderBytes() int64 {
+	if tr.tr1 != nil && tr.tr1.MaxResponseHeaderBytes > 0 {
+		return tr.tr1.MaxResponseHeaderBytes
+	}
+	return 10 << 20 // Matches HTTP/1 and HTTP/2 default of 10 MB.
+}
+
+func (tr *transport) newClientConn(ctx context.Context, qconn *quic.Conn, stateHook func() error) (*clientConn, error) {
 	cc := &clientConn{
 		tr:           tr,
 		unregistered: make(chan struct{}),
@@ -239,16 +279,12 @@ func (tr *transport) newClientConn(ctx context.Context, qconn *quic.Conn, stateH
 		tr.unregisterConn(cc)
 		return nil, fmt.Errorf("http3: cannot create control stream: %v", err)
 	}
-	controlStream.writeSettings()
+	controlStream.writeSettings(settingsMaxFieldSectionSize, tr.maxResponseHeaderBytes())
 	controlStream.Flush()
 
 	go func() {
 		cc.acceptStreams(qconn, cc)
-		cc.mu.Lock()
-		cc.closed = true
-		cc.mu.Unlock()
-		cc.maybeCallStateHook()
-		tr.unregisterConn(cc)
+		cc.handleClose()
 	}()
 	return cc, nil
 }
@@ -262,6 +298,20 @@ func (cc *clientConn) Close() error {
 	// thinking that there is still an active cc.
 	<-cc.unregistered
 	return err
+}
+
+func (cc *clientConn) Proto() int {
+	return 3
+}
+
+func (cc *clientConn) NetConn() net.Conn {
+	// TODO: This should return a fake net.Conn that implements RemoteAddr/LocalAddr.
+	// This fake Conn will be provided to user GotConn trace hooks.
+	return nil
+}
+
+func (cc *clientConn) CloseWithError(err error) {
+	cc.Close()
 }
 
 func (cc *clientConn) Err() error {
@@ -318,6 +368,27 @@ func (cc *clientConn) InFlight() int {
 	return cc.reserved + cc.active
 }
 
+func (cc *clientConn) handleClose() {
+	cc.mu.Lock()
+	alreadyClosed := cc.closed
+	cc.closed = true
+	cc.mu.Unlock()
+	if !alreadyClosed {
+		cc.tr.unregisterConn(cc)
+		cc.maybeCallStateHook()
+	}
+}
+
+func (cc *clientConn) decrActiveAndCallStateHook() {
+	cc.mu.Lock()
+	cc.active--
+	closed := cc.closed
+	cc.mu.Unlock()
+	if !closed {
+		cc.maybeCallStateHook()
+	}
+}
+
 func (cc *clientConn) maybeCallStateHook() {
 	if cc.stateHook != nil {
 		cc.stateHook()
@@ -360,6 +431,7 @@ func (cc *clientConn) handleControlStream(st *stream) error {
 			}
 		case frameTypeGoaway:
 			// TODO: Wait for requests to complete before closing connection.
+			// TODO: Mark connection as unavailable / reject new reservations.
 			return errH3NoError
 		default:
 			// Unknown frames are ignored.
@@ -410,4 +482,5 @@ func (cc *clientConn) abort(err error) {
 	} else {
 		cc.qconn.Abort(err)
 	}
+	cc.handleClose()
 }

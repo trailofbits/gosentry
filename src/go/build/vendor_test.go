@@ -18,6 +18,7 @@ import (
 // DO NOT ADD TO THIS LIST TO FIX BUILDS.
 // Vendoring a new package requires prior discussion.
 var allowedPackagePrefixes = []string{
+	"go.uber.org/goleak", // Gosentry's LibAFL leak detector.
 	"golang.org/x",
 	"github.com/google/pprof",
 	"github.com/ianlancetaylor/demangle",

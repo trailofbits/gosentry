@@ -191,6 +191,7 @@ func InitConfig(config *ssa.Config) {
 	ir.Syms.Loong64HasLAM_BH = typecheck.LookupRuntimeVar("loong64HasLAM_BH")         // bool
 	ir.Syms.Loong64HasDBAR_HINTS = typecheck.LookupRuntimeVar("loong64HasDBAR_HINTS") // bool
 	ir.Syms.Loong64HasLSX = typecheck.LookupRuntimeVar("loong64HasLSX")               // bool
+	ir.Syms.RISCV64HasV = typecheck.LookupRuntimeVar("riscv64HasV")                   // bool
 	ir.Syms.RISCV64HasZbb = typecheck.LookupRuntimeVar("riscv64HasZbb")               // bool
 	ir.Syms.Staticuint64s = typecheck.LookupRuntimeVar("staticuint64s")
 	ir.Syms.Typedmemmove = typecheck.LookupRuntimeFunc("typedmemmove")
@@ -349,7 +350,7 @@ func buildssa(compiler ssa.Compiler, fn *ir.Func, worker int, isPgoHot bool) (*s
 	}
 	s.checkPtrEnabled = ir.ShouldCheckPtr(fn, 1)
 
-	if base.Flag.Cfg.Instrumenting && fn.Pragma&ir.Norace == 0 && !fn.Linksym().ABIWrapper() {
+	if base.Flag.Cfg.Instrumenting && fn.Pragma&ir.Norace == 0 && !fn.ABIWrapper() {
 		if !base.Flag.Race || !objabi.LookupPkgSpecial(fn.Sym().Pkg.Path).NoRaceFunc {
 			s.instrumentMemory = true
 			if base.Flag.Race {
@@ -2052,7 +2053,14 @@ func (s *state) stmt(n ir.Node) {
 		}
 
 		b := s.endBlock()
-		b.Pos = s.lastPos.WithIsStmt() // Do this even if b is an empty block.
+		if n.Pos().IsStmt() == src.PosNotStmt {
+			// the front end generated this branch, and it is
+			// not a statement in the source (for example, the
+			// implicit default case of a switch). See issue 81705.
+			b.Pos = s.lastPos.WithNotStmt()
+		} else {
+			b.Pos = s.lastPos.WithIsStmt() // Do this even if b is an empty block.
+		}
 		b.AddEdgeTo(to)
 
 	case ir.OFOR:
@@ -2152,6 +2160,20 @@ func (s *state) stmt(n ir.Node) {
 			// labeled
 			lab = s.label(sym)
 			lab.breakTarget = bEnd
+		}
+
+		// End the current block at the position of the switch or select
+		// statement. The jump at the end of the block gives the statement
+		// an instruction that executes before any case is evaluated. In
+		// optimized builds, the empty block is fused away. Without this, a
+		// switch with no tag has no such instruction, and a breakpoint on
+		// the switch line stops only after all cases fail. See issue 81705.
+		if s.curBlock != nil && n.Pos().IsStmt() != src.PosNotStmt {
+			b := s.endBlock()
+			b.Pos = n.Pos().WithIsStmt()
+			bStart := s.f.NewBlock(block.BlockPlain)
+			b.AddEdgeTo(bStart)
+			s.startBlock(bStart)
 		}
 
 		// generate body code
@@ -4309,7 +4331,7 @@ func (s *state) minMax(n *ir.CallExpr) *ssa.Value {
 		if typ.IsFloat() {
 			hasIntrinsic := false
 			switch Arch.LinkArch.Family {
-			case sys.AMD64, sys.ARM64, sys.Loong64, sys.RISCV64:
+			case sys.AMD64, sys.ARM64, sys.Loong64, sys.RISCV64, sys.Wasm:
 				hasIntrinsic = true
 			case sys.PPC64:
 				hasIntrinsic = buildcfg.GOPPC64 >= 9
@@ -4636,6 +4658,12 @@ func (s *state) zeroVal(t *types.Type) *ssa.Value {
 	if t.Size() == 0 {
 		return s.entryNewValue0(ssaop.OpEmpty, t)
 	}
+	b := s.entryBlock()
+	if t.ContainsSIMD() {
+		// SIMD code needs to be guarded by feature checks, so
+		// we can't put its zero value in the entry block.
+		b = s.curBlock
+	}
 	switch {
 	case t.IsInteger():
 		switch t.Size() {
@@ -4683,15 +4711,15 @@ func (s *state) zeroVal(t *types.Type) *ssa.Value {
 		return s.constSlice(t)
 	case isStructNotSIMD(t):
 		n := t.NumFields()
-		v := s.entryNewValue0(ssaop.OpStructMake, t)
+		v := b.NewValue0(src.NoXPos, ssaop.OpStructMake, t)
 		for i := 0; i < n; i++ {
 			v.AddArg(s.zeroVal(t.FieldType(i)))
 		}
 		return v
 	case t.IsArray() && t.NumElem() == 1:
-		return s.entryNewValue1(ssaop.OpArrayMake1, t, s.zeroVal(t.Elem()))
+		return b.NewValue1(src.NoXPos, ssaop.OpArrayMake1, t, s.zeroVal(t.Elem()))
 	case t.IsSIMD():
-		return s.newValue0(ssaop.OpZeroSIMD, t)
+		return b.NewValue0(src.NoXPos, ssaop.OpZeroSIMD, t)
 	}
 	s.Fatalf("zero for type %v not implemented", t)
 	return nil
@@ -4963,7 +4991,11 @@ func (s *state) openDeferExit() {
 		var callArgs []*ssa.Value
 		var call *ssa.Value
 		if r.closure != nil {
-			v := s.load(r.closure.Type.Elem(), r.closure)
+			t := r.closure.Type.Elem()
+			v := s.load(t, r.closure)
+			// The bit was cleared above and panic processing only reads a slot
+			// whose bit is set, so the slot is dead from here.
+			s.store(t, r.closure, s.zeroVal(t))
 			s.maybeNilCheckClosure(v, callDefer)
 			codeptr := s.rawLoad(types.Types[types.TUINTPTR], v)
 			aux := ssa.ClosureAuxCall(s.f.ABIDefault.ABIAnalyzeTypes(nil, nil))
@@ -5750,8 +5782,8 @@ func (s *state) intDivide(n ir.Node, a, b *ssa.Value) *ssa.Value {
 	}
 	if needcheck {
 		// do a size-appropriate check for zero
-		// cmp := s.newValue2(s.ssaOp(ir.ONE, n.Type()), types.Types[types.TBOOL], b, s.zeroVal(n.Type()))
-		// s.check(cmp, ir.Syms.Panicdivide) // temporarily commented out
+		cmp := s.newValue2(s.ssaOp(ir.ONE, n.Type()), types.Types[types.TBOOL], b, s.zeroVal(n.Type()))
+		s.check(cmp, ir.Syms.Panicdivide)
 	}
 
 	return s.newValue2(s.ssaOp(n.Op(), n.Type()), a.Type, a, b)

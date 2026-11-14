@@ -50,7 +50,7 @@ package sort
 //		fmt.Printf("Pick an integer from 0 to 100.\n")
 //		answer := sort.Search(100, func(i int) bool {
 //			fmt.Printf("Is your number <= %d? ", i)
-//			fmt.Scanf("%s", &s)
+//			fmt.Scan(&s)
 //			return s != "" && s[0] == 'y'
 //		})
 //		fmt.Printf("Your number is %d.\n", answer)
@@ -99,19 +99,23 @@ func Search(n int, f func(int) bool) int {
 func Find(n int, cmp func(int) int) (i int, found bool) {
 	// The invariants here are similar to the ones in Search.
 	// Define cmp(-1) > 0 and cmp(n) <= 0
-	// Invariant: cmp(i-1) > 0, cmp(j) <= 0
+	// Invariant: cmp(i-1) > 0, cmp(j) <= 0, and found == (j < n && cmp(j) == 0)
 	i, j := 0, n
+	// found only goes from false to true: j only decreases, and cmp is
+	// negative only above the indexes where it is zero, so a later narrowing
+	// of j is at an index where cmp is zero too.
 	for i < j {
 		h := int(uint(i+j) >> 1) // avoid overflow when computing h
 		// i ≤ h < j
-		if cmp(h) > 0 {
+		if c := cmp(h); c > 0 {
 			i = h + 1 // preserves cmp(i-1) > 0
 		} else {
 			j = h // preserves cmp(j) <= 0
+			found = c == 0
 		}
 	}
 	// i == j, cmp(i-1) > 0 and cmp(j) <= 0
-	return i, i < n && cmp(i) == 0
+	return i, found
 }
 
 // Convenience wrappers for common cases.

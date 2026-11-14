@@ -184,6 +184,8 @@ func Check(t *testing.T) {
 	for _, file := range nextFiles {
 		required = append(required, fileFeatures(file, true)...)
 	}
+	// Gosentry's exported hooks have no upstream Go proposal number.
+	required = append(required, fileFeatures(filepath.Join(testenv.GOROOT(t), "api/gosentry.txt"), false)...)
 	exception := fileFeatures(filepath.Join(testenv.GOROOT(t), "api/except.txt"), false)
 
 	if exitCode == 1 {

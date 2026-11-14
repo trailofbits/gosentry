@@ -20,7 +20,7 @@ import (
 )
 
 var (
-	flagTools = flagVar("tools", ToolSet{"tmplgen": true, "simdgen": true, "wasmgen": true, "midway": true, "refgen": true}, "comma-separated list of tools (or +/-tools) to run")
+	flagTools = flagVar("tools", ToolSet{"tmplgen": true, "simdgen": true, "wasmgen": true, "midway": true}, "comma-separated list of tools (or +/-tools) to run")
 
 	flagN         = flag.Bool("n", false, "dry run")
 	flagXedPath   = sgutil.FlagXEDPath(".")
@@ -132,11 +132,6 @@ func main() {
 	if flagTools["wasmgen"] || flagTools["simdgen"] {
 		ssaGenPath := prettyPath(".", genFlags.OutputPath("cmd/compile/internal/ssa/_gen"))
 
-		// If there is garbage in ssa/_gen/simdgenericOps.go, it can affect the merge in simdgen/wasmgen.
-		if genFlags.Write {
-			removeSimdGenericOps(ssaGenPath)
-		}
-
 		if flagTools["wasmgen"] {
 			doGen("wasmgen", &files)
 		}
@@ -155,30 +150,8 @@ func main() {
 		}
 	}
 
-	if flagTools["refgen"] {
-		doGen("cmd/refgen", &files)
-	}
-
 	if flagTools["midway"] {
 		doGen("midway", &files)
-	}
-}
-
-func removeSimdGenericOps(ssaGenPath string) {
-	if *flagN {
-		// Dry run: keep the file. Without this, `go generate -n` (or any run that
-		// stops before regenerating — e.g. an unset XEDPATH failing the amd64
-		// step even when the arm64 path is valid) still deletes simdgenericOps.go
-		// here, and a later single -arch run recreates it with only that arch's
-		// ops, silently dropping the others.
-		return
-	}
-	ssaSimdGenericOps := filepath.Join(ssaGenPath, "simdgenericOps.go")
-	if _, err := os.Stat(ssaSimdGenericOps); err == nil {
-		if err = os.Remove(ssaSimdGenericOps); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to delete %s before regenerating it, %v\n", ssaSimdGenericOps, err)
-			os.Exit(1)
-		}
 	}
 }
 

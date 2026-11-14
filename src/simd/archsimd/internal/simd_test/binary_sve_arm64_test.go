@@ -195,10 +195,6 @@ func TestAbsSVE(t *testing.T) {
 	if !archsimd.ARM64.SVE() {
 		t.Skip("no SVE")
 	}
-	testInt8sUnary(t, archsimd.Int8s.Abs, absSlice[int8])
-	testInt16sUnary(t, archsimd.Int16s.Abs, absSlice[int16])
-	testInt32sUnary(t, archsimd.Int32s.Abs, absSlice[int32])
-	testInt64sUnary(t, archsimd.Int64s.Abs, absSlice[int64])
 	testFloat32sUnary(t, archsimd.Float32s.Abs, absSlice[float32])
 	testFloat64sUnary(t, archsimd.Float64s.Abs, absSlice[float64])
 }
@@ -213,6 +209,52 @@ func TestNegSVE(t *testing.T) {
 	testInt64sUnary(t, archsimd.Int64s.Neg, negSlice[int64])
 	testFloat32sUnary(t, archsimd.Float32s.Neg, negSlice[float32])
 	testFloat64sUnary(t, archsimd.Float64s.Neg, negSlice[float64])
+}
+
+func TestOnesCountSVE(t *testing.T) {
+	if !archsimd.ARM64.SVE() {
+		t.Skip("no SVE")
+	}
+	testInt8sUnary(t, archsimd.Int8s.OnesCount, onesCountSlice[int8])
+	testInt16sUnary(t, archsimd.Int16s.OnesCount, onesCountSlice[int16])
+	testInt32sUnary(t, archsimd.Int32s.OnesCount, onesCountSlice[int32])
+	testInt64sUnary(t, archsimd.Int64s.OnesCount, onesCountSlice[int64])
+	testUint8sUnary(t, archsimd.Uint8s.OnesCount, onesCountSlice[uint8])
+	testUint16sUnary(t, archsimd.Uint16s.OnesCount, onesCountSlice[uint16])
+	testUint32sUnary(t, archsimd.Uint32s.OnesCount, onesCountSlice[uint32])
+	testUint64sUnary(t, archsimd.Uint64s.OnesCount, onesCountSlice[uint64])
+}
+
+// TestOnesCountIfElseSVE checks OnesCount under a select, which folds into
+// its merging-predicated form.
+func TestOnesCountIfElseSVE(t *testing.T) {
+	if !archsimd.ARM64.SVE() {
+		t.Skip("no SVE")
+	}
+	testInt8sBinary(t, func(x, y archsimd.Int8s) archsimd.Int8s {
+		return x.OnesCount().IfElse(x.Greater(y), y)
+	}, ifElseSlice(onesCountSlice[int8]))
+	testInt16sBinary(t, func(x, y archsimd.Int16s) archsimd.Int16s {
+		return x.OnesCount().IfElse(x.Greater(y), y)
+	}, ifElseSlice(onesCountSlice[int16]))
+	testInt32sBinary(t, func(x, y archsimd.Int32s) archsimd.Int32s {
+		return x.OnesCount().IfElse(x.Greater(y), y)
+	}, ifElseSlice(onesCountSlice[int32]))
+	testInt64sBinary(t, func(x, y archsimd.Int64s) archsimd.Int64s {
+		return x.OnesCount().IfElse(x.Greater(y), y)
+	}, ifElseSlice(onesCountSlice[int64]))
+	testUint8sBinary(t, func(x, y archsimd.Uint8s) archsimd.Uint8s {
+		return x.OnesCount().IfElse(x.Greater(y), y)
+	}, ifElseSlice(onesCountSlice[uint8]))
+	testUint16sBinary(t, func(x, y archsimd.Uint16s) archsimd.Uint16s {
+		return x.OnesCount().IfElse(x.Greater(y), y)
+	}, ifElseSlice(onesCountSlice[uint16]))
+	testUint32sBinary(t, func(x, y archsimd.Uint32s) archsimd.Uint32s {
+		return x.OnesCount().IfElse(x.Greater(y), y)
+	}, ifElseSlice(onesCountSlice[uint32]))
+	testUint64sBinary(t, func(x, y archsimd.Uint64s) archsimd.Uint64s {
+		return x.OnesCount().IfElse(x.Greater(y), y)
+	}, ifElseSlice(onesCountSlice[uint64]))
 }
 
 func TestSqrtSVE(t *testing.T) {
@@ -253,6 +295,35 @@ func TestRoundSVE(t *testing.T) {
 	}
 	testFloat32sUnary(t, archsimd.Float32s.Round, roundSlice[float32])
 	testFloat64sUnary(t, archsimd.Float64s.Round, roundSlice[float64])
+}
+
+// ifElseSlice returns, lane by lane, op(x) where x > y and y elsewhere.
+func ifElseSlice[T number](op func([]T) []T) func(x, y []T) []T {
+	return func(x, y []T) []T {
+		r := op(x)
+		for i := range r {
+			if !(x[i] > y[i]) {
+				r[i] = y[i]
+			}
+		}
+		return r
+	}
+}
+
+// TestRoundingIfElseSVE checks the rounding operations under a select, which
+// folds into their merging-predicated forms.
+func TestRoundingIfElseSVE(t *testing.T) {
+	if !archsimd.ARM64.SVE() {
+		t.Skip("no SVE")
+	}
+	testFloat32sBinary(t, func(x, y archsimd.Float32s) archsimd.Float32s { return x.Ceil().IfElse(x.Greater(y), y) }, ifElseSlice(ceilSlice[float32]))
+	testFloat64sBinary(t, func(x, y archsimd.Float64s) archsimd.Float64s { return x.Ceil().IfElse(x.Greater(y), y) }, ifElseSlice(ceilSlice[float64]))
+	testFloat32sBinary(t, func(x, y archsimd.Float32s) archsimd.Float32s { return x.Floor().IfElse(x.Greater(y), y) }, ifElseSlice(floorSlice[float32]))
+	testFloat64sBinary(t, func(x, y archsimd.Float64s) archsimd.Float64s { return x.Floor().IfElse(x.Greater(y), y) }, ifElseSlice(floorSlice[float64]))
+	testFloat32sBinary(t, func(x, y archsimd.Float32s) archsimd.Float32s { return x.Trunc().IfElse(x.Greater(y), y) }, ifElseSlice(truncSlice[float32]))
+	testFloat64sBinary(t, func(x, y archsimd.Float64s) archsimd.Float64s { return x.Trunc().IfElse(x.Greater(y), y) }, ifElseSlice(truncSlice[float64]))
+	testFloat32sBinary(t, func(x, y archsimd.Float32s) archsimd.Float32s { return x.Round().IfElse(x.Greater(y), y) }, ifElseSlice(roundSlice[float32]))
+	testFloat64sBinary(t, func(x, y archsimd.Float64s) archsimd.Float64s { return x.Round().IfElse(x.Greater(y), y) }, ifElseSlice(roundSlice[float64]))
 }
 
 func TestAndSVE(t *testing.T) {
@@ -364,4 +435,49 @@ func TestMulHighSVE(t *testing.T) {
 		testUint32sBinary(t, archsimd.Uint32s.MulHigh, mulHighSlice[uint32])
 		testUint64sBinary(t, archsimd.Uint64s.MulHigh, mulHighSlice[uint64])
 	}
+}
+
+func TestMaxSVE(t *testing.T) {
+	if !archsimd.ARM64.SVE() {
+		t.Skip("no SVE")
+	}
+	testInt8sBinary(t, archsimd.Int8s.Max, maxSlice[int8])
+	testInt16sBinary(t, archsimd.Int16s.Max, maxSlice[int16])
+	testInt32sBinary(t, archsimd.Int32s.Max, maxSlice[int32])
+	testInt64sBinary(t, archsimd.Int64s.Max, maxSlice[int64])
+	testUint8sBinary(t, archsimd.Uint8s.Max, maxSlice[uint8])
+	testUint16sBinary(t, archsimd.Uint16s.Max, maxSlice[uint16])
+	testUint32sBinary(t, archsimd.Uint32s.Max, maxSlice[uint32])
+	testUint64sBinary(t, archsimd.Uint64s.Max, maxSlice[uint64])
+	testFloat32sBinary(t, archsimd.Float32s.Max, maxSlice[float32])
+	testFloat64sBinary(t, archsimd.Float64s.Max, maxSlice[float64])
+}
+
+func TestMinSVE(t *testing.T) {
+	if !archsimd.ARM64.SVE() {
+		t.Skip("no SVE")
+	}
+	testInt8sBinary(t, archsimd.Int8s.Min, minSlice[int8])
+	testInt16sBinary(t, archsimd.Int16s.Min, minSlice[int16])
+	testInt32sBinary(t, archsimd.Int32s.Min, minSlice[int32])
+	testInt64sBinary(t, archsimd.Int64s.Min, minSlice[int64])
+	testUint8sBinary(t, archsimd.Uint8s.Min, minSlice[uint8])
+	testUint16sBinary(t, archsimd.Uint16s.Min, minSlice[uint16])
+	testUint32sBinary(t, archsimd.Uint32s.Min, minSlice[uint32])
+	testUint64sBinary(t, archsimd.Uint64s.Min, minSlice[uint64])
+	testFloat32sBinary(t, archsimd.Float32s.Min, minSlice[float32])
+	testFloat64sBinary(t, archsimd.Float64s.Min, minSlice[float64])
+}
+
+func TestDivSVE(t *testing.T) {
+	if !archsimd.ARM64.SVE() {
+		t.Skip("no SVE")
+	}
+	// Integer division exists only for 32- and 64-bit elements.
+	testInt32sBinary(t, archsimd.Int32s.Div, intDivSlice[int32])
+	testInt64sBinary(t, archsimd.Int64s.Div, intDivSlice[int64])
+	testUint32sBinary(t, archsimd.Uint32s.Div, intDivSlice[uint32])
+	testUint64sBinary(t, archsimd.Uint64s.Div, intDivSlice[uint64])
+	testFloat32sBinary(t, archsimd.Float32s.Div, divSlice[float32])
+	testFloat64sBinary(t, archsimd.Float64s.Div, divSlice[float64])
 }

@@ -5,23 +5,11 @@
 #include "go_asm.h"
 #include "go_tls.h"
 #include "textflag.h"
-#include "time_windows.h"
-
-// Offsets into Thread Environment Block (pointer in FS)
-#define TEB_TlsSlots 0xE10
-#define TEB_ArbitraryPtr 0x14
+#include "funcdata.h"
 
 // faster get/set last error
 TEXT runtime·getlasterror(SB),NOSPLIT,$0
 	MOVL	0x34(FS), AX
-	MOVL	AX, ret+0(FP)
-	RET
-
-TEXT runtime·sigFetchGSafe<ABIInternal>(SB),NOSPLIT,$0
-	get_tls(AX)
-	CMPL	AX, $0
-	JE	2(PC)
-	MOVL	g(AX), AX
 	MOVL	AX, ret+0(FP)
 	RET
 
@@ -153,11 +141,9 @@ TEXT tstart<>(SB),NOSPLIT,$8-4
 	MOVL	AX, g_stackguard1(DX)
 
 	// Set up tls.
-	LEAL	m_tls(CX), DI
 	MOVL	CX, g_m(DX)
-	MOVL	DX, g(DI)
-	MOVL	DI, 4(SP)
-	CALL	runtime·setldt(SB) // clobbers CX and DX
+	get_tls2(AX, DI)
+	MOVL	DX, g(AX)
 
 	// Someday the convention will be D is always cleared.
 	CLD
@@ -183,21 +169,15 @@ TEXT runtime·tstart_stdcall(SB),NOSPLIT,$0
 	XORL	AX, AX			// return 0 == success
 
 	RET
-
-// setldt(int slot, int base, int size)
-TEXT runtime·setldt(SB),NOSPLIT,$0-12
-	MOVL	base+4(FP), DX
-	MOVL	runtime·tls_g(SB), CX
-	MOVL	DX, 0(CX)(FS)
-	RET
-
-TEXT runtime·nanotime1(SB),NOSPLIT,$0-8
-loop:
-	MOVL	(_INTERRUPT_TIME+time_hi1), AX
-	MOVL	(_INTERRUPT_TIME+time_lo), CX
-	MOVL	(_INTERRUPT_TIME+time_hi2), DI
-	CMPL	AX, DI
-	JNE	loop
+TEXT runtime·nanotime2(SB),NOSPLIT,$24-8
+	NO_LOCAL_POINTERS
+	LEAL	nanotime_trampoline<>(SB), AX
+	MOVL	AX, 0(SP)
+	LEAL	16(SP), AX
+	MOVL	AX, 4(SP)
+	CALL	runtime·asmcgocall(SB)
+	MOVL	16(SP), CX
+	MOVL	20(SP), DI
 
 	// wintime = DI:CX, multiply by 100
 	MOVL	$100, AX
@@ -209,31 +189,17 @@ loop:
 	MOVL	DX, ret_hi+4(FP)
 	RET
 
-// This is called from rt0_go, which runs on the system stack
-// using the initial stack allocated by the OS.
-TEXT runtime·wintls(SB),NOSPLIT,$0
-	// Allocate a TLS slot to hold g across calls to external code
-	MOVL	SP, BP
-	MOVL	runtime·_TlsAlloc(SB), AX
+// Called on the system stack using the C calling convention. Adapt the
+// stdcall callee's stack cleanup and preserve the caller's LastError.
+TEXT nanotime_trampoline<>(SB),NOSPLIT,$8-4
+	MOVL	arg+0(FP), AX
+	MOVL	0x34(FS), CX
+	MOVL	CX, 4(SP)
+	MOVL	AX, 0(SP)
+	MOVL	runtime·_QueryInterruptTimePrecise(SB), AX
 	CALL	AX
-	MOVL	BP, SP
-
-	MOVL	AX, CX	// TLS index
-
-	// Assert that slot is less than 64 so we can use _TEB->TlsSlots
-	CMPL	CX, $64
-	JB	ok
-	// Fallback to the TEB arbitrary pointer.
-	// TODO: don't use the arbitrary pointer (see go.dev/issue/59824)
-	MOVL	$TEB_ArbitraryPtr, CX
-	JMP	settls
-ok:
-	// Convert the TLS index at CX into
-	// an offset from TEB_TlsSlots.
-	SHLL	$2, CX
-
-	// Save offset from TLS into tls_g.
-	ADDL	$TEB_TlsSlots, CX
-settls:
-	MOVL	CX, runtime·tls_g(SB)
+	SUBL	$4, SP // QueryInterruptTimePrecise popped its argument.
+	MOVL	4(SP), CX
+	MOVL	CX, 0x34(FS)
 	RET
+

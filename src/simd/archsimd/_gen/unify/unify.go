@@ -154,6 +154,14 @@ func (v *Value) unify1(w *Value, e envSet, swap bool, uf *unifier) (Domain, envS
 
 	// Variables
 	if vd, ok := vd.(Var); ok {
+		if wd, ok := wd.(Var); ok && !debugNoFastPaths && e.fewerValues(wd.id, vd.id) {
+			// Var.unify partitions the environment set by vd and
+			// unifies each value of vd with w. Each of these then
+			// partitions by wd, but can rule out most of wd's values
+			// without unifying them (see [valueFilter]). Hence, it's
+			// faster to partition by the variable with fewer values.
+			return wd.unify(v, e, !swap, uf)
+		}
 		return vd.unify(w, e, swap, uf)
 	}
 
@@ -213,7 +221,34 @@ func (d Def) unify(o Def, e envSet, swap bool, uf *unifier) (Domain, envSet, err
 			out.fields[key] = dv
 		}
 	}
+	// Usually one Def's keys are a subset of the other's.
+	switch len(out.fields) {
+	case len(d.fields):
+		out.keys = d.keys
+	case len(o.fields):
+		out.keys = o.keys
+	default:
+		out.keys = mergeSorted(d.keys, o.keys)
+	}
 	return out, e, nil
+}
+
+// mergeSorted returns the sorted union of sorted slices a and b, which must
+// each have no duplicates.
+func mergeSorted(a, b []string) []string {
+	out := make([]string, 0, len(a)+len(b))
+	for len(a) > 0 && len(b) > 0 {
+		switch {
+		case a[0] < b[0]:
+			out, a = append(out, a[0]), a[1:]
+		case a[0] > b[0]:
+			out, b = append(out, b[0]), b[1:]
+		default:
+			out, a, b = append(out, a[0]), a[1:], b[1:]
+		}
+	}
+	out = append(out, a...)
+	return append(out, b...)
 }
 
 func (v Tuple) unify(w Tuple, e envSet, swap bool, uf *unifier) (Domain, envSet, error) {

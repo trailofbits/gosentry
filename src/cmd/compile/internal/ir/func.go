@@ -6,6 +6,7 @@ package ir
 
 import (
 	"cmd/compile/internal/base"
+	"cmd/compile/internal/stats"
 	"cmd/compile/internal/types"
 	"cmd/internal/hash"
 	"cmd/internal/obj"
@@ -156,6 +157,9 @@ type Func struct {
 	// WasmExport is used by the //go:wasmexport directive to store info about
 	// a WebAssembly function export.
 	WasmExport *WasmExport
+
+	// Stats holds compiler statistics for this function.
+	Stats *stats.Stats
 }
 
 // WasmImport stores metadata associated with the //go:wasmimport pragma.
@@ -190,6 +194,10 @@ func NewFunc(fpos, npos src.XPos, sym *types.Sym, typ *types.Type) *Func {
 	fn.SetTypecheck(1)
 
 	name.Func = fn
+
+	if base.Flag.Stats {
+		fn.Stats = new(stats.Stats)
+	}
 
 	return fn
 }
@@ -400,16 +408,13 @@ func splitPkg(name string) (pkgpath, sym string) {
 	return "", name
 }
 
-var CurFunc *Func
+// WithPos invokes do with base.Pos set to curfn.Pos(), and then
+// restores its previous value before returning.
+func WithPos(curfn *Func, do func()) {
+	oldpos := base.Pos
+	defer func() { base.Pos = oldpos }()
 
-// WithFunc invokes do with CurFunc and base.Pos set to curfn and
-// curfn.Pos(), respectively, and then restores their previous values
-// before returning.
-func WithFunc(curfn *Func, do func()) {
-	oldfn, oldpos := CurFunc, base.Pos
-	defer func() { CurFunc, base.Pos = oldfn, oldpos }()
-
-	CurFunc, base.Pos = curfn, curfn.Pos()
+	base.Pos = curfn.Pos()
 	do()
 }
 

@@ -67,7 +67,10 @@ func isHighFPReg(r int16) bool {
 }
 
 // loadByRegWidth returns the load instruction of the given register of a given width.
-func loadByRegWidth(r int16, width int64) obj.As {
+// avx says whether AVX is known to be present, in which case VEX encodings are
+// used for otherwise legacy-SSE instructions to avoid AVX-SSE transition
+// penalties. See issue #80835.
+func loadByRegWidth(r int16, width int64, avx bool) obj.As {
 	// Avoid partial register write for GPR
 	if !isFPReg(r) && !isKReg(r) {
 		switch width {
@@ -78,17 +81,28 @@ func loadByRegWidth(r int16, width int64) obj.As {
 		}
 	}
 	// Otherwise, there's no difference between load and store opcodes.
-	return storeByRegWidth(r, width)
+	return storeByRegWidth(r, width, avx)
 }
 
 // storeByRegWidth returns the store instruction of the given register of a given width.
 // It's also used for loading const to a reg.
-func storeByRegWidth(r int16, width int64) obj.As {
+// See loadByRegWidth for the meaning of avx.
+func storeByRegWidth(r int16, width int64, avx bool) obj.As {
 	if isHighFPReg(r) {
 		// High registers require AVX512 instruction
 		return x86.AVMOVDQU64
 	}
 	if isFPReg(r) {
+		if avx {
+			switch width {
+			case 4:
+				return x86.AVMOVSS
+			case 8:
+				return x86.AVMOVSD
+			case 16:
+				return x86.AVMOVUPS
+			}
+		}
 		switch width {
 		case 4:
 			return x86.AMOVSS
@@ -121,7 +135,8 @@ func storeByRegWidth(r int16, width int64) obj.As {
 }
 
 // moveByRegsWidth returns the reg->reg move instruction of the given dest/src registers of a given width.
-func moveByRegsWidth(dest, src int16, width int64) obj.As {
+// See loadByRegWidth for the meaning of avx.
+func moveByRegsWidth(dest, src int16, width int64, avx bool) obj.As {
 	// fp -> fp
 	if isFPReg(dest) && isFPReg(src) {
 		if isHighFPReg(src) || isHighFPReg(dest) {
@@ -133,6 +148,9 @@ func moveByRegsWidth(dest, src int16, width int64) obj.As {
 		// There is no xmm->xmm move with 1 byte opcode,
 		// so use movups, which has 2 byte opcode.
 		if width <= 16 {
+			if avx {
+				return x86.AVMOVUPS
+			}
 			return x86.AMOVUPS
 		}
 		if width <= 32 {
@@ -146,6 +164,15 @@ func moveByRegsWidth(dest, src int16, width int64) obj.As {
 			panic(fmt.Sprintf("bad move, src=%v, dest=%v, width=%d", src, dest, width))
 		}
 		return x86.AKMOVQ
+	}
+	// gp -> fp, fp -> gp
+	if avx && (isFPReg(dest) || isFPReg(src)) {
+		switch width {
+		case 1, 2, 4:
+			return x86.AVMOVD
+		case 8:
+			return x86.AVMOVQ
+		}
 	}
 	// gp -> fp, fp -> gp, gp -> gp
 	switch width {
@@ -665,7 +692,7 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		// But this requires a way for regalloc to know that SRC might be
 		// clobbered by this instruction.
 		t := v.RegTmp()
-		opregreg(s, moveByRegsWidth(t, v.Args[1].Reg(), v.Type.Size()), t, v.Args[1].Reg())
+		opregreg(s, moveByRegsWidth(t, v.Args[1].Reg(), v.Type.Size(), hasAVX(v)), t, v.Args[1].Reg())
 
 		p := s.Prog(v.Op.Asm())
 		p.From.Type = obj.TYPE_REG
@@ -850,12 +877,23 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 			opregreg(s, x86.AXORL, x, x)
 			break
 		}
-		p := s.Prog(storeByRegWidth(x, v.Type.Size()))
+		p := s.Prog(storeByRegWidth(x, v.Type.Size(), hasAVX(v)))
 		p.From.Type = obj.TYPE_FCONST
 		p.From.Val = math.Float64frombits(uint64(v.AuxInt))
 		p.To.Type = obj.TYPE_REG
 		p.To.Reg = x
-	case ssaop.OpAMD64MOVQload, ssaop.OpAMD64MOVLload, ssaop.OpAMD64MOVWload, ssaop.OpAMD64MOVBload, ssaop.OpAMD64MOVOload,
+	case ssaop.OpAMD64MOVOload:
+		asm := v.Op.Asm()
+		if hasAVX(v) {
+			asm = x86.AVMOVUPS
+		}
+		p := s.Prog(asm)
+		p.From.Type = obj.TYPE_MEM
+		p.From.Reg = v.Args[0].Reg()
+		ssagen.AddAux(&p.From, v)
+		p.To.Type = obj.TYPE_REG
+		p.To.Reg = v.Reg()
+	case ssaop.OpAMD64MOVQload, ssaop.OpAMD64MOVLload, ssaop.OpAMD64MOVWload, ssaop.OpAMD64MOVBload,
 		ssaop.OpAMD64MOVSSload, ssaop.OpAMD64MOVSDload, ssaop.OpAMD64MOVBQSXload, ssaop.OpAMD64MOVWQSXload, ssaop.OpAMD64MOVLQSXload,
 		ssaop.OpAMD64MOVBEQload, ssaop.OpAMD64MOVBELload:
 		p := s.Prog(v.Op.Asm())
@@ -872,7 +910,18 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		ssagen.AddAux(&p.From, v)
 		p.To.Type = obj.TYPE_REG
 		p.To.Reg = v.Reg()
-	case ssaop.OpAMD64MOVQstore, ssaop.OpAMD64MOVSSstore, ssaop.OpAMD64MOVSDstore, ssaop.OpAMD64MOVLstore, ssaop.OpAMD64MOVWstore, ssaop.OpAMD64MOVBstore, ssaop.OpAMD64MOVOstore,
+	case ssaop.OpAMD64MOVOstore:
+		asm := v.Op.Asm()
+		if hasAVX(v) {
+			asm = x86.AVMOVUPS
+		}
+		p := s.Prog(asm)
+		p.From.Type = obj.TYPE_REG
+		p.From.Reg = v.Args[1].Reg()
+		p.To.Type = obj.TYPE_MEM
+		p.To.Reg = v.Args[0].Reg()
+		ssagen.AddAux(&p.To, v)
+	case ssaop.OpAMD64MOVQstore, ssaop.OpAMD64MOVSSstore, ssaop.OpAMD64MOVSDstore, ssaop.OpAMD64MOVLstore, ssaop.OpAMD64MOVWstore, ssaop.OpAMD64MOVBstore,
 		ssaop.OpAMD64ADDQmodify, ssaop.OpAMD64SUBQmodify, ssaop.OpAMD64ANDQmodify, ssaop.OpAMD64ORQmodify, ssaop.OpAMD64XORQmodify,
 		ssaop.OpAMD64ADDLmodify, ssaop.OpAMD64SUBLmodify, ssaop.OpAMD64ANDLmodify, ssaop.OpAMD64ORLmodify, ssaop.OpAMD64XORLmodify,
 		ssaop.OpAMD64MOVBEQstore, ssaop.OpAMD64MOVBELstore, ssaop.OpAMD64MOVBEWstore:
@@ -965,11 +1014,16 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 			v.Fatalf("MOVO for non zero constants not implemented: %s", v.LongString())
 		}
 
+		avx := hasAVX(v)
 		if s.ABI != obj.ABIInternal {
 			// zero X15 manually
-			opregreg(s, x86.AXORPS, x86.REG_X15, x86.REG_X15)
+			zeroX15Low(s, avx)
 		}
-		p := s.Prog(v.Op.Asm())
+		asm := v.Op.Asm()
+		if avx {
+			asm = x86.AVMOVUPS
+		}
+		p := s.Prog(asm)
 		p.From.Type = obj.TYPE_REG
 		p.From.Reg = x86.REG_X15
 		p.To.Type = obj.TYPE_MEM
@@ -1035,12 +1089,21 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		opregreg(s, x86.AXORPS, r, r)
 		opregreg(s, v.Op.Asm(), r, v.Args[0].Reg())
 	case ssaop.OpAMD64MOVQi2f, ssaop.OpAMD64MOVQf2i, ssaop.OpAMD64MOVLi2f, ssaop.OpAMD64MOVLf2i:
+		avx := hasAVX(v)
 		var p *obj.Prog
 		switch v.Op {
 		case ssaop.OpAMD64MOVQi2f, ssaop.OpAMD64MOVQf2i:
-			p = s.Prog(x86.AMOVQ)
+			if avx {
+				p = s.Prog(x86.AVMOVQ)
+			} else {
+				p = s.Prog(x86.AMOVQ)
+			}
 		case ssaop.OpAMD64MOVLi2f, ssaop.OpAMD64MOVLf2i:
-			p = s.Prog(x86.AMOVL)
+			if avx {
+				p = s.Prog(x86.AVMOVD)
+			} else {
+				p = s.Prog(x86.AMOVL)
+			}
 		}
 		p.From.Type = obj.TYPE_REG
 		p.From.Reg = v.Args[0].Reg()
@@ -1082,9 +1145,10 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		p.To.Reg = v.Reg()
 
 	case ssaop.OpAMD64LoweredZero:
+		avx := hasAVX(v)
 		if s.ABI != obj.ABIInternal {
 			// zero X15 manually
-			opregreg(s, x86.AXORPS, x86.REG_X15, x86.REG_X15)
+			zeroX15Low(s, avx)
 		}
 		ptrReg := v.Args[0].Reg()
 		n := v.AuxInt
@@ -1092,7 +1156,7 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 			v.Fatalf("Zero too small %d", n)
 		}
 		zero16 := func(off int64) {
-			zero16(s, ptrReg, off)
+			zero16(s, ptrReg, off, avx)
 		}
 
 		// Generate zeroing instructions.
@@ -1109,9 +1173,10 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		}
 
 	case ssaop.OpAMD64LoweredZeroLoop:
+		avx := hasAVX(v)
 		if s.ABI != obj.ABIInternal {
 			// zero X15 manually
-			opregreg(s, x86.AXORPS, x86.REG_X15, x86.REG_X15)
+			zeroX15Low(s, avx)
 		}
 		ptrReg := v.Args[0].Reg()
 		countReg := v.RegTmp()
@@ -1129,7 +1194,7 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 			v.Fatalf("ZeroLoop size too small %d", n)
 		}
 		zero16 := func(off int64) {
-			zero16(s, ptrReg, off)
+			zero16(s, ptrReg, off, avx)
 		}
 
 		// Put iteration count in a register.
@@ -1188,9 +1253,10 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		if n < 16 {
 			v.Fatalf("Move too small %d", n)
 		}
+		avx := hasAVX(v)
 		// move 16 bytes from srcReg+off to dstReg+off.
 		move16 := func(off int64) {
-			move16(s, srcReg, dstReg, tmpReg, off)
+			move16(s, srcReg, dstReg, tmpReg, off, avx)
 		}
 
 		// Generate copying instructions.
@@ -1227,9 +1293,10 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 			//   Might as well use straightline code.
 			v.Fatalf("ZeroLoop size too small %d", n)
 		}
+		avx := hasAVX(v)
 		// move 16 bytes from srcReg+off to dstReg+off.
 		move16 := func(off int64) {
-			move16(s, srcReg, dstReg, tmpReg, off)
+			move16(s, srcReg, dstReg, tmpReg, off, avx)
 		}
 
 		// Put iteration count in a register.
@@ -1302,7 +1369,7 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 				// since it zeroes the upper 32 bits anyway.
 				width = 4
 			}
-			opregreg(s, moveByRegsWidth(y, x, width), y, x)
+			opregreg(s, moveByRegsWidth(y, x, width, hasAVX(v)), y, x)
 		}
 	case ssaop.OpLoadReg:
 		if v.Type.IsFlags() {
@@ -1310,7 +1377,7 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 			return
 		}
 		r := v.Reg()
-		p := s.Prog(loadByRegWidth(r, v.Type.Size()))
+		p := s.Prog(loadByRegWidth(r, v.Type.Size(), hasAVX(v)))
 		ssagen.AddrAuto(&p.From, v.Args[0])
 		p.To.Type = obj.TYPE_REG
 		if v.Type.IsSIMD() {
@@ -1327,7 +1394,7 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		if v.Type.IsSIMD() {
 			r = simdOrMaskReg(v.Args[0])
 		}
-		p := s.Prog(storeByRegWidth(r, v.Type.Size()))
+		p := s.Prog(storeByRegWidth(r, v.Type.Size(), hasAVX(v)))
 		p.From.Type = obj.TYPE_REG
 		p.From.Reg = r
 		ssagen.AddrAuto(&p.To, v)
@@ -1350,8 +1417,11 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 			if t.IsSIMD() {
 				reg = simdRegBySize(reg, sz)
 			}
+			// These spills execute in the prologue, so only the
+			// entry block's CPU features apply.
+			avx := v.Block.Func.Entry.CPUfeatures.HasFeature(ssa.CPUavx)
 			s.FuncInfo().AddSpill(
-				obj.RegSpill{Reg: reg, Addr: addr, Unspill: loadByRegWidth(reg, sz), Spill: storeByRegWidth(reg, sz)})
+				obj.RegSpill{Reg: reg, Addr: addr, Unspill: loadByRegWidth(reg, sz, avx), Spill: storeByRegWidth(reg, sz, avx)})
 		}
 		v.Block.Func.RegArgs = nil
 		ssagen.CheckArgReg(v)
@@ -1536,17 +1606,29 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		p.To.Type = obj.TYPE_REG
 		p.To.Reg = v.Reg0()
 
-	case ssaop.OpAMD64BSFQ, ssaop.OpAMD64BSRQ, ssaop.OpAMD64BSFL, ssaop.OpAMD64BSRL, ssaop.OpAMD64SQRTSD, ssaop.OpAMD64SQRTSS:
+	case ssaop.OpAMD64BSFQinit, ssaop.OpAMD64BSRQinit:
+		p := s.Prog(v.Op.Asm())
+		p.From.Type = obj.TYPE_REG
+		p.From.Reg = v.Args[1].Reg()
+		p.To.Type = obj.TYPE_REG
+		p.To.Reg = v.Reg()
+	case ssaop.OpAMD64BSFQ, ssaop.OpAMD64BSRQ, ssaop.OpAMD64BSFL, ssaop.OpAMD64BSRL:
+		if v.Args[0].Reg() != v.Reg() {
+			// BSF/BSR depend on the previous destination value.
+			// Clear the destination to break the dependency.
+			opregreg(s, x86.AXORL, v.Reg(), v.Reg())
+		}
 		p := s.Prog(v.Op.Asm())
 		p.From.Type = obj.TYPE_REG
 		p.From.Reg = v.Args[0].Reg()
 		p.To.Type = obj.TYPE_REG
-		switch v.Op {
-		case ssaop.OpAMD64BSFQ, ssaop.OpAMD64BSRQ:
-			p.To.Reg = v.Reg0()
-		case ssaop.OpAMD64BSFL, ssaop.OpAMD64BSRL, ssaop.OpAMD64SQRTSD, ssaop.OpAMD64SQRTSS:
-			p.To.Reg = v.Reg()
-		}
+		p.To.Reg = v.Reg()
+	case ssaop.OpAMD64SQRTSD, ssaop.OpAMD64SQRTSS:
+		p := s.Prog(v.Op.Asm())
+		p.From.Type = obj.TYPE_REG
+		p.From.Reg = v.Args[0].Reg()
+		p.To.Type = obj.TYPE_REG
+		p.To.Reg = v.Reg()
 	case ssaop.OpAMD64LoweredRound32F, ssaop.OpAMD64LoweredRound64F:
 		// input is already rounded
 	case ssaop.OpAMD64ROUNDSD, ssaop.OpAMD64ROUNDSS:
@@ -1884,6 +1966,7 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		x86.ParseSuffix(p, "Z")             // must be zero if not in mask
 
 	case ssaop.OpAMD64KANDB, ssaop.OpAMD64KANDW, ssaop.OpAMD64KANDD, ssaop.OpAMD64KANDQ,
+		ssaop.OpAMD64KANDNB, ssaop.OpAMD64KANDNW, ssaop.OpAMD64KANDND, ssaop.OpAMD64KANDNQ,
 		ssaop.OpAMD64KORB, ssaop.OpAMD64KORW, ssaop.OpAMD64KORD, ssaop.OpAMD64KORQ,
 		ssaop.OpAMD64KXORB, ssaop.OpAMD64KXORW, ssaop.OpAMD64KXORD, ssaop.OpAMD64KXORQ,
 		ssaop.OpAMD64KXNORB, ssaop.OpAMD64KXNORW, ssaop.OpAMD64KXNORD, ssaop.OpAMD64KXNORQ: // XNOR == EQ
@@ -1946,7 +2029,8 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		p.To.Reg = v.Reg()
 
 	case ssaop.OpAMD64KMOVQk, ssaop.OpAMD64KMOVDk, ssaop.OpAMD64KMOVWk, ssaop.OpAMD64KMOVBk,
-		ssaop.OpAMD64KMOVQi, ssaop.OpAMD64KMOVDi, ssaop.OpAMD64KMOVWi, ssaop.OpAMD64KMOVBi:
+		ssaop.OpAMD64KMOVQi, ssaop.OpAMD64KMOVDi, ssaop.OpAMD64KMOVWi, ssaop.OpAMD64KMOVBi,
+		ssaop.OpAMD64KNOTB, ssaop.OpAMD64KNOTW, ssaop.OpAMD64KNOTD, ssaop.OpAMD64KNOTQ:
 		// See also ssa.OpAMD64KMOVQload
 		p := s.Prog(v.Op.Asm())
 		p.From.Type = obj.TYPE_REG
@@ -1969,18 +2053,31 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 	}
 }
 
+// vxorpsX15 zeroes the whole X15 register (including the high bits)
+// using a VEX encoding. AVX must be present.
+func vxorpsX15(s *ssagen.State) {
+	p := s.Prog(x86.AVXORPS)
+	p.From.Type = obj.TYPE_REG
+	p.From.Reg = x86.REG_X15
+	p.AddRestSourceReg(x86.REG_X15)
+	p.To.Type = obj.TYPE_REG
+	p.To.Reg = x86.REG_X15
+}
+
+// zeroX15Low zeroes the low 16 bytes of the X15 register, using a VEX
+// encoding if avx says AVX is known to be present.
+func zeroX15Low(s *ssagen.State, avx bool) {
+	if avx {
+		vxorpsX15(s)
+		return
+	}
+	opregreg(s, x86.AXORPS, x86.REG_X15, x86.REG_X15)
+}
+
 // zeroX15 zeroes the X15 register.
 func zeroX15(s *ssagen.State) {
-	vxorps := func(s *ssagen.State) {
-		p := s.Prog(x86.AVXORPS)
-		p.From.Type = obj.TYPE_REG
-		p.From.Reg = x86.REG_X15
-		p.AddRestSourceReg(x86.REG_X15)
-		p.To.Type = obj.TYPE_REG
-		p.To.Reg = x86.REG_X15
-	}
 	if buildcfg.GOAMD64 >= 3 {
-		vxorps(s)
+		vxorpsX15(s)
 		return
 	}
 	opregreg(s, x86.AXORPS, x86.REG_X15, x86.REG_X15)
@@ -1993,7 +2090,7 @@ func zeroX15(s *ssagen.State) {
 	p.To.Offset = 1
 	jmp := s.Prog(x86.AJNE)
 	jmp.To.Type = obj.TYPE_BRANCH
-	vxorps(s)
+	vxorpsX15(s)
 	end := s.Prog(obj.ANOP)
 	jmp.To.SetTarget(end)
 }
@@ -2593,7 +2690,10 @@ func ssaGenBlock(s *ssagen.State, b, next *ssa.Block) {
 }
 
 func loadRegResult(s *ssagen.State, f *ssa.Func, t *types.Type, reg int16, n *ir.Name, off int64) *obj.Prog {
-	p := s.Prog(loadByRegWidth(reg, t.Size()))
+	// The entry block's CPU features hold on every path through the
+	// function, so they can be used regardless of where this load is
+	// placed.
+	p := s.Prog(loadByRegWidth(reg, t.Size(), f.Entry.CPUfeatures.HasFeature(ssa.CPUavx)))
 	p.From.Type = obj.TYPE_MEM
 	p.From.Name = obj.NAME_AUTO
 	p.From.Sym = n.Linksym()
@@ -2604,17 +2704,30 @@ func loadRegResult(s *ssagen.State, f *ssa.Func, t *types.Type, reg int16, n *ir
 }
 
 func spillArgReg(pp *objw.Progs, p *obj.Prog, f *ssa.Func, t *types.Type, reg int16, n *ir.Name, off int64) *obj.Prog {
-	p = pp.Append(p, storeByRegWidth(reg, t.Size()), obj.TYPE_REG, reg, 0, obj.TYPE_MEM, 0, n.FrameOffset()+off)
+	// See loadRegResult for why the entry block's features apply.
+	p = pp.Append(p, storeByRegWidth(reg, t.Size(), f.Entry.CPUfeatures.HasFeature(ssa.CPUavx)), obj.TYPE_REG, reg, 0, obj.TYPE_MEM, 0, n.FrameOffset()+off)
 	p.To.Name = obj.NAME_PARAM
 	p.To.Sym = n.Linksym()
 	p.Pos = p.Pos.WithNotStmt()
 	return p
 }
 
+// hasAVX reports whether the cpufeatures pass proved that AVX must be
+// present whenever v executes. In that case VEX encodings are used for
+// otherwise legacy-SSE instructions, to avoid AVX-SSE transition
+// penalties. See issue #80835.
+func hasAVX(v *ssa.Value) bool {
+	return v.Block.CPUfeatures.HasFeature(ssa.CPUavx)
+}
+
 // zero 16 bytes at reg+off.
-func zero16(s *ssagen.State, reg int16, off int64) {
+func zero16(s *ssagen.State, reg int16, off int64, avx bool) {
 	//   MOVUPS  X15, off(ptrReg)
-	p := s.Prog(x86.AMOVUPS)
+	op := x86.AMOVUPS
+	if avx {
+		op = x86.AVMOVUPS
+	}
+	p := s.Prog(op)
 	p.From.Type = obj.TYPE_REG
 	p.From.Reg = x86.REG_X15
 	p.To.Type = obj.TYPE_MEM
@@ -2623,16 +2736,20 @@ func zero16(s *ssagen.State, reg int16, off int64) {
 }
 
 // move 16 bytes from src+off to dst+off using temporary register tmp.
-func move16(s *ssagen.State, src, dst, tmp int16, off int64) {
+func move16(s *ssagen.State, src, dst, tmp int16, off int64, avx bool) {
 	//   MOVUPS  off(srcReg), tmpReg
 	//   MOVUPS  tmpReg, off(dstReg)
-	p := s.Prog(x86.AMOVUPS)
+	op := x86.AMOVUPS
+	if avx {
+		op = x86.AVMOVUPS
+	}
+	p := s.Prog(op)
 	p.From.Type = obj.TYPE_MEM
 	p.From.Reg = src
 	p.From.Offset = off
 	p.To.Type = obj.TYPE_REG
 	p.To.Reg = tmp
-	p = s.Prog(x86.AMOVUPS)
+	p = s.Prog(op)
 	p.From.Type = obj.TYPE_REG
 	p.From.Reg = tmp
 	p.To.Type = obj.TYPE_MEM
@@ -2660,6 +2777,53 @@ func simdRegBySize(reg int16, size int64) int16 {
 		return reg + (x86.REG_Z0 - x86.REG_X0)
 	}
 	panic("simdRegBySize: bad size")
+}
+
+// simdNarrowArg changes the source operand of p that is arg's register to
+// name the size-byte register instead. This is for instructions that read
+// only the low part of a SIMD value, such as a widening conversion from the
+// low half of a 256-bit vector, which takes an X register operand.
+//
+// For example, Int8x32.ExtendToInt16 reads only the low 128 bits of its
+// 256-bit Int8x32 receiver. By default, lowering picks register sizes to match
+// Go type sizes, which would lower it to
+//
+//	VPMOVSXBW Y1, Y0
+//
+// but this instruction encoding doesn't exist, because VPMOVSXBW takes a
+// 128-bit input, matching what it actually reads. In this case, the register
+// size does not match the Go type. simdNarrowArg(p, v.Args[0], 16) corrects
+// this lowering to
+//
+//	VPMOVSXBW X1, Y0
+func simdNarrowArg(p *obj.Prog, arg *ssa.Value, size int64) {
+	// Matching the operand by register is sound because the generated code
+	// calls simdNarrowArg right after the helper that built p from some SSA
+	// value v, and arg is one of v's vreg inputs, v.Args[i]. The helper named
+	// each vreg input of v by the full-width register of its Go type, so arg's
+	// full-width register is a source operand of p, and narrow operands are
+	// always vreg inputs. If arg's register matches no source operand, or
+	// more than one, we can't tell which operand to change, so fail rather
+	// than guess.
+	want := simdReg(arg)
+	var found *obj.Addr
+	match := func(a *obj.Addr) {
+		if a.Type != obj.TYPE_REG || a.Reg != want {
+			return
+		}
+		if found != nil {
+			base.Fatalf("simdNarrowArg: %v matches more than one source of %v", arg, p)
+		}
+		found = a
+	}
+	match(&p.From)
+	for i := range p.RestArgs {
+		match(&p.RestArgs[i].Addr)
+	}
+	if found == nil {
+		base.Fatalf("simdNarrowArg: %v is not a source of %v", arg, p)
+	}
+	found.Reg = simdRegBySize(arg.Reg(), size)
 }
 
 // XXX k mask

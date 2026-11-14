@@ -361,7 +361,7 @@ func createConservativeVar(fnsym *obj.LSym, fn *ir.Func, n *ir.Name, closureVars
 		DictIndex:     n.DictIndex,
 		ClosureOffset: closureOffset(n, closureVars),
 	}
-	if n.Esc() == ir.EscHeap && n.Heapaddr != nil {
+	if base.Ctxt.Flag_locationlists && n.Esc() == ir.EscHeap && n.Heapaddr != nil {
 		// The variable was promoted to the heap and has a known heap
 		// address, so describe its location by dereferencing the pointer
 		// stored at its stack offset. A heap-escaped variable may have no
@@ -454,7 +454,7 @@ func createSimpleVar(fnsym *obj.LSym, n *ir.Name, closureVars map[*ir.Name]int64
 	localAutoOffset := func() int64 {
 		offs = n.FrameOffset()
 		if base.Ctxt.Arch.FixedFrameSize == 0 {
-			offs -= int64(types.PtrSize)
+			offs -= int64(base.Ctxt.Arch.RegSize)
 		}
 		if buildcfg.FramePointerEnabled {
 			offs -= int64(types.PtrSize)
@@ -570,7 +570,7 @@ func createHeapDerefLocationList(n *ir.Name, entryID ssa.ID) []ssa.LocListEntry 
 	// Get the stack offset where the heap pointer is stored
 	heapPtrOffset := n.Heapaddr.FrameOffset()
 	if base.Ctxt.Arch.FixedFrameSize == 0 {
-		heapPtrOffset -= int64(types.PtrSize)
+		heapPtrOffset -= int64(base.Ctxt.Arch.RegSize)
 	}
 	if buildcfg.FramePointerEnabled {
 		heapPtrOffset -= int64(types.PtrSize)

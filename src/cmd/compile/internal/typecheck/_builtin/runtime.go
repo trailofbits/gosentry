@@ -132,6 +132,8 @@ func panicrangestate(state int)
 
 // defer in range over func
 func deferrangefunc() interface{}
+func gorecoverat(frame interface{}) interface{}
+func recoverrangefunc() interface{}
 
 func rand() uint64
 func rand32() uint32

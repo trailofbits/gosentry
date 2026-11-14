@@ -14,6 +14,8 @@ import (
 	"internal/pkgbits"
 	"io"
 	"os"
+
+	"golang.org/x/tools/go/gcexportdata"
 )
 
 // Import imports a gc-generated package given its import path and srcDir, adds
@@ -70,7 +72,14 @@ func Import(fset *token.FileSet, packages map[string]*types.Package, path, srcDi
 	defer rc.Close()
 
 	buf := bufio.NewReader(rc)
-	// TODO(mark): Check for "i" format.
+	peek, err := buf.Peek(1)
+	if err != nil {
+		return
+	}
+	if peek[0] == 'i' {
+		pkg, err = gcexportdata.Read(buf, fset, packages, path)
+		return
+	}
 	data, err := exportdata.ReadUnified(buf, false)
 	if err != nil {
 		err = fmt.Errorf("import %q: %v", path, err)

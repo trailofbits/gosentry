@@ -134,8 +134,7 @@ func TestGcLastTime(t *testing.T) {
 		t.Fatalf("bad last GC time: got %v, want [%v, %v]", last, t0, t1)
 	}
 	pause := ms.PauseNs[(ms.NumGC+255)%256]
-	// Due to timer granularity, pause can actually be 0 on windows
-	// or on virtualized environments.
+	// Clock granularity can make a short pause appear to take zero time.
 	if pause == 0 {
 		t.Logf("last GC pause was 0")
 	} else if pause > 10e9 {
@@ -210,8 +209,10 @@ func TestGcZombieReporting(t *testing.T) {
 	// add invalidptr=0 for avoiding the badPointer check.
 	// See issue https://golang.org/issues/49613/
 	got := runTestProg(t, "testprog", "GCZombie", "GODEBUG=invalidptr=0")
-	want := "found pointer to free object"
-	if !strings.Contains(got, want) {
+	if want := "found pointer to free object"; !strings.Contains(got, want) {
+		t.Fatalf("expected %q in output, but got %q", want, got)
+	}
+	if want := " zombie"; !strings.Contains(got, want) {
 		t.Fatalf("expected %q in output, but got %q", want, got)
 	}
 }

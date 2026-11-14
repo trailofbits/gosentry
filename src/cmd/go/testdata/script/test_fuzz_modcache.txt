@@ -18,7 +18,7 @@ env GOFLAGS=-modcacherw
 go get -t example.com/fuzzfail@v0.1.0
 go test example.com/fuzzfail
 
-! go test -fuzz=. example.com/fuzzfail
+! go test -fuzz=. -use-libafl=false example.com/fuzzfail
 ! stdout .
 stderr '^cannot use -fuzz flag on package outside the main module$'
 
@@ -34,7 +34,7 @@ go get -t example.com/fuzzfail@v0.2.0
 ! go test example.com/fuzzfail
 stdout '^\s*fuzzfail_test\.go:7: oops:'
 
-! go test -fuzz=. example.com/fuzzfail
+! go test -fuzz=. -use-libafl=false example.com/fuzzfail
 ! stdout .
 stderr '^cannot use -fuzz flag on package outside the main module$'
 
@@ -45,10 +45,10 @@ go mod verify
 # the main module — either the failures would not be recorded or the behavior of
 # the 'std' tests would change globally.
 
-! go test -fuzz . encoding/json
+! go test -fuzz . -use-libafl=false encoding/json
 stderr '^cannot use -fuzz flag on package outside the main module$'
 
-! go test -fuzz . cmd/buildid
+! go test -fuzz . -use-libafl=false cmd/buildid
 stderr '^cannot use -fuzz flag on package outside the main module$'
 
 

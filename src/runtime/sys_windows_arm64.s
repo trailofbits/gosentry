@@ -6,13 +6,10 @@
 #include "go_tls.h"
 #include "textflag.h"
 #include "funcdata.h"
-#include "time_windows.h"
 #include "cgo/abi_arm64.h"
 
 // Offsets into Thread Environment Block (pointer in R18)
 #define TEB_error 0x68
-#define TEB_TlsSlots 0x1480
-#define TEB_ArbitraryPtr 0x28
 
 // Note: R0-R7 are args, R8 is indirect return value address,
 // R9-R15 are caller-save, R19-R29 are callee-save.
@@ -146,36 +143,21 @@ TEXT runtime·tstart_stdcall(SB),NOSPLIT,$96-0
 	MOVD	$0, R0
 	RET
 
-TEXT runtime·nanotime1(SB),NOSPLIT,$0-8
-	MOVD	$_INTERRUPT_TIME, R3
-	MOVD	time_lo(R3), R0
+TEXT runtime·nanotime2<ABIInternal>(SB),NOSPLIT,$40-0
+	NO_LOCAL_POINTERS
+	// asmcgocall passes the result pointer in R0 using the Windows ABI.
+	// Save LastError outside the call's argument and result slots.
+	MOVWU	TEB_error(R18_PLATFORM), R1
+	MOVW	R1, 40(RSP)
+	MOVD	runtime·_QueryInterruptTimePrecise(SB), R0
+	MOVD	R0, 8(RSP)
+	MOVD	$32(RSP), R0
+	MOVD	R0, 16(RSP)
+	BL	runtime·asmcgocall(SB)
+	MOVWU	40(RSP), R1
+	MOVW	R1, TEB_error(R18_PLATFORM)
+	MOVD	32(RSP), R0
 	MOVD	$100, R1
 	MUL	R1, R0
-	MOVD	R0, ret+0(FP)
 	RET
 
-// This is called from rt0_go, which runs on the system stack
-// using the initial stack allocated by the OS.
-// It calls back into standard C using the BL below.
-TEXT runtime·wintls(SB),NOSPLIT,$0
-	// Allocate a TLS slot to hold g across calls to external code
-	MOVD	runtime·_TlsAlloc(SB), R0
-	SUB	$16, RSP	// skip over saved frame pointer below RSP
-	BL	(R0)
-	ADD	$16, RSP
-
-	// Assert that slot is less than 64 so we can use _TEB->TlsSlots
-	CMP	$64, R0
-	BLT	ok
-	// Fallback to the TEB arbitrary pointer.
-	// TODO: don't use the arbitrary pointer (see go.dev/issue/59824)
-	MOVD	$TEB_ArbitraryPtr, R0
-	B	settls
-ok:
-
-	// Save offset from R18 into tls_g.
-	LSL	$3, R0
-	ADD	$TEB_TlsSlots, R0
-settls:
-	MOVD	R0, runtime·tls_g(SB)
-	RET

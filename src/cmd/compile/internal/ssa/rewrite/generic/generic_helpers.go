@@ -78,7 +78,7 @@ func canLoadUnaligned(c *ssa.Config) bool {
 // canRotate reports whether the architecture supports
 // rotates of integer registers with the given number of bits.
 func canRotate(c *ssa.Config, bits int64) bool {
-	if bits > c.PtrSize*8 {
+	if bits > c.RegSize*8 {
 		// Don't rewrite to rotates bigger than the machine word.
 		return false
 	}
@@ -255,7 +255,9 @@ func isFixedLoad(v *ssa.Value, sym ssa.Sym, off int64) bool {
 				case "Size_", "PtrBytes", "Hash", "Kind_", "GCData":
 					return true
 				case "TFlag":
-					return t.TFlagComputed()
+					// A noalg descriptor can be replaced by one with
+					// algorithms, changing TFlagRegularMemory.
+					return t.TFlagComputed() && !types.TypeHasNoAlg(t)
 				default:
 					// fmt.Println("unknown field", f.Sym.Name)
 					return false
@@ -284,6 +286,10 @@ func isInlinableMemclr(c *ssa.Config, sz int64) bool {
 		return true
 	case "ppc64le", "ppc64", "loong64":
 		return sz < 512
+	case "riscv64":
+		// For small size, zeroing byte-by-byte is faster than a function call.
+		// Larger sizes still benefit from alignment and larger stores.
+		return sz <= 4
 	}
 	return false
 }
@@ -518,7 +524,7 @@ func rewriteFixedLoad(v *ssa.Value, sym ssa.Sym, sb *ssa.Value, off int64) *ssa.
 	if (v.Type.IsPtrShaped() || v.Type.IsUintptr()) && lsym.Type == objabi.SRODATA {
 		for _, r := range lsym.R {
 			if (r.Type == objabi.R_ADDR || r.Type == objabi.R_WEAKADDR) && int64(r.Off) == off && r.Add == 0 {
-				if strings.HasPrefix(r.Sym.Name, "type:") {
+				if r.Sym.IsGoType() {
 					// In case we're loading a type out of a dictionary, we need to record
 					// that the containing function might put that type in an interface.
 					// That information is currently recorded in relocations in the dictionary,

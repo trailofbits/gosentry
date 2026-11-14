@@ -9,11 +9,22 @@ package simd_test
 import (
 	"fmt"
 	"math"
+	"os"
 	"reflect"
-	"simd/archsimd/internal/test_helpers"
+	"simd/internal/test_helpers"
+	"slices"
 	"testing"
 	"unsafe"
 )
+
+// inQEMU reports whether the tests are running under QEMU user-mode
+// emulation, which has bugs in a few SIMD instructions that would otherwise
+// cause test failures. The IN_QEMU environment variable is set by some of the
+// Go builders (see runtime/pprof's use of it), and can be set manually when
+// running tests with "go test -exec qemu-...".
+func inQEMU() bool {
+	return os.Getenv("IN_QEMU") == "1"
+}
 
 type signed interface {
 	~int | ~int8 | ~int16 | ~int32 | ~int64
@@ -366,4 +377,41 @@ func testStorePartReturnValue[T number, V HasLenAndStorePart[T]](t *testing.T) {
 		}
 	}
 	t.Logf("tested %s", name)
+}
+
+// testNarrowEdges tests a narrowing conversion on values around the limits of
+// the result type, which the general test data doesn't cover well. It rotates
+// xs through the lanes of the input so each value is tried in each lane.
+func testNarrowEdges[X, Z integer, VX interface{ Len() int }, VZ interface {
+	Len() int
+	Store([]Z)
+}](t *testing.T, xs []X, load func([]X) VX, conv func(VX) VZ, want func(X) Z) {
+	t.Helper()
+	var vx VX
+	var vz VZ
+	x := make([]X, vx.Len())
+	got := make([]Z, vz.Len())
+	w := make([]Z, vz.Len())
+	for start := range xs {
+		for i := range x {
+			x[i] = xs[(start+i)%len(xs)]
+		}
+		conv(load(x)).Store(got)
+		for i := range w {
+			w[i] = 0
+			if i < len(x) {
+				w[i] = want(x[i])
+			}
+		}
+		if !slices.Equal(got, w) {
+			t.Errorf("%T to %T: x=%v got %v, want %v", vx, vz, x, got, w)
+		}
+	}
+}
+
+// hi returns a want function that applies f to the high half of its input.
+func hi[X, Z any](f func(X) Z) func(x []X) []Z {
+	return func(x []X) []Z {
+		return map1(f)(x[len(x)/2:])
+	}
 }

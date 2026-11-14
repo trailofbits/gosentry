@@ -28,6 +28,7 @@ import (
 	"cmd/compile/internal/ssacompile"
 	"cmd/compile/internal/ssagen"
 	"cmd/compile/internal/staticinit"
+	"cmd/compile/internal/stats"
 	"cmd/compile/internal/typecheck"
 	"cmd/compile/internal/types"
 	"cmd/internal/dwarf"
@@ -73,7 +74,7 @@ func Main(archInit func(*ssagen.ArchInfo)) {
 	archInit(&ssagen.Arch)
 
 	base.Ctxt = obj.Linknew(ssagen.Arch.LinkArch)
-	base.Ctxt.DiagFunc = base.Errorf
+	base.Ctxt.DiagFunc = base.Diagf
 	base.Ctxt.DiagFlush = base.FlushErrors
 	base.Ctxt.Bso = bufio.NewWriter(os.Stdout)
 
@@ -272,7 +273,6 @@ func Main(archInit func(*ssagen.ArchInfo)) {
 	for _, fn := range typecheck.Target.Funcs {
 		transformed = append(transformed, loopvar.ForCapture(fn)...)
 	}
-	ir.CurFunc = nil
 
 	// Build init task, if needed.
 	pkginit.MakeTask()
@@ -280,6 +280,10 @@ func Main(archInit func(*ssagen.ArchInfo)) {
 	// Generate ABI wrappers. Must happen before escape analysis
 	// and doesn't benefit from dead-coding or inlining.
 	symABIs.GenABIWrappers()
+
+	// Preassign symbol indexes so that they're set when we emit export data,
+	// if it's emitted early. This depends on the results of GenABIWrappers.
+	preassignSymIdxs(symABIs)
 
 	deadlocals.Funcs(typecheck.Target.Funcs)
 
@@ -308,7 +312,8 @@ func Main(archInit func(*ssagen.ArchInfo)) {
 		ssagen.EnableNoWriteBarrierRecCheck()
 	}
 
-	ir.CurFunc = nil
+	base.Timer.Start("fe", "dumpexport")
+	dumpexport()
 
 	reflectdata.WriteBasicTypes()
 
@@ -365,6 +370,14 @@ func Main(archInit func(*ssagen.ArchInfo)) {
 		break
 	}
 
+	if base.Flag.Stats {
+		s := new(stats.Stats)
+		for _, fn := range typecheck.Target.Funcs {
+			s.Merge(fn.Stats)
+		}
+		s.Print()
+	}
+
 	base.Timer.AddEvent(int64(len(typecheck.Target.Funcs)), "funcs")
 
 	if base.Flag.CompilingRuntime {
@@ -387,7 +400,6 @@ func Main(archInit func(*ssagen.ArchInfo)) {
 	}
 
 	ssagen.CheckLargeStacks()
-	typecheck.CheckFuncStack()
 
 	if len(compilequeue) != 0 {
 		base.Fatalf("%d uncompiled functions", len(compilequeue))

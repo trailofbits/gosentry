@@ -102,10 +102,17 @@ func simd{{GetSIMDTag}}Intrinsics(addF func(pkg, fn string, b intrinsicBuilder, 
 	var loadStore = templateNamed("loadStore", `	addF(simdPackage, "Load{{.Name}}Array", simdLoad(), {{GetSysArch}})
 	addF(simdPackage, "{{.Name}}.StoreArray", simdStore(), {{GetSysArch}})`)
 
+	// TODO the operand order for AndNot on amd64 is cursed and should instead happen at the generic-to-architecture SSA rewrite (or later?)
 	var mask = templateNamed("mask", `	addF(simdPackage, "{{.Name}}.To{{.VectorCounterpart}}", func(s *state, n *ir.CallExpr, args []*ssa.Value) *ssa.Value { return args[0] }, {{GetSysArch}})
 	addF(simdPackage, "{{.VectorCounterpart}}.asMask", func(s *state, n *ir.CallExpr, args []*ssa.Value) *ssa.Value { return args[0] }, {{GetSysArch}})
 	addF(simdPackage, "{{.Name}}.And", opLen2(ssaop.OpAnd{{.ReshapedVectorWithAndOr}}, types.TypeVec{{.Size}}), {{GetSysArch}})
 	addF(simdPackage, "{{.Name}}.Or", opLen2(ssaop.OpOr{{.ReshapedVectorWithAndOr}}, types.TypeVec{{.Size}}), {{GetSysArch}})
+{{- if eq GetSysArch "sys.AMD64"}}
+	addF(simdPackage, "{{.Name}}.AndNot", opLen2_21(ssaop.OpAndNot{{.ReshapedVectorWithAndOr}}, types.TypeVec{{.Size}}), {{GetSysArch}})
+{{- else}}
+	addF(simdPackage, "{{.Name}}.AndNot", opLen2(ssaop.OpAndNot{{.ReshapedVectorWithAndOr}}, types.TypeVec{{.Size}}), {{GetSysArch}})
+{{- end}}
+	addF(simdPackage, "{{.Name}}.Xor", opLen2(ssaop.OpXor{{.ReshapedVectorWithAndOr}}, types.TypeVec{{.Size}}), {{GetSysArch}})
 {{- if eq GetSysArch "sys.ARM64"}}
 	addF(simdPackage, "{{.Name}}.Not", opLen1(ssaop.OpNot{{.ReshapedVectorWithAndOr}}, types.TypeVec{{.Size}}), {{GetSysArch}})
 {{- else}}
@@ -113,14 +120,19 @@ func simd{{GetSIMDTag}}Intrinsics(addF func(pkg, fn string, b intrinsicBuilder, 
 	addF(simdPackage, "{{.Name}}.ToBits", simdCvtMaskToV({{.ElemBits}}, {{.Lanes}}), {{GetSysArch}})
 {{- end}}`)
 
-	// SVE predicates are P-registers, moved to/from memory by the hand-written
-	// sveLoadWhole/sveStoreWhole builders (a generic Load/Store of a mask value,
-	// lowered to PLDR/PSTR); only this registration of the raw intrinsics is
-	// generated (the exported Load/Store wrappers are generated Go in types_sve.go).
-	var sveMask = templateNamed("sveMask", `	addF(simdPackage, "{{.Name}}.store", sveStoreWhole(), {{GetSysArch}})
-	addF(simdPackage, "load{{.Name}}", sveLoadWhole(), {{GetSysArch}})`)
+	var sveMask = templateNamed("sveMask", `	addF(simdPackage, "{{.Name}}AllTrue", opLen0(ssaop.Op{{.Name}}AllTrue, types.TypeMask), {{GetSysArch}})
+	addF(simdPackage, "{{.Name}}FromCount", opLen1(ssaop.Op{{.Name}}FromCount, types.TypeMask), {{GetSysArch}})
+	addF(simdPackage, "{{.Name}}.First", opLen1(ssaop.Op{{.Name}}First, types.TypeMask), {{GetSysArch}})
+	addF(simdPackage, "{{.Name}}.Next", opLen1(ssaop.Op{{.Name}}Next, types.TypeMask), {{GetSysArch}})
+	addF(simdPackage, "{{.Name}}.All", opLen1(ssaop.Op{{.Name}}All, types.Types[types.TBOOL]), {{GetSysArch}})
+	addF(simdPackage, "{{.Name}}.None", opLen1(ssaop.Op{{.Name}}None, types.Types[types.TBOOL]), {{GetSysArch}})
+	addF(simdPackage, "{{.Name}}.Any", opLen1(ssaop.Op{{.Name}}Any, types.Types[types.TBOOL]), {{GetSysArch}})`)
 
-	var maskedLoadStore = templateNamed("maskedLoadStore", `	addF(simdPackage, "{{.Name}}.StoreArrayMasked", simdMaskedStore(ssaop.OpStoreMasked{{.ElemBits}}), sys.AMD64)`)
+	var maskedLoadStore = templateNamed("maskedLoadStore", `	addF(simdPackage, "load{{.Name}}ArrayMasked", simdMaskedLoad(ssaop.OpLoadMasked{{.ElemBits}}), sys.AMD64)
+	addF(simdPackage, "{{.Name}}.StoreArrayMasked", simdMaskedStore(ssaop.OpStoreMasked{{.ElemBits}}), sys.AMD64)`)
+
+	var maskedIfElse = templateNamed("maskedIfElse", `	addF(simdPackage, "{{.Name}}.Masked", opLen2(ssaop.OpMasked{{.MaskedOpSuffix}}, types.TypeVec{{.Size}}), sys.AMD64)
+	addF(simdPackage, "{{.Name}}.IfElse", opLen3(ssaop.OpIfElse{{.MaskedOpSuffix}}, types.TypeVec{{.Size}}), sys.AMD64)`)
 
 	var vectorConversion = templateNamed("vectorConversion", `	addF(simdPackage, "{{.Tsrc.Name}}.As{{.Tdst.Name}}", func(s *state, n *ir.CallExpr, args []*ssa.Value) *ssa.Value { return args[0] }, {{GetSysArch}})`)
 
@@ -217,6 +229,9 @@ func simd{{GetSIMDTag}}Intrinsics(addF func(pkg, fn string, b intrinsicBuilder, 
 	// TODO: Reconsider for ARM64 SVE which supports predicated loads/stores.
 	if CurrentArch().Arch == "amd64" {
 		for _, typ := range typesFromTypeMap(typeMap) {
+			if !typ.IsMask() && !typ.IsScalable() {
+				doTemplate(maskedIfElse, typ)
+			}
 			if typ.MaskedLoadStoreFilter() {
 				doTemplate(maskedLoadStore, typ)
 			}
@@ -225,7 +240,7 @@ func simd{{GetSIMDTag}}Intrinsics(addF func(pkg, fn string, b intrinsicBuilder, 
 
 	// The AVX mask template treats a mask as a data vector (no-op To/asMask
 	// conversions, And/Or/Not via reshaped vector ops, FromBits/ToBits); an SVE
-	// predicate is a P-register with just the memory APIs (Store/LoadMask). The
+	// predicate is a P-register with its own constructors and accessors. The
 	// predicate-consuming ops (Masked, IfElse, ...) are peephole optimizations of
 	// the data-vector ops, not mask methods, so they are not generated here.
 	maskTpl := mask

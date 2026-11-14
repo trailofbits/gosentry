@@ -26,6 +26,7 @@ package gentools
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"go/format"
@@ -36,7 +37,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 )
 
 // Options contains standard options and CLI flags for code generators.
@@ -106,6 +106,15 @@ func (o *Options) WritingToInput() bool {
 	return o.Write && (o.outDir == "" || o.outDir == o.GOROOT)
 }
 
+// OverlayDir returns the root directory containing overlay files if an overlay
+// is active (i.e. -outdir is set and different from -goroot), or "" otherwise.
+func (o *Options) OverlayDir() string {
+	if o != nil && o.outDir != "" && o.outDir != o.GOROOT {
+		return o.outDir
+	}
+	return ""
+}
+
 type fileInfo struct {
 	relPath string
 	isGo    bool
@@ -120,12 +129,14 @@ type Files struct {
 	// If nil, the globally registered options from RegisterFlags are used automatically.
 	Options *Options
 
-	files []*fileInfo
+	files          []*fileInfo
+	postProcessors []PostProcessor
+
+	fileSet map[string]*fileInfo // By fileInfo.relPath
 
 	// tmpDir is a temporary directory used for communicating with subprocess
-	// gentools.
-	tmpDirOnce sync.Once
-	tmpDir     string
+	// gentools. It is created by ExecFlags and removed by Flush.
+	tmpDir string
 }
 
 func (f *Files) getOptions() Options {
@@ -156,24 +167,52 @@ func (f *Files) getOptions() Options {
 // returns a *bytes.Buffer for the generator to populate. During Flush(), Go
 // files are formatted with go/format.
 func (f *Files) NewGoFile(relPath string) *bytes.Buffer {
-	info := &fileInfo{
+	return f.newFile(&fileInfo{
 		relPath: relPath,
 		isGo:    true,
-	}
-	f.files = append(f.files, info)
-	return &info.buf
+	})
 }
 
 // NewRawFile registers a non-Go file (e.g. .rules, YAML, txtar) at relPath
 // (relative to GOROOT/src). It returns a *bytes.Buffer for the generator to
 // populate. During Flush(), content is written directly without go/format.
 func (f *Files) NewRawFile(relPath string) *bytes.Buffer {
-	info := &fileInfo{
+	return f.newFile(&fileInfo{
 		relPath: relPath,
 		isGo:    false,
+	})
+}
+
+func (f *Files) newFile(info *fileInfo) *bytes.Buffer {
+	if f.fileSet == nil {
+		f.fileSet = make(map[string]*fileInfo)
+	}
+	if f.fileSet[info.relPath] != nil {
+		panic(fmt.Sprintf("generator already created file %s", info.relPath))
+	}
+	f.fileSet[info.relPath] = info
+	if opts := f.getOptions(); opts.Write && !opts.WritingToInput() {
+		path := opts.OutputPath(info.relPath)
+		if _, err := os.Stat(path); err == nil {
+			panic(fmt.Sprintf("file already exists in output directory (created by multiple generators?): %s", path))
+		}
 	}
 	f.files = append(f.files, info)
 	return &info.buf
+}
+
+// PostProcessor is a function that inspects or transforms file content before
+// it is written, diffed, or packed into a txtar archive.
+//
+// relPath is the file path relative to GOROOT/src. isGo indicates whether the
+// file was registered as a Go file (via NewGoFile).
+type PostProcessor func(relPath string, isGo bool, content []byte) ([]byte, error)
+
+// AddPostProcessor registers a post-processing hook to be run on generated
+// files during Flush before writing or diffing. Post-processors are called in
+// registration order.
+func (f *Files) AddPostProcessor(fn PostProcessor) {
+	f.postProcessors = append(f.postProcessors, fn)
 }
 
 // ExecFlags returns a sequence of flags that can be passed to a gentools
@@ -185,13 +224,13 @@ func (f *Files) NewRawFile(relPath string) *bytes.Buffer {
 // directory back as if this process had written all of those files using f and
 // applies the configured output mode.
 func (f *Files) ExecFlags() []string {
-	f.tmpDirOnce.Do(func() {
+	if f.tmpDir == "" {
 		tmpDir, err := os.MkdirTemp("", "")
 		if err != nil {
 			panic("failed to create tmpdir: " + err.Error())
 		}
 		f.tmpDir = tmpDir
-	})
+	}
 	return []string{"-goroot", f.getOptions().GOROOT, "-w", "-outdir", f.tmpDir}
 }
 
@@ -219,6 +258,13 @@ func (f *Files) Flush() error {
 	if f.tmpDir != "" {
 		root := filepath.Join(f.tmpDir, "src")
 		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				if path == root && errors.Is(err, fs.ErrNotExist) {
+					// The subprocesses didn't write any files.
+					return fs.SkipAll
+				}
+				return err
+			}
 			if d.IsDir() {
 				return nil
 			}
@@ -237,20 +283,28 @@ func (f *Files) Flush() error {
 			return err
 		}
 		os.RemoveAll(f.tmpDir)
+		// Later subprocesses get a new temporary directory.
+		f.tmpDir = ""
 	}
 
 	for i, fi := range f.files {
-		raw := fi.buf.Bytes()
-		var content []byte
-		if fi.isGo {
-			formatted, err := format.Source(raw)
+		content := fi.buf.Bytes()
+
+		for _, pp := range f.postProcessors {
+			var err error
+			content, err = pp(fi.relPath, fi.isGo, content)
 			if err != nil {
-				printFormattingError(opts.ErrOutput, fi.relPath, raw, err)
+				return err
+			}
+		}
+
+		if fi.isGo {
+			formatted, err := format.Source(content)
+			if err != nil {
+				printFormattingError(opts.ErrOutput, fi.relPath, content, err)
 				return fmt.Errorf("error formatting %s: %w", fi.relPath, err)
 			}
 			content = formatted
-		} else {
-			content = raw
 		}
 
 		prepared[i] = preparedFile{

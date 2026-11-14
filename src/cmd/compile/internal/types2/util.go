@@ -66,3 +66,37 @@ var kind2tok = [...]token.Token{
 	syntax.RuneLit:   token.CHAR,
 	syntax.StringLit: token.STRING,
 }
+
+// unTilde returns the operand of ~x and true, or x and false.
+func unTilde(x syntax.Expr) (syntax.Expr, bool) {
+	if op, _ := x.(*syntax.Operation); op != nil && op.Op == syntax.Tilde {
+		return op.X, true
+	}
+	return x, false
+}
+
+// splitOr returns the operands of x | y, or nil, nil.
+func splitOr(e syntax.Expr) (x, y syntax.Expr) {
+	if op, _ := e.(*syntax.Operation); op != nil && op.Op == syntax.Or {
+		return op.X, op.Y
+	}
+	return nil, nil
+}
+
+// newIdent returns a new identifier with the given position and name.
+func newIdent(pos syntax.Pos, name string) *syntax.Name {
+	return syntax.NewName(pos, name)
+}
+
+// If x represents an index expression, unpackIndexExpr returns the indexed expression
+// and, if unpackParams is set, its indices. If unpackParams is not set, indices is nil.
+// If x is not an index expression, unpackIndexExpr returns (nil, nil).
+func unpackIndexExpr(x syntax.Expr, unpackParams bool) (indexed syntax.Expr, indices []syntax.Expr) {
+	if ix, _ := x.(*syntax.IndexExpr); ix != nil {
+		indexed = ix.X
+		if unpackParams {
+			indices = syntax.UnpackListExpr(ix.Index)
+		}
+	}
+	return
+}

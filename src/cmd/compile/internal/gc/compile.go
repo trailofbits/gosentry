@@ -31,10 +31,6 @@ var (
 )
 
 func enqueueFunc(fn *ir.Func, symABIs *ssagen.SymABIs) {
-	if ir.CurFunc != nil {
-		base.FatalfAt(fn.Pos(), "enqueueFunc %v inside %v", fn, ir.CurFunc)
-	}
-
 	if ir.FuncName(fn) == "_" {
 		// Skip compiling blank functions.
 		// Frontend already reported any spec-mandated errors (#29870).
@@ -50,7 +46,7 @@ func enqueueFunc(fn *ir.Func, symABIs *ssagen.SymABIs) {
 	}
 
 	if len(fn.Body) == 0 {
-		if ir.IsIntrinsicSym(fn.Sym()) && fn.Sym().Linkname == "" && !symABIs.HasDef(fn.Sym()) {
+		if needsIntrinsicBody(fn, symABIs) {
 			// Generate the function body for a bodyless intrinsic, in case it
 			// is used in a non-call context (e.g. as a function pointer).
 			// We skip functions defined in assembly, or has a linkname (which
@@ -96,6 +92,10 @@ func enqueueFunc(fn *ir.Func, symABIs *ssagen.SymABIs) {
 	compilequeue = append(compilequeue, fn)
 }
 
+func needsIntrinsicBody(fn *ir.Func, symABIs *ssagen.SymABIs) bool {
+	return len(fn.Body) == 0 && ir.IsIntrinsicSym(fn.Sym()) && fn.Sym().Linkname == "" && !symABIs.HasDef(fn.Sym())
+}
+
 // prepareFunc handles any remaining frontend compilation tasks that
 // aren't yet safe to perform concurrently.
 func prepareFunc(fn *ir.Func) {
@@ -120,12 +120,10 @@ func prepareFunc(fn *ir.Func) {
 	// Must be done after InitLSym and CalcSize.
 	ssagen.GenWasmExportWrapper(fn)
 
-	ir.CurFunc = fn
 	walk.Walk(fn)
 	if ir.MatchAstDump(fn, "walk") {
 		ir.AstDump(fn, "walk, "+ir.FuncName(fn))
 	}
-	ir.CurFunc = nil // enforce no further uses of CurFunc
 
 	base.Ctxt.DwTextCount++
 }

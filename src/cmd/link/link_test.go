@@ -10,7 +10,9 @@ import (
 	"debug/elf"
 	"debug/macho"
 	"debug/pe"
+	"encoding/binary"
 	"errors"
+	"fmt"
 	"internal/abi"
 	"internal/buildcfg"
 	"internal/platform"
@@ -1186,6 +1188,96 @@ func TestPErsrcLLVM(t *testing.T) {
 	}
 }
 
+func TestPELoaderTLS(t *testing.T) {
+	testenv.MustHaveGoBuild(t)
+	if runtime.GOOS != "windows" {
+		t.Skip("this is a windows-only test")
+	}
+	t.Parallel()
+
+	tmpdir := t.TempDir()
+	src := filepath.Join(tmpdir, "main.go")
+	if err := os.WriteFile(src, []byte(trivialSrc), 0666); err != nil {
+		t.Fatal(err)
+	}
+	exe := filepath.Join(tmpdir, "main.exe")
+	cmd := goCmd(t, "build", "-ldflags=-linkmode=internal", "-o", exe, src)
+	cmd.Env = append(cmd.Env, "CGO_ENABLED=0")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("%v: %v:\n%s", cmd.Args, err, out)
+	}
+
+	pf, err := pe.Open(exe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pf.Close()
+
+	var imageBase uint64
+	var imageSize uint64
+	var tlsDir pe.DataDirectory
+	ptrSize := 4
+	switch header := pf.OptionalHeader.(type) {
+	case *pe.OptionalHeader32:
+		imageBase = uint64(header.ImageBase)
+		imageSize = uint64(header.SizeOfImage)
+		tlsDir = header.DataDirectory[pe.IMAGE_DIRECTORY_ENTRY_TLS]
+	case *pe.OptionalHeader64:
+		imageBase = header.ImageBase
+		imageSize = uint64(header.SizeOfImage)
+		tlsDir = header.DataDirectory[pe.IMAGE_DIRECTORY_ENTRY_TLS]
+		ptrSize = 8
+	default:
+		t.Fatalf("unexpected optional header type %T", header)
+	}
+	wantDirSize := uint32(4*ptrSize + 8)
+	if tlsDir.VirtualAddress == 0 || tlsDir.Size != wantDirSize {
+		t.Fatalf("TLS directory = {%#x, %#x}, want non-zero address and size %#x", tlsDir.VirtualAddress, tlsDir.Size, wantDirSize)
+	}
+
+	var tlsSection *pe.Section
+	for _, section := range pf.Sections {
+		if section.Name == ".tls" {
+			tlsSection = section
+			break
+		}
+	}
+	if tlsSection == nil {
+		t.Fatal("missing .tls section")
+	}
+	data, err := tlsSection.Data()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tlsDir.VirtualAddress < tlsSection.VirtualAddress {
+		t.Fatalf("TLS directory lies outside .tls section")
+	}
+	dirOffset := int(tlsDir.VirtualAddress - tlsSection.VirtualAddress)
+	if dirOffset+int(tlsDir.Size) > len(data) {
+		t.Fatalf("TLS directory lies outside .tls section")
+	}
+	directory := data[dirOffset:]
+	readAddress := func(offset int) uint64 {
+		if ptrSize == 8 {
+			return binary.LittleEndian.Uint64(directory[offset:])
+		}
+		return uint64(binary.LittleEndian.Uint32(directory[offset:]))
+	}
+	start := readAddress(0)
+	end := readAddress(ptrSize)
+	index := readAddress(2 * ptrSize)
+	callbacks := readAddress(3 * ptrSize)
+	if want := imageBase + uint64(tlsSection.VirtualAddress); start != want || end-start != uint64(ptrSize) {
+		t.Fatalf("TLS template = [%#x, %#x), want [%#x, %#x)", start, end, want, want+uint64(ptrSize))
+	}
+	if index < imageBase || index >= imageBase+imageSize {
+		t.Fatalf("TLS index address %#x lies outside image", index)
+	}
+	if callbacks != 0 {
+		t.Fatalf("TLS callback address = %#x, want 0", callbacks)
+	}
+}
+
 func TestContentAddressableSymbols(t *testing.T) {
 	// Test that the linker handles content-addressable symbols correctly.
 	testenv.MustHaveGoBuild(t)
@@ -1358,8 +1450,23 @@ func TestLargeReloc(t *testing.T) {
 
 	tmpdir := t.TempDir()
 
+	// Also generate a large symbol table (>8MB) to test that
+	// unallocated symbols (such as .machosymstr) don't cause failure.
+	var buf bytes.Buffer
+	buf.WriteString(testLargeRelocSrc)
+	const n = 1000
+	symName := strings.Repeat("a", 1<<14)
+	for i := range n {
+		fmt.Fprintf(&buf, "var sym%d_%s byte = 1\n", i, symName)
+	}
+	fmt.Fprintln(&buf, "var syms = []*byte{")
+	for i := range n {
+		fmt.Fprintf(&buf, "\t&sym%d_%s,\n", i, symName)
+	}
+	fmt.Fprintln(&buf, "}\nfunc init() { check(*syms[0], 1) }")
+
 	src := filepath.Join(tmpdir, "x.go")
-	err := os.WriteFile(src, []byte(testLargeRelocSrc), 0666)
+	err := os.WriteFile(src, buf.Bytes(), 0666)
 	if err != nil {
 		t.Fatalf("failed to write source file: %v", err)
 	}
@@ -1522,6 +1629,61 @@ func main() {}
 			t.Fatalf("output differ:\n%s\n==========\n%s\n\nfull output:\n%s\n==========\n%s",
 				out0, out, fullOut0, fullOut)
 		}
+	}
+}
+
+// TestExtldWithArgs tests that cmd/link runs the external linker command
+// with the arguments that command was given (as in CC="ccache gcc"), both
+// when linking and when merely probing whether the toolchain supports some
+// flag. Dropping the arguments makes every probe fail, which silently
+// changes how the program is linked. See issue 81164.
+func TestExtldWithArgs(t *testing.T) {
+	testenv.MustHaveGoBuild(t)
+	testenv.MustHaveCGO(t) // this test requires -linkmode=external
+	t.Parallel()
+
+	ccOut, err := testenv.CleanCmdEnv(testenv.Command(t, testenv.GoToolPath(t), "env", "CC")).Output()
+	if err != nil {
+		t.Fatalf("go env CC: %v", err)
+	}
+	cc := strings.TrimSpace(string(ccOut))
+	if cc == "" || strings.ContainsAny(cc, " \t'\"") {
+		t.Skipf("CC=%q is not a plain command name", cc)
+	}
+
+	tmpdir := t.TempDir()
+	if strings.ContainsAny(tmpdir, " \t'\"") {
+		t.Skipf("temporary directory %q needs quoting in CC", tmpdir)
+	}
+	errfile := filepath.Join(tmpdir, "errors")
+
+	wrapccGo := filepath.Join(tmpdir, "wrapcc.go")
+	src := strings.Replace(wrapccSrc, "ERRFILE", strconv.Quote(errfile), 1)
+	if err := os.WriteFile(wrapccGo, []byte(src), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	wrapcc := filepath.Join(tmpdir, "wrapcc.exe")
+	cmd := testenv.CleanCmdEnv(testenv.Command(t, testenv.GoToolPath(t), "build", "-o", wrapcc, wrapccGo))
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("building wrapcc failed: %v\n%s", err, out)
+	}
+
+	xGo := filepath.Join(tmpdir, "x.go")
+	if err := os.WriteFile(xGo, []byte(`package main; import "C"; func main() {}`), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	exe := filepath.Join(tmpdir, "x.exe")
+	cmd = goCmd(t, "build", "-ldflags=-linkmode=external", "-o", exe, xGo)
+	cmd.Env = append(cmd.Env, "CC="+wrapcc+" --sentinel "+cc)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("build failed: %v\n%s", err, out)
+	}
+
+	switch data, err := os.ReadFile(errfile); {
+	case err == nil:
+		t.Errorf("C compiler wrapper was invoked without its arguments:\n%s", data)
+	case !os.IsNotExist(err):
+		t.Fatal(err)
 	}
 }
 
@@ -2488,3 +2650,42 @@ func TestTypePlacement(t *testing.T) {
 		}
 	}
 }
+
+// wrapcc is a C compiler wrapper that runs the compiler named by its
+// second argument, but only if it was passed the sentinel first
+// argument. Invocations missing them are recorded in errfile.
+const wrapccSrc = `
+package main
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+)
+
+func main() {
+	for _, arg := range os.Args {
+		if arg == "-###" {
+			// cmd/go probes the compiler named by CC[0] alone to
+			// compute its tool ID. Don't print the word "version".
+			return
+		}
+	}
+	if len(os.Args) < 3 || os.Args[1] != "--sentinel" {
+		f, err := os.OpenFile(ERRFILE, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o666)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Fprintf(f, "%q\n", os.Args)
+		f.Close()
+		os.Exit(1)
+	}
+	cmd := exec.Command(os.Args[2], os.Args[3:]...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+`

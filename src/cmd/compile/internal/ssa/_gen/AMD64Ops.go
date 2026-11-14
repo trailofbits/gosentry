@@ -121,6 +121,7 @@ func init() {
 		ax         = buildReg("AX")
 		cx         = buildReg("CX")
 		dx         = buildReg("DX")
+		r12        = buildReg("R12")
 		gp         = buildReg("AX CX DX BX BP SI DI R8 R9 R10 R11 R12 R13 R15")
 		g          = buildReg("g")
 		fp         = buildReg("X0 X1 X2 X3 X4 X5 X6 X7 X8 X9 X10 X11 X12 X13 X14")
@@ -269,6 +270,7 @@ func init() {
 		kstore = regInfo{inputs: []regMask{gpspsb, mask, regMask{}}}
 		gpk    = regInfo{inputs: gponly, outputs: maskonly}
 		kgp    = regInfo{inputs: maskonly, outputs: gponly}
+		kk     = regInfo{inputs: maskonly, outputs: maskonly}
 		k2k    = regInfo{inputs: []regMask{mask, mask}, outputs: maskonly}
 
 		x15only = regInfo{inputs: nil, outputs: []regMask{x15}}
@@ -738,13 +740,15 @@ func init() {
 		{name: "NOTQ", argLength: 1, reg: gp11, asm: "NOTQ", resultInArg0: true, earlyOk: true},
 		{name: "NOTL", argLength: 1, reg: gp11, asm: "NOTL", resultInArg0: true, earlyOk: true, zeroUpperBits: 32},
 
-		// BS{F,R}Q returns a tuple [result, flags]
+		// BS{F,R}{Q,L} return only the result.
 		// result is undefined if the input is zero.
-		// flags are set to "equal" if the input is zero, "not equal" otherwise.
-		// BS{F,R}L returns only the result.
-		{name: "BSFQ", argLength: 1, reg: gp11flags, asm: "BSFQ", typ: "(UInt64,Flags)", earlyOk: true},        // # of low-order zeroes in 64-bit arg
+		{name: "BSFQ", argLength: 1, reg: gp11, asm: "BSFQ", typ: "UInt64", clobberFlags: true, earlyOk: true}, // # of low-order zeroes in 64-bit arg
+		{name: "BSRQ", argLength: 1, reg: gp11, asm: "BSRQ", typ: "UInt64", clobberFlags: true, earlyOk: true}, // # of high-order zeroes in 64-bit arg
+		// init variants take the destination in arg0 and input in arg1.
+		// arg0 is preserved if arg1 is zero.
+		{name: "BSFQinit", argLength: 2, reg: gp21, asm: "BSFQ", typ: "UInt64", resultInArg0: true, clobberFlags: true, earlyOk: true},
+		{name: "BSRQinit", argLength: 2, reg: gp21, asm: "BSRQ", typ: "UInt64", resultInArg0: true, clobberFlags: true, earlyOk: true},
 		{name: "BSFL", argLength: 1, reg: gp11, asm: "BSFL", typ: "UInt32", clobberFlags: true, earlyOk: true}, // # of low-order zeroes in 32-bit arg
-		{name: "BSRQ", argLength: 1, reg: gp11flags, asm: "BSRQ", typ: "(UInt64,Flags)", earlyOk: true},        // # of high-order zeroes in 64-bit arg
 		{name: "BSRL", argLength: 1, reg: gp11, asm: "BSRL", typ: "UInt32", clobberFlags: true, earlyOk: true}, // # of high-order zeroes in 32-bit arg
 
 		// CMOV instructions: 64, 32 and 16-bit sizes.
@@ -848,8 +852,8 @@ func init() {
 		{name: "MAXSD", argLength: 2, reg: fp21, resultInArg0: true, asm: "MAXSD", earlyOk: true}, // max(arg0,arg1)
 		{name: "MAXSS", argLength: 2, reg: fp21, resultInArg0: true, asm: "MAXSS", earlyOk: true}, // max(arg0,arg1)
 
-		{name: "SBBQcarrymask", argLength: 1, reg: flagsgp, asm: "SBBQ", earlyOk: true},                    // (int64)(-1) if carry is set, 0 if carry is clear.
-		{name: "SBBLcarrymask", argLength: 1, reg: flagsgp, asm: "SBBL", earlyOk: true, zeroUpperBits: 32}, // (int32)(-1) if carry is set, 0 if carry is clear.
+		{name: "SBBQcarrymask", argLength: 1, reg: flagsgp, asm: "SBBQ", earlyOk: true, clobberFlags: true},                    // (int64)(-1) if carry is set, 0 if carry is clear.
+		{name: "SBBLcarrymask", argLength: 1, reg: flagsgp, asm: "SBBL", earlyOk: true, zeroUpperBits: 32, clobberFlags: true}, // (int32)(-1) if carry is set, 0 if carry is clear.
 		// Note: SBBW and SBBB are subsumed by SBBL
 
 		{name: "SETEQ", argLength: 1, reg: readflags, asm: "SETEQ", earlyOk: true}, // extract == condition from arg0
@@ -1142,7 +1146,8 @@ func init() {
 		{name: "InvertFlags", argLength: 1}, // reverse direction of arg0
 
 		// Pseudo-ops
-		{name: "LoweredGetG", argLength: 1, reg: gp01}, // arg0=mem
+		// LoweredGetG loads g from TLS, clobbering R12 and flags on Windows.
+		{name: "LoweredGetG", argLength: 1, reg: regInfo{outputs: []regMask{gp.minus(r12)}, clobbers: r12}, clobberFlags: true}, // arg0=mem
 		// Scheduler ensures LoweredGetClosurePtr occurs only in entry block,
 		// and sorts it to the very beginning of the block to prevent other
 		// use of DX (the closure pointer)
@@ -1422,16 +1427,20 @@ func init() {
 		{name: "VMOVDQUload512", argLength: 2, reg: wload, asm: "VMOVDQU64", aux: "SymOff", faultOnNilArg0: true, symEffect: "Read"},    // load from arg0+auxint+aux, arg1 = mem
 		{name: "VMOVDQUstore512", argLength: 3, reg: wstore, asm: "VMOVDQU64", aux: "SymOff", faultOnNilArg0: true, symEffect: "Write"}, // store, *(arg0+auxint+aux) = arg1, arg2 = mem
 
-		// AVX2 32 and 64-bit element int-vector masked moves.
-		{name: "VPMASK32load128", argLength: 3, reg: vloadv, asm: "VPMASKMOVD", aux: "SymOff", faultOnNilArg0: true, symEffect: "Read"},    // load from arg0+auxint+aux, arg1=integer mask, arg2 = mem
-		{name: "VPMASK32store128", argLength: 4, reg: vstorev, asm: "VPMASKMOVD", aux: "SymOff", faultOnNilArg0: true, symEffect: "Write"}, // store, *(arg0+auxint+aux) = arg2, arg1=integer mask, arg3 = mem
-		{name: "VPMASK64load128", argLength: 3, reg: vloadv, asm: "VPMASKMOVQ", aux: "SymOff", faultOnNilArg0: true, symEffect: "Read"},    // load from arg0+auxint+aux, arg1=integer mask, arg2 = mem
-		{name: "VPMASK64store128", argLength: 4, reg: vstorev, asm: "VPMASKMOVQ", aux: "SymOff", faultOnNilArg0: true, symEffect: "Write"}, // store, *(arg0+auxint+aux) = arg2, arg1=integer mask, arg3 = mem
+		// AVX 32 and 64-bit element vector-masked moves. These use VMASKMOVPS/PD
+		// rather than AVX2's VPMASKMOVD/Q. They have the same semantics (including
+		// fault suppression for masked-off elements) and move bits without
+		// interpreting them, so they work for integer vectors, too, but they only
+		// require AVX.
+		{name: "VPMASK32load128", argLength: 3, reg: vloadv, asm: "VMASKMOVPS", aux: "SymOff", faultOnNilArg0: true, symEffect: "Read"},    // load from arg0+auxint+aux, arg1=integer mask, arg2 = mem
+		{name: "VPMASK32store128", argLength: 4, reg: vstorev, asm: "VMASKMOVPS", aux: "SymOff", faultOnNilArg0: true, symEffect: "Write"}, // store, *(arg0+auxint+aux) = arg2, arg1=integer mask, arg3 = mem
+		{name: "VPMASK64load128", argLength: 3, reg: vloadv, asm: "VMASKMOVPD", aux: "SymOff", faultOnNilArg0: true, symEffect: "Read"},    // load from arg0+auxint+aux, arg1=integer mask, arg2 = mem
+		{name: "VPMASK64store128", argLength: 4, reg: vstorev, asm: "VMASKMOVPD", aux: "SymOff", faultOnNilArg0: true, symEffect: "Write"}, // store, *(arg0+auxint+aux) = arg2, arg1=integer mask, arg3 = mem
 
-		{name: "VPMASK32load256", argLength: 3, reg: vloadv, asm: "VPMASKMOVD", aux: "SymOff", faultOnNilArg0: true, symEffect: "Read"},    // load from arg0+auxint+aux, arg1=integer mask, arg2 = mem
-		{name: "VPMASK32store256", argLength: 4, reg: vstorev, asm: "VPMASKMOVD", aux: "SymOff", faultOnNilArg0: true, symEffect: "Write"}, // store, *(arg0+auxint+aux) = arg2, arg1=integer mask, arg3 = mem
-		{name: "VPMASK64load256", argLength: 3, reg: vloadv, asm: "VPMASKMOVQ", aux: "SymOff", faultOnNilArg0: true, symEffect: "Read"},    // load from arg0+auxint+aux, arg1=integer mask, arg2 = mem
-		{name: "VPMASK64store256", argLength: 4, reg: vstorev, asm: "VPMASKMOVQ", aux: "SymOff", faultOnNilArg0: true, symEffect: "Write"}, // store, *(arg0+auxint+aux) = arg2, arg1=integer mask, arg3 = mem
+		{name: "VPMASK32load256", argLength: 3, reg: vloadv, asm: "VMASKMOVPS", aux: "SymOff", faultOnNilArg0: true, symEffect: "Read"},    // load from arg0+auxint+aux, arg1=integer mask, arg2 = mem
+		{name: "VPMASK32store256", argLength: 4, reg: vstorev, asm: "VMASKMOVPS", aux: "SymOff", faultOnNilArg0: true, symEffect: "Write"}, // store, *(arg0+auxint+aux) = arg2, arg1=integer mask, arg3 = mem
+		{name: "VPMASK64load256", argLength: 3, reg: vloadv, asm: "VMASKMOVPD", aux: "SymOff", faultOnNilArg0: true, symEffect: "Read"},    // load from arg0+auxint+aux, arg1=integer mask, arg2 = mem
+		{name: "VPMASK64store256", argLength: 4, reg: vstorev, asm: "VMASKMOVPD", aux: "SymOff", faultOnNilArg0: true, symEffect: "Write"}, // store, *(arg0+auxint+aux) = arg2, arg1=integer mask, arg3 = mem
 
 		// AVX512 8-64-bit element mask-register masked moves
 		{name: "VPMASK8load512", argLength: 3, reg: wloadk, asm: "VMOVDQU8", aux: "SymOff", faultOnNilArg0: true, symEffect: "Read"},      // load from arg0+auxint+aux, arg1=k mask, arg2 = mem
@@ -1538,6 +1547,12 @@ func init() {
 		{name: "KANDD", argLength: 2, reg: k2k, asm: "KANDD", typ: "Mask"},
 		{name: "KANDQ", argLength: 2, reg: k2k, asm: "KANDQ", typ: "Mask"},
 
+		// Like ANDNQ, and unlike VPANDN, KANDN computes arg0 &^ arg1.
+		{name: "KANDNB", argLength: 2, reg: k2k, asm: "KANDNB", typ: "Mask"}, // arg0 &^ arg1
+		{name: "KANDNW", argLength: 2, reg: k2k, asm: "KANDNW", typ: "Mask"}, // arg0 &^ arg1
+		{name: "KANDND", argLength: 2, reg: k2k, asm: "KANDND", typ: "Mask"}, // arg0 &^ arg1
+		{name: "KANDNQ", argLength: 2, reg: k2k, asm: "KANDNQ", typ: "Mask"}, // arg0 &^ arg1
+
 		{name: "KORB", argLength: 2, reg: k2k, asm: "KORB", typ: "Mask"},
 		{name: "KORW", argLength: 2, reg: k2k, asm: "KORW", typ: "Mask"},
 		{name: "KORD", argLength: 2, reg: k2k, asm: "KORD", typ: "Mask"},
@@ -1553,6 +1568,11 @@ func init() {
 		{name: "KXNORW", argLength: 2, reg: k2k, asm: "KXNORW", typ: "Mask"},
 		{name: "KXNORD", argLength: 2, reg: k2k, asm: "KXNORD", typ: "Mask"},
 		{name: "KXNORQ", argLength: 2, reg: k2k, asm: "KXNORQ", typ: "Mask"},
+
+		{name: "KNOTB", argLength: 1, reg: kk, asm: "KNOTB", typ: "Mask"},
+		{name: "KNOTW", argLength: 1, reg: kk, asm: "KNOTW", typ: "Mask"},
+		{name: "KNOTD", argLength: 1, reg: kk, asm: "KNOTD", typ: "Mask"},
+		{name: "KNOTQ", argLength: 1, reg: kk, asm: "KNOTQ", typ: "Mask"},
 
 		// VPTEST
 		{name: "VPTEST", asm: "VPTEST", argLength: 2, reg: v2flags, clobberFlags: true, typ: "Flags"},
@@ -1597,8 +1617,9 @@ func init() {
 		ParamFloatRegNames: "X0 X1 X2 X3 X4 X5 X6 X7 X8 X9 X10 X11 X12 X13 X14",
 		gpregmask:          gp,
 		fpregmask:          fp,
-		specialregmask:     mask.union(w.minus(v)),
+		specialregmask:     w.minus(v),
 		simdregmask:        v,
+		simdmaskreg:        mask,
 		framepointerreg:    int8(num["BP"]),
 		linkreg:            -1, // not used
 	})

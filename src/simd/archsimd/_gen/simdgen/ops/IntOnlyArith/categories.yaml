@@ -8,6 +8,15 @@
   # Unary operation, not commutative
   documentation: !string |-
     // NAME computes the absolute value of each element.
+# VPABSQ at 128 and 256 bits, as machine ops only, so that AMD64.rules can
+# use it in place of the AVX/AVX2 emulation of Abs when AVX-512 is known to be
+# available.
+- go: absInt64AVX512
+  noTypes: "true"
+  noGenericOps: "true"
+  commutative: false
+  documentation: !string |-
+    // NAME computes the absolute value of each element.
 - go: MulSign
   commutative: false
   documentation: !string |-
@@ -16,3 +25,17 @@
   commutative: false
   documentation: !string |-
     // NAME counts the number of set bits in each element.
+- go: onesCount # amd64 emulates on AVX and AVX2, access AVX512 through feature check
+  commutative: false
+  documentation: !string |-
+    // NAME counts the number of set bits in each element.
+# Constrained to integer elements: the float Div in FPonlyArith documents the
+# IEEE 754 semantics.
+- go: Div
+  commutative: false
+  out:
+  - base: int|uint
+  documentation: !string |-
+    // NAME divides corresponding elements of two vectors, truncating toward
+    // zero. Division by zero yields zero rather than panicking, and dividing
+    // the minimum signed value by -1 yields the minimum signed value.

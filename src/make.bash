@@ -153,7 +153,7 @@ fi
 export GOROOT_BOOTSTRAP
 
 bootstrapenv() {
-	GOROOT="$GOROOT_BOOTSTRAP" GO111MODULE=off GOENV=off GOOS= GOARCH= GOEXPERIMENT= GOFLAGS= "$@"
+	GOROOT="$GOROOT_BOOTSTRAP" GO111MODULE=off GOENV=off GOOS= GOARCH= GOEXPERIMENT= GOFLAGS= GOWASM= "$@"
 }
 
 export GOROOT="$(cd .. && pwd)"
@@ -191,6 +191,7 @@ if [[ "$GOROOT_BOOTSTRAP" == "$GOROOT" ]]; then
 	exit 1
 fi
 rm -f cmd/dist/dist
+rm -rf cmd/dist/dist.dSYM
 bootstrapenv "$GOROOT_BOOTSTRAP/bin/go" build -o cmd/dist/dist ./cmd/dist
 
 # -e doesn't propagate out of eval, so check success by hand.
@@ -210,6 +211,7 @@ if [[ "$1" == "--dist-tool" ]]; then
 		cp cmd/dist/dist "$2"
 	fi
 	mv cmd/dist/dist "$GOTOOLDIR"/dist
+	rm -rf cmd/dist/dist.dSYM
 	exit 0
 fi
 
@@ -218,6 +220,7 @@ fi
 # Throw ours, built with the bootstrap toolchain, away after bootstrap.
 ./cmd/dist/dist bootstrap -a $vflag $GO_DISTFLAGS "$@"
 rm -f ./cmd/dist/dist
+rm -rf ./cmd/dist/dist.dSYM
 
 # gosentry: optionally keep a system-wide `gosentry` binary in sync with the freshly-built toolchain.
 #

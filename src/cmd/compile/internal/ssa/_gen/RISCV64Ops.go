@@ -216,8 +216,6 @@ func init() {
 		{name: "MOVHUreg", argLength: 1, reg: gp11, asm: "MOVHU", earlyOk: true}, // move from arg0, unsign-extended from half
 		{name: "MOVWUreg", argLength: 1, reg: gp11, asm: "MOVWU", earlyOk: true}, // move from arg0, unsign-extended from word
 
-		{name: "MOVDnop", argLength: 1, reg: regInfo{inputs: []regMask{gpMask}, outputs: []regMask{gpMask}}, resultInArg0: true, earlyOk: true}, // nop, return arg0 in same register
-
 		// Shift ops
 		{name: "SLL", argLength: 2, reg: gp21, asm: "SLL", earlyOk: true},                   // arg0 << (aux1 & 63), logical left shift
 		{name: "SLLW", argLength: 2, reg: gp21, asm: "SLLW", earlyOk: true},                 // arg0 << (aux1 & 31), logical left shift of 32 bit value, sign extended to 64 bits
@@ -268,6 +266,14 @@ func init() {
 		{name: "MAX", argLength: 2, reg: gp21, asm: "MAX", commutative: true, earlyOk: true},   // max(arg0,arg1), signed
 		{name: "MINU", argLength: 2, reg: gp21, asm: "MINU", commutative: true, earlyOk: true}, // min(arg0,arg1), unsigned
 		{name: "MAXU", argLength: 2, reg: gp21, asm: "MAXU", commutative: true, earlyOk: true}, // max(arg0,arg1), unsigned
+
+		// Single bit operations
+		{name: "BEXT", argLength: 2, reg: gp21, asm: "BEXT", earlyOk: true},                 // (arg0 >> (arg1 & 63)) & 1
+		{name: "BEXTI", argLength: 1, reg: gp11, asm: "BEXTI", aux: "Int64", earlyOk: true}, // (arg0 >> index) & 1
+		{name: "BINV", argLength: 2, reg: gp21, asm: "BINV", earlyOk: true},                 // arg0 ^ (1 << (arg1 & 63))
+		{name: "BINVI", argLength: 1, reg: gp11, asm: "BINVI", aux: "Int64", earlyOk: true}, // arg0 ^ (1 << index)
+		{name: "BSET", argLength: 2, reg: gp21, asm: "BSET", earlyOk: true},                 // arg0 | (1 << (arg1 & 63))
+		{name: "BSETI", argLength: 1, reg: gp11, asm: "BSETI", aux: "Int64", earlyOk: true}, // arg0 | (1 << index)
 
 		// Generate boolean values
 		{name: "SEQZ", argLength: 1, reg: gp11, asm: "SEQZ", earlyOk: true},                 // arg0 == 0, result is 0 or 1
@@ -322,8 +328,16 @@ func init() {
 			needIntTemp:    true,
 			faultOnNilArg0: true,
 			addrSinkArg0:   true,
+			// We dont save RVV in async preemption yet
+			// so mark this as an unsafe point.
+			unsafePoint: true,
 			reg: regInfo{
-				inputs:       []regMask{gpMask},
+				// For GORISCV64 < rva23 this lowers to a runtime branch that
+				// uses either an RVV loop (clobbering X5/X6) or the scalar loop
+				// (using the int temp). For rva23 and later it always uses RVV.
+				// RVV uses V24-V31, which are not allocated by SSA.
+				inputs:       []regMask{gpMask.minus(r5toR6)},
+				clobbers:     r5toR6,
 				clobbersArg0: true,
 			},
 		},
@@ -522,6 +536,12 @@ func init() {
 		{name: "FLED", argLength: 2, reg: fp2gp, asm: "FLED", earlyOk: true},                                                                   // arg0 <= arg1
 		{name: "LoweredFMIND", argLength: 2, reg: fp21, resultNotInArgs: true, asm: "FMIND", commutative: true, typ: "Float64", earlyOk: true}, // min(arg0, arg1)
 		{name: "LoweredFMAXD", argLength: 2, reg: fp21, resultNotInArgs: true, asm: "FMAXD", commutative: true, typ: "Float64", earlyOk: true}, // max(arg0, arg1)
+
+		{name: "LoweredRoundToEvenD", argLength: 1, reg: fp11, resultNotInArgs: true, typ: "Float64"}, // round float64 to nearest integer, ties to even
+		{name: "LoweredRoundD", argLength: 1, reg: fp11, resultNotInArgs: true, typ: "Float64"},       // round float64 to nearest integer, ties away from zero
+		{name: "LoweredFloorD", argLength: 1, reg: fp11, resultNotInArgs: true, typ: "Float64"},       // round float64 toward -Inf
+		{name: "LoweredCeilD", argLength: 1, reg: fp11, resultNotInArgs: true, typ: "Float64"},        // round float64 toward +Inf
+		{name: "LoweredTruncD", argLength: 1, reg: fp11, resultNotInArgs: true, typ: "Float64"},       // round float64 toward zero
 
 		// Floating point classify (in the F and D extensions).
 		//

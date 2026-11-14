@@ -18,8 +18,9 @@ import (
 	"unicode/utf8"
 
 	"cmd/compile/internal/base"
-	"cmd/compile/internal/importer"
 	"cmd/compile/internal/ir"
+	"cmd/compile/internal/midway"
+	"cmd/compile/internal/testimporter"
 	"cmd/compile/internal/typecheck"
 	"cmd/compile/internal/types"
 	"cmd/compile/internal/types2"
@@ -190,6 +191,36 @@ func readImportFile(path string, target *ir.Package, env *types2.Context, packag
 	}
 
 	pkg1 = types.NewPkg(path, "")
+
+	// Functions and methods that depend (directly or indirectly) on the "simd" package
+	// must be rewritten, with uses of "simd" replaced by "simd/internal/bridge". The
+	// import semantics depend on how a package interacts with "simd".
+
+	// For direct dependencies:
+	// Note that "simd/internal/bridge" cannot be directly imported (except by "simd").
+	// Thus, it won't appear in -importcfg (except for "simd") and won't be available
+	// via `openPackage("simd/internal/bridge")`. To work around this, the export data
+	// for "simd/internal/bridge" is included in that of "simd". When "simd" is read,
+	// an artificial direct import for both packages is created.
+
+	// For indirect dependencies:
+	// Note that neither package will be in -importcfg. To work around this, the export
+	// data for "simd" (and "simd/internal/bridge") is included in any package which
+	// exports a declaration referencing "simd" (see #81614).
+
+	// This is the direct case.
+	if path == midway.SimdBridgePkg && base.Ctxt.Pkgpath != midway.SimdPkg && !pkg1.Direct {
+		if _, _, err = readImportFile(midway.SimdPkg, target, env, packages); err != nil {
+			return
+		}
+	}
+	// This is the indirect case.
+	if path == midway.SimdPkg && !pkg1.Direct && simdPkgReader != nil && simdPkgReader.PkgPath() != midway.SimdPkg {
+		if _, _, err = readImportFile(simdPkgReader.PkgPath(), target, env, packages); err != nil {
+			return
+		}
+	}
+
 	if packages != nil {
 		pkg2 = packages[path]
 		if !(pkg1.Direct == (pkg2 != nil && pkg2.Complete())) {
@@ -223,7 +254,20 @@ func readImportFile(path string, target *ir.Package, env *types2.Context, packag
 
 	// Read package descriptors for both types2 and compiler backend.
 	readPackage(newPkgReader(pr), pkg1, false)
-	pkg2 = importer.ReadPackage(env, packages, pr)
+	pkg2 = testimporter.ReadPackage(env, packages, pr)
+
+	// If we imported bundled export data for "simd" and/or "simd/internal/bridge",
+	// mark their types.Pkg as directly imported.
+	// Checking p.Complete() is necesary for handling uses of "simd" in unexported
+	// code, since they will not have bundled export data (see testdata/b81614d).
+	if packages != nil {
+		if p := packages[midway.SimdPkg]; p != nil && p.Complete() {
+			types.NewPkg(midway.SimdPkg, "").Direct = true
+		}
+		if p := packages[midway.SimdBridgePkg]; p != nil && p.Complete() {
+			types.NewPkg(midway.SimdBridgePkg, "").Direct = true
+		}
+	}
 
 	err = addFingerprint(path, data)
 	return

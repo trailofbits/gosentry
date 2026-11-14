@@ -14783,6 +14783,29 @@ func rewriteValue_OpLoad(v *ssa.Value) bool {
 		v0.AddArg2(v1, mem)
 		return true
 	}
+	// match: (Load <t1> p1 move:(Move [n] p2 src mem))
+	// cond: t1.Size() <= n && ssa.IsSamePtr(p1, p2) && !ssa.IsVolatile(src)
+	// result: @move.Block (Load <t1> src mem)
+	for {
+		t1 := v.Type
+		p1 := v_0
+		move := v_1
+		if move.Op != ssaop.OpMove {
+			break
+		}
+		n := ssa.AuxIntToInt64(move.AuxInt)
+		mem := move.Args[2]
+		p2 := move.Args[0]
+		src := move.Args[1]
+		if !(t1.Size() <= n && ssa.IsSamePtr(p1, p2) && !ssa.IsVolatile(src)) {
+			break
+		}
+		b = move.Block
+		v0 := b.NewValue0(v.Pos, ssaop.OpLoad, t1)
+		v.CopyOf(v0)
+		v0.AddArg2(src, mem)
+		return true
+	}
 	// match: (Load <t1> p1 (Store {t2} p2 (Const64 [x]) _))
 	// cond: ssa.IsSamePtr(p1,p2) && t2.Size() == 8 && ssa.Is64BitFloat(t1) && !math.IsNaN(math.Float64frombits(uint64(x)))
 	// result: (Const64F [math.Float64frombits(uint64(x))])
@@ -17719,7 +17742,7 @@ func rewriteValue_OpMemEq(v *ssa.Value) bool {
 		return true
 	}
 	// match: (MemEq sptr tptr (Const64 [8]) mem)
-	// cond: canLoadUnaligned(config) && config.PtrSize == 8
+	// cond: canLoadUnaligned(config) && config.RegSize == 8
 	// result: (Eq64 (Load <typ.Int64> sptr mem) (Load <typ.Int64> tptr mem))
 	for {
 		sptr := v_0
@@ -17728,7 +17751,7 @@ func rewriteValue_OpMemEq(v *ssa.Value) bool {
 			break
 		}
 		mem := v_3
-		if !(canLoadUnaligned(config) && config.PtrSize == 8) {
+		if !(canLoadUnaligned(config) && config.RegSize == 8) {
 			break
 		}
 		v.Reset(ssaop.OpEq64)
@@ -28786,6 +28809,7 @@ func rewriteValue_OpRotateLeft16(v *ssa.Value) bool {
 	v_0 := v.Args[0]
 	b := v.Block
 	config := b.Func.Config
+	typ := &b.Func.Config.Types
 	// match: (RotateLeft16 (Const16 [x]) (Const64 [y]))
 	// result: (Const16 [int16(bits.RotateLeft16(uint16(x), int(y)))])
 	for {
@@ -29259,21 +29283,20 @@ func rewriteValue_OpRotateLeft16(v *ssa.Value) bool {
 		v.AddArg2(x, v0)
 		return true
 	}
-	// match: (RotateLeft16 x (Const64 <t> [c]))
-	// cond: config.PtrSize == 4
-	// result: (RotateLeft16 x (Const32 <t> [int32(c)]))
+	// match: (RotateLeft16 x (Const64 [c]))
+	// cond: config.RegSize == 4
+	// result: (RotateLeft16 x (Const32 <typ.UInt32> [int32(c)]))
 	for {
 		x := v_0
 		if v_1.Op != ssaop.OpConst64 {
 			break
 		}
-		t := v_1.Type
 		c := ssa.AuxIntToInt64(v_1.AuxInt)
-		if !(config.PtrSize == 4) {
+		if !(config.RegSize == 4) {
 			break
 		}
 		v.Reset(ssaop.OpRotateLeft16)
-		v0 := b.NewValue0(v.Pos, ssaop.OpConst32, t)
+		v0 := b.NewValue0(v.Pos, ssaop.OpConst32, typ.UInt32)
 		v0.AuxInt = ssa.Int32ToAuxInt(int32(c))
 		v.AddArg2(x, v0)
 		return true
@@ -29361,6 +29384,7 @@ func rewriteValue_OpRotateLeft32(v *ssa.Value) bool {
 	v_0 := v.Args[0]
 	b := v.Block
 	config := b.Func.Config
+	typ := &b.Func.Config.Types
 	// match: (RotateLeft32 (Const32 [x]) (Const64 [y]))
 	// result: (Const32 [int32(bits.RotateLeft32(uint32(x), int(y)))])
 	for {
@@ -29834,21 +29858,20 @@ func rewriteValue_OpRotateLeft32(v *ssa.Value) bool {
 		v.AddArg2(x, v0)
 		return true
 	}
-	// match: (RotateLeft32 x (Const64 <t> [c]))
-	// cond: config.PtrSize == 4
-	// result: (RotateLeft32 x (Const32 <t> [int32(c)]))
+	// match: (RotateLeft32 x (Const64 [c]))
+	// cond: config.RegSize == 4
+	// result: (RotateLeft32 x (Const32 <typ.UInt32> [int32(c)]))
 	for {
 		x := v_0
 		if v_1.Op != ssaop.OpConst64 {
 			break
 		}
-		t := v_1.Type
 		c := ssa.AuxIntToInt64(v_1.AuxInt)
-		if !(config.PtrSize == 4) {
+		if !(config.RegSize == 4) {
 			break
 		}
 		v.Reset(ssaop.OpRotateLeft32)
-		v0 := b.NewValue0(v.Pos, ssaop.OpConst32, t)
+		v0 := b.NewValue0(v.Pos, ssaop.OpConst32, typ.UInt32)
 		v0.AuxInt = ssa.Int32ToAuxInt(int32(c))
 		v.AddArg2(x, v0)
 		return true
@@ -29936,6 +29959,7 @@ func rewriteValue_OpRotateLeft64(v *ssa.Value) bool {
 	v_0 := v.Args[0]
 	b := v.Block
 	config := b.Func.Config
+	typ := &b.Func.Config.Types
 	// match: (RotateLeft64 (Const64 [x]) (Const64 [y]))
 	// result: (Const64 [int64(bits.RotateLeft64(uint64(x), int(y)))])
 	for {
@@ -30409,21 +30433,20 @@ func rewriteValue_OpRotateLeft64(v *ssa.Value) bool {
 		v.AddArg2(x, v0)
 		return true
 	}
-	// match: (RotateLeft64 x (Const64 <t> [c]))
-	// cond: config.PtrSize == 4
-	// result: (RotateLeft64 x (Const32 <t> [int32(c)]))
+	// match: (RotateLeft64 x (Const64 [c]))
+	// cond: config.RegSize == 4
+	// result: (RotateLeft64 x (Const32 <typ.UInt32> [int32(c)]))
 	for {
 		x := v_0
 		if v_1.Op != ssaop.OpConst64 {
 			break
 		}
-		t := v_1.Type
 		c := ssa.AuxIntToInt64(v_1.AuxInt)
-		if !(config.PtrSize == 4) {
+		if !(config.RegSize == 4) {
 			break
 		}
 		v.Reset(ssaop.OpRotateLeft64)
-		v0 := b.NewValue0(v.Pos, ssaop.OpConst32, t)
+		v0 := b.NewValue0(v.Pos, ssaop.OpConst32, typ.UInt32)
 		v0.AuxInt = ssa.Int32ToAuxInt(int32(c))
 		v.AddArg2(x, v0)
 		return true
@@ -30511,6 +30534,7 @@ func rewriteValue_OpRotateLeft8(v *ssa.Value) bool {
 	v_0 := v.Args[0]
 	b := v.Block
 	config := b.Func.Config
+	typ := &b.Func.Config.Types
 	// match: (RotateLeft8 (Const8 [x]) (Const64 [y]))
 	// result: (Const8 [int8(bits.RotateLeft8(uint8(x), int(y)))])
 	for {
@@ -30984,21 +31008,20 @@ func rewriteValue_OpRotateLeft8(v *ssa.Value) bool {
 		v.AddArg2(x, v0)
 		return true
 	}
-	// match: (RotateLeft8 x (Const64 <t> [c]))
-	// cond: config.PtrSize == 4
-	// result: (RotateLeft8 x (Const32 <t> [int32(c)]))
+	// match: (RotateLeft8 x (Const64 [c]))
+	// cond: config.RegSize == 4
+	// result: (RotateLeft8 x (Const32 <typ.UInt32> [int32(c)]))
 	for {
 		x := v_0
 		if v_1.Op != ssaop.OpConst64 {
 			break
 		}
-		t := v_1.Type
 		c := ssa.AuxIntToInt64(v_1.AuxInt)
-		if !(config.PtrSize == 4) {
+		if !(config.RegSize == 4) {
 			break
 		}
 		v.Reset(ssaop.OpRotateLeft8)
-		v0 := b.NewValue0(v.Pos, ssaop.OpConst32, t)
+		v0 := b.NewValue0(v.Pos, ssaop.OpConst32, typ.UInt32)
 		v0.AuxInt = ssa.Int32ToAuxInt(int32(c))
 		v.AddArg2(x, v0)
 		return true
@@ -34798,6 +34821,39 @@ func rewriteValue_OpStaticLECall(v *ssa.Value) bool {
 	b := v.Block
 	config := b.Func.Config
 	typ := &b.Func.Config.Types
+	// match: (StaticLECall {callAux} sptr (Addr {scon} (SB)) (Const32 [1]) mem)
+	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon)
+	// result: (MakeResult (Eq8 (Load <typ.Int8> sptr mem) (Const8 <typ.Int8> [int8(ssa.Read8(scon,0))])) mem)
+	for {
+		if len(v.Args) != 4 {
+			break
+		}
+		callAux := ssa.AuxToCall(v.Aux)
+		mem := v.Args[3]
+		sptr := v.Args[0]
+		v_1 := v.Args[1]
+		if v_1.Op != ssaop.OpAddr {
+			break
+		}
+		scon := ssa.AuxToSym(v_1.Aux)
+		v_1_0 := v_1.Args[0]
+		if v_1_0.Op != ssaop.OpSB {
+			break
+		}
+		v_2 := v.Args[2]
+		if v_2.Op != ssaop.OpConst32 || ssa.AuxIntToInt32(v_2.AuxInt) != 1 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon)) {
+			break
+		}
+		v.Reset(ssaop.OpMakeResult)
+		v0 := b.NewValue0(v.Pos, ssaop.OpEq8, typ.Bool)
+		v1 := b.NewValue0(v.Pos, ssaop.OpLoad, typ.Int8)
+		v1.AddArg2(sptr, mem)
+		v2 := b.NewValue0(v.Pos, ssaop.OpConst8, typ.Int8)
+		v2.AuxInt = ssa.Int8ToAuxInt(int8(ssa.Read8(scon, 0)))
+		v0.AddArg2(v1, v2)
+		v.AddArg2(v0, mem)
+		return true
+	}
 	// match: (StaticLECall {callAux} sptr (Addr {scon} (SB)) (Const64 [1]) mem)
 	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon)
 	// result: (MakeResult (Eq8 (Load <typ.Int8> sptr mem) (Const8 <typ.Int8> [int8(ssa.Read8(scon,0))])) mem)
@@ -34819,6 +34875,39 @@ func rewriteValue_OpStaticLECall(v *ssa.Value) bool {
 		}
 		v_2 := v.Args[2]
 		if v_2.Op != ssaop.OpConst64 || ssa.AuxIntToInt64(v_2.AuxInt) != 1 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon)) {
+			break
+		}
+		v.Reset(ssaop.OpMakeResult)
+		v0 := b.NewValue0(v.Pos, ssaop.OpEq8, typ.Bool)
+		v1 := b.NewValue0(v.Pos, ssaop.OpLoad, typ.Int8)
+		v1.AddArg2(sptr, mem)
+		v2 := b.NewValue0(v.Pos, ssaop.OpConst8, typ.Int8)
+		v2.AuxInt = ssa.Int8ToAuxInt(int8(ssa.Read8(scon, 0)))
+		v0.AddArg2(v1, v2)
+		v.AddArg2(v0, mem)
+		return true
+	}
+	// match: (StaticLECall {callAux} (Addr {scon} (SB)) sptr (Const32 [1]) mem)
+	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon)
+	// result: (MakeResult (Eq8 (Load <typ.Int8> sptr mem) (Const8 <typ.Int8> [int8(ssa.Read8(scon,0))])) mem)
+	for {
+		if len(v.Args) != 4 {
+			break
+		}
+		callAux := ssa.AuxToCall(v.Aux)
+		mem := v.Args[3]
+		v_0 := v.Args[0]
+		if v_0.Op != ssaop.OpAddr {
+			break
+		}
+		scon := ssa.AuxToSym(v_0.Aux)
+		v_0_0 := v_0.Args[0]
+		if v_0_0.Op != ssaop.OpSB {
+			break
+		}
+		sptr := v.Args[1]
+		v_2 := v.Args[2]
+		if v_2.Op != ssaop.OpConst32 || ssa.AuxIntToInt32(v_2.AuxInt) != 1 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon)) {
 			break
 		}
 		v.Reset(ssaop.OpMakeResult)
@@ -34864,6 +34953,39 @@ func rewriteValue_OpStaticLECall(v *ssa.Value) bool {
 		v.AddArg2(v0, mem)
 		return true
 	}
+	// match: (StaticLECall {callAux} sptr (Addr {scon} (SB)) (Const32 [2]) mem)
+	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config)
+	// result: (MakeResult (Eq16 (Load <typ.Int16> sptr mem) (Const16 <typ.Int16> [int16(ssa.Read16(scon,0,config.Ctxt.Arch.ByteOrder))])) mem)
+	for {
+		if len(v.Args) != 4 {
+			break
+		}
+		callAux := ssa.AuxToCall(v.Aux)
+		mem := v.Args[3]
+		sptr := v.Args[0]
+		v_1 := v.Args[1]
+		if v_1.Op != ssaop.OpAddr {
+			break
+		}
+		scon := ssa.AuxToSym(v_1.Aux)
+		v_1_0 := v_1.Args[0]
+		if v_1_0.Op != ssaop.OpSB {
+			break
+		}
+		v_2 := v.Args[2]
+		if v_2.Op != ssaop.OpConst32 || ssa.AuxIntToInt32(v_2.AuxInt) != 2 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config)) {
+			break
+		}
+		v.Reset(ssaop.OpMakeResult)
+		v0 := b.NewValue0(v.Pos, ssaop.OpEq16, typ.Bool)
+		v1 := b.NewValue0(v.Pos, ssaop.OpLoad, typ.Int16)
+		v1.AddArg2(sptr, mem)
+		v2 := b.NewValue0(v.Pos, ssaop.OpConst16, typ.Int16)
+		v2.AuxInt = ssa.Int16ToAuxInt(int16(ssa.Read16(scon, 0, config.Ctxt.Arch.ByteOrder)))
+		v0.AddArg2(v1, v2)
+		v.AddArg2(v0, mem)
+		return true
+	}
 	// match: (StaticLECall {callAux} sptr (Addr {scon} (SB)) (Const64 [2]) mem)
 	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config)
 	// result: (MakeResult (Eq16 (Load <typ.Int16> sptr mem) (Const16 <typ.Int16> [int16(ssa.Read16(scon,0,config.Ctxt.Arch.ByteOrder))])) mem)
@@ -34885,6 +35007,39 @@ func rewriteValue_OpStaticLECall(v *ssa.Value) bool {
 		}
 		v_2 := v.Args[2]
 		if v_2.Op != ssaop.OpConst64 || ssa.AuxIntToInt64(v_2.AuxInt) != 2 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config)) {
+			break
+		}
+		v.Reset(ssaop.OpMakeResult)
+		v0 := b.NewValue0(v.Pos, ssaop.OpEq16, typ.Bool)
+		v1 := b.NewValue0(v.Pos, ssaop.OpLoad, typ.Int16)
+		v1.AddArg2(sptr, mem)
+		v2 := b.NewValue0(v.Pos, ssaop.OpConst16, typ.Int16)
+		v2.AuxInt = ssa.Int16ToAuxInt(int16(ssa.Read16(scon, 0, config.Ctxt.Arch.ByteOrder)))
+		v0.AddArg2(v1, v2)
+		v.AddArg2(v0, mem)
+		return true
+	}
+	// match: (StaticLECall {callAux} (Addr {scon} (SB)) sptr (Const32 [2]) mem)
+	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config)
+	// result: (MakeResult (Eq16 (Load <typ.Int16> sptr mem) (Const16 <typ.Int16> [int16(ssa.Read16(scon,0,config.Ctxt.Arch.ByteOrder))])) mem)
+	for {
+		if len(v.Args) != 4 {
+			break
+		}
+		callAux := ssa.AuxToCall(v.Aux)
+		mem := v.Args[3]
+		v_0 := v.Args[0]
+		if v_0.Op != ssaop.OpAddr {
+			break
+		}
+		scon := ssa.AuxToSym(v_0.Aux)
+		v_0_0 := v_0.Args[0]
+		if v_0_0.Op != ssaop.OpSB {
+			break
+		}
+		sptr := v.Args[1]
+		v_2 := v.Args[2]
+		if v_2.Op != ssaop.OpConst32 || ssa.AuxIntToInt32(v_2.AuxInt) != 2 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config)) {
 			break
 		}
 		v.Reset(ssaop.OpMakeResult)
@@ -34930,6 +35085,39 @@ func rewriteValue_OpStaticLECall(v *ssa.Value) bool {
 		v.AddArg2(v0, mem)
 		return true
 	}
+	// match: (StaticLECall {callAux} sptr (Addr {scon} (SB)) (Const32 [4]) mem)
+	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config)
+	// result: (MakeResult (Eq32 (Load <typ.Int32> sptr mem) (Const32 <typ.Int32> [int32(ssa.Read32(scon,0,config.Ctxt.Arch.ByteOrder))])) mem)
+	for {
+		if len(v.Args) != 4 {
+			break
+		}
+		callAux := ssa.AuxToCall(v.Aux)
+		mem := v.Args[3]
+		sptr := v.Args[0]
+		v_1 := v.Args[1]
+		if v_1.Op != ssaop.OpAddr {
+			break
+		}
+		scon := ssa.AuxToSym(v_1.Aux)
+		v_1_0 := v_1.Args[0]
+		if v_1_0.Op != ssaop.OpSB {
+			break
+		}
+		v_2 := v.Args[2]
+		if v_2.Op != ssaop.OpConst32 || ssa.AuxIntToInt32(v_2.AuxInt) != 4 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config)) {
+			break
+		}
+		v.Reset(ssaop.OpMakeResult)
+		v0 := b.NewValue0(v.Pos, ssaop.OpEq32, typ.Bool)
+		v1 := b.NewValue0(v.Pos, ssaop.OpLoad, typ.Int32)
+		v1.AddArg2(sptr, mem)
+		v2 := b.NewValue0(v.Pos, ssaop.OpConst32, typ.Int32)
+		v2.AuxInt = ssa.Int32ToAuxInt(int32(ssa.Read32(scon, 0, config.Ctxt.Arch.ByteOrder)))
+		v0.AddArg2(v1, v2)
+		v.AddArg2(v0, mem)
+		return true
+	}
 	// match: (StaticLECall {callAux} sptr (Addr {scon} (SB)) (Const64 [4]) mem)
 	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config)
 	// result: (MakeResult (Eq32 (Load <typ.Int32> sptr mem) (Const32 <typ.Int32> [int32(ssa.Read32(scon,0,config.Ctxt.Arch.ByteOrder))])) mem)
@@ -34951,6 +35139,39 @@ func rewriteValue_OpStaticLECall(v *ssa.Value) bool {
 		}
 		v_2 := v.Args[2]
 		if v_2.Op != ssaop.OpConst64 || ssa.AuxIntToInt64(v_2.AuxInt) != 4 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config)) {
+			break
+		}
+		v.Reset(ssaop.OpMakeResult)
+		v0 := b.NewValue0(v.Pos, ssaop.OpEq32, typ.Bool)
+		v1 := b.NewValue0(v.Pos, ssaop.OpLoad, typ.Int32)
+		v1.AddArg2(sptr, mem)
+		v2 := b.NewValue0(v.Pos, ssaop.OpConst32, typ.Int32)
+		v2.AuxInt = ssa.Int32ToAuxInt(int32(ssa.Read32(scon, 0, config.Ctxt.Arch.ByteOrder)))
+		v0.AddArg2(v1, v2)
+		v.AddArg2(v0, mem)
+		return true
+	}
+	// match: (StaticLECall {callAux} (Addr {scon} (SB)) sptr (Const32 [4]) mem)
+	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config)
+	// result: (MakeResult (Eq32 (Load <typ.Int32> sptr mem) (Const32 <typ.Int32> [int32(ssa.Read32(scon,0,config.Ctxt.Arch.ByteOrder))])) mem)
+	for {
+		if len(v.Args) != 4 {
+			break
+		}
+		callAux := ssa.AuxToCall(v.Aux)
+		mem := v.Args[3]
+		v_0 := v.Args[0]
+		if v_0.Op != ssaop.OpAddr {
+			break
+		}
+		scon := ssa.AuxToSym(v_0.Aux)
+		v_0_0 := v_0.Args[0]
+		if v_0_0.Op != ssaop.OpSB {
+			break
+		}
+		sptr := v.Args[1]
+		v_2 := v.Args[2]
+		if v_2.Op != ssaop.OpConst32 || ssa.AuxIntToInt32(v_2.AuxInt) != 4 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config)) {
 			break
 		}
 		v.Reset(ssaop.OpMakeResult)
@@ -34996,8 +35217,8 @@ func rewriteValue_OpStaticLECall(v *ssa.Value) bool {
 		v.AddArg2(v0, mem)
 		return true
 	}
-	// match: (StaticLECall {callAux} sptr (Addr {scon} (SB)) (Const64 [8]) mem)
-	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.PtrSize == 8
+	// match: (StaticLECall {callAux} sptr (Addr {scon} (SB)) (Const32 [8]) mem)
+	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8
 	// result: (MakeResult (Eq64 (Load <typ.Int64> sptr mem) (Const64 <typ.Int64> [int64(ssa.Read64(scon,0,config.Ctxt.Arch.ByteOrder))])) mem)
 	for {
 		if len(v.Args) != 4 {
@@ -35016,7 +35237,7 @@ func rewriteValue_OpStaticLECall(v *ssa.Value) bool {
 			break
 		}
 		v_2 := v.Args[2]
-		if v_2.Op != ssaop.OpConst64 || ssa.AuxIntToInt64(v_2.AuxInt) != 8 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.PtrSize == 8) {
+		if v_2.Op != ssaop.OpConst32 || ssa.AuxIntToInt32(v_2.AuxInt) != 8 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8) {
 			break
 		}
 		v.Reset(ssaop.OpMakeResult)
@@ -35029,8 +35250,41 @@ func rewriteValue_OpStaticLECall(v *ssa.Value) bool {
 		v.AddArg2(v0, mem)
 		return true
 	}
-	// match: (StaticLECall {callAux} (Addr {scon} (SB)) sptr (Const64 [8]) mem)
-	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.PtrSize == 8
+	// match: (StaticLECall {callAux} sptr (Addr {scon} (SB)) (Const64 [8]) mem)
+	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8
+	// result: (MakeResult (Eq64 (Load <typ.Int64> sptr mem) (Const64 <typ.Int64> [int64(ssa.Read64(scon,0,config.Ctxt.Arch.ByteOrder))])) mem)
+	for {
+		if len(v.Args) != 4 {
+			break
+		}
+		callAux := ssa.AuxToCall(v.Aux)
+		mem := v.Args[3]
+		sptr := v.Args[0]
+		v_1 := v.Args[1]
+		if v_1.Op != ssaop.OpAddr {
+			break
+		}
+		scon := ssa.AuxToSym(v_1.Aux)
+		v_1_0 := v_1.Args[0]
+		if v_1_0.Op != ssaop.OpSB {
+			break
+		}
+		v_2 := v.Args[2]
+		if v_2.Op != ssaop.OpConst64 || ssa.AuxIntToInt64(v_2.AuxInt) != 8 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8) {
+			break
+		}
+		v.Reset(ssaop.OpMakeResult)
+		v0 := b.NewValue0(v.Pos, ssaop.OpEq64, typ.Bool)
+		v1 := b.NewValue0(v.Pos, ssaop.OpLoad, typ.Int64)
+		v1.AddArg2(sptr, mem)
+		v2 := b.NewValue0(v.Pos, ssaop.OpConst64, typ.Int64)
+		v2.AuxInt = ssa.Int64ToAuxInt(int64(ssa.Read64(scon, 0, config.Ctxt.Arch.ByteOrder)))
+		v0.AddArg2(v1, v2)
+		v.AddArg2(v0, mem)
+		return true
+	}
+	// match: (StaticLECall {callAux} (Addr {scon} (SB)) sptr (Const32 [8]) mem)
+	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8
 	// result: (MakeResult (Eq64 (Load <typ.Int64> sptr mem) (Const64 <typ.Int64> [int64(ssa.Read64(scon,0,config.Ctxt.Arch.ByteOrder))])) mem)
 	for {
 		if len(v.Args) != 4 {
@@ -35049,7 +35303,7 @@ func rewriteValue_OpStaticLECall(v *ssa.Value) bool {
 		}
 		sptr := v.Args[1]
 		v_2 := v.Args[2]
-		if v_2.Op != ssaop.OpConst64 || ssa.AuxIntToInt64(v_2.AuxInt) != 8 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.PtrSize == 8) {
+		if v_2.Op != ssaop.OpConst32 || ssa.AuxIntToInt32(v_2.AuxInt) != 8 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8) {
 			break
 		}
 		v.Reset(ssaop.OpMakeResult)
@@ -35059,6 +35313,87 @@ func rewriteValue_OpStaticLECall(v *ssa.Value) bool {
 		v2 := b.NewValue0(v.Pos, ssaop.OpConst64, typ.Int64)
 		v2.AuxInt = ssa.Int64ToAuxInt(int64(ssa.Read64(scon, 0, config.Ctxt.Arch.ByteOrder)))
 		v0.AddArg2(v1, v2)
+		v.AddArg2(v0, mem)
+		return true
+	}
+	// match: (StaticLECall {callAux} (Addr {scon} (SB)) sptr (Const64 [8]) mem)
+	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8
+	// result: (MakeResult (Eq64 (Load <typ.Int64> sptr mem) (Const64 <typ.Int64> [int64(ssa.Read64(scon,0,config.Ctxt.Arch.ByteOrder))])) mem)
+	for {
+		if len(v.Args) != 4 {
+			break
+		}
+		callAux := ssa.AuxToCall(v.Aux)
+		mem := v.Args[3]
+		v_0 := v.Args[0]
+		if v_0.Op != ssaop.OpAddr {
+			break
+		}
+		scon := ssa.AuxToSym(v_0.Aux)
+		v_0_0 := v_0.Args[0]
+		if v_0_0.Op != ssaop.OpSB {
+			break
+		}
+		sptr := v.Args[1]
+		v_2 := v.Args[2]
+		if v_2.Op != ssaop.OpConst64 || ssa.AuxIntToInt64(v_2.AuxInt) != 8 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8) {
+			break
+		}
+		v.Reset(ssaop.OpMakeResult)
+		v0 := b.NewValue0(v.Pos, ssaop.OpEq64, typ.Bool)
+		v1 := b.NewValue0(v.Pos, ssaop.OpLoad, typ.Int64)
+		v1.AddArg2(sptr, mem)
+		v2 := b.NewValue0(v.Pos, ssaop.OpConst64, typ.Int64)
+		v2.AuxInt = ssa.Int64ToAuxInt(int64(ssa.Read64(scon, 0, config.Ctxt.Arch.ByteOrder)))
+		v0.AddArg2(v1, v2)
+		v.AddArg2(v0, mem)
+		return true
+	}
+	// match: (StaticLECall {callAux} sptr (Addr {scon} (SB)) (Const32 [3]) mem)
+	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config)
+	// result: (MakeResult (Eq32 (Or32 <typ.Int32> (ZeroExt16to32 <typ.Int32> (Load <typ.Int16> sptr mem)) (Lsh32x32 <typ.Int32> (ZeroExt8to32 <typ.Int32> (Load <typ.Int8> (OffPtr <typ.BytePtr> [2] sptr) mem)) (Const32 <typ.Int32> [16]))) (Const32 <typ.Int32> [int32(uint32(ssa.Read16(scon,0,config.Ctxt.Arch.ByteOrder))|(uint32(ssa.Read8(scon,2))<<16))])) mem)
+	for {
+		if len(v.Args) != 4 {
+			break
+		}
+		callAux := ssa.AuxToCall(v.Aux)
+		mem := v.Args[3]
+		sptr := v.Args[0]
+		v_1 := v.Args[1]
+		if v_1.Op != ssaop.OpAddr {
+			break
+		}
+		scon := ssa.AuxToSym(v_1.Aux)
+		v_1_0 := v_1.Args[0]
+		if v_1_0.Op != ssaop.OpSB {
+			break
+		}
+		v_2 := v.Args[2]
+		if v_2.Op != ssaop.OpConst32 || ssa.AuxIntToInt32(v_2.AuxInt) != 3 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config)) {
+			break
+		}
+		v.Reset(ssaop.OpMakeResult)
+		v0 := b.NewValue0(v.Pos, ssaop.OpEq32, typ.Bool)
+		v1 := b.NewValue0(v.Pos, ssaop.OpOr32, typ.Int32)
+		v2 := b.NewValue0(v.Pos, ssaop.OpZeroExt16to32, typ.Int32)
+		v3 := b.NewValue0(v.Pos, ssaop.OpLoad, typ.Int16)
+		v3.AddArg2(sptr, mem)
+		v2.AddArg(v3)
+		v4 := b.NewValue0(v.Pos, ssaop.OpLsh32x32, typ.Int32)
+		v5 := b.NewValue0(v.Pos, ssaop.OpZeroExt8to32, typ.Int32)
+		v6 := b.NewValue0(v.Pos, ssaop.OpLoad, typ.Int8)
+		v7 := b.NewValue0(v.Pos, ssaop.OpOffPtr, typ.BytePtr)
+		v7.AuxInt = ssa.Int64ToAuxInt(2)
+		v7.AddArg(sptr)
+		v6.AddArg2(v7, mem)
+		v5.AddArg(v6)
+		v8 := b.NewValue0(v.Pos, ssaop.OpConst32, typ.Int32)
+		v8.AuxInt = ssa.Int32ToAuxInt(16)
+		v4.AddArg2(v5, v8)
+		v1.AddArg2(v2, v4)
+		v9 := b.NewValue0(v.Pos, ssaop.OpConst32, typ.Int32)
+		v9.AuxInt = ssa.Int32ToAuxInt(int32(uint32(ssa.Read16(scon, 0, config.Ctxt.Arch.ByteOrder)) | (uint32(ssa.Read8(scon, 2)) << 16)))
+		v0.AddArg2(v1, v9)
 		v.AddArg2(v0, mem)
 		return true
 	}
@@ -35083,6 +35418,54 @@ func rewriteValue_OpStaticLECall(v *ssa.Value) bool {
 		}
 		v_2 := v.Args[2]
 		if v_2.Op != ssaop.OpConst64 || ssa.AuxIntToInt64(v_2.AuxInt) != 3 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config)) {
+			break
+		}
+		v.Reset(ssaop.OpMakeResult)
+		v0 := b.NewValue0(v.Pos, ssaop.OpEq32, typ.Bool)
+		v1 := b.NewValue0(v.Pos, ssaop.OpOr32, typ.Int32)
+		v2 := b.NewValue0(v.Pos, ssaop.OpZeroExt16to32, typ.Int32)
+		v3 := b.NewValue0(v.Pos, ssaop.OpLoad, typ.Int16)
+		v3.AddArg2(sptr, mem)
+		v2.AddArg(v3)
+		v4 := b.NewValue0(v.Pos, ssaop.OpLsh32x32, typ.Int32)
+		v5 := b.NewValue0(v.Pos, ssaop.OpZeroExt8to32, typ.Int32)
+		v6 := b.NewValue0(v.Pos, ssaop.OpLoad, typ.Int8)
+		v7 := b.NewValue0(v.Pos, ssaop.OpOffPtr, typ.BytePtr)
+		v7.AuxInt = ssa.Int64ToAuxInt(2)
+		v7.AddArg(sptr)
+		v6.AddArg2(v7, mem)
+		v5.AddArg(v6)
+		v8 := b.NewValue0(v.Pos, ssaop.OpConst32, typ.Int32)
+		v8.AuxInt = ssa.Int32ToAuxInt(16)
+		v4.AddArg2(v5, v8)
+		v1.AddArg2(v2, v4)
+		v9 := b.NewValue0(v.Pos, ssaop.OpConst32, typ.Int32)
+		v9.AuxInt = ssa.Int32ToAuxInt(int32(uint32(ssa.Read16(scon, 0, config.Ctxt.Arch.ByteOrder)) | (uint32(ssa.Read8(scon, 2)) << 16)))
+		v0.AddArg2(v1, v9)
+		v.AddArg2(v0, mem)
+		return true
+	}
+	// match: (StaticLECall {callAux} (Addr {scon} (SB)) sptr (Const32 [3]) mem)
+	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config)
+	// result: (MakeResult (Eq32 (Or32 <typ.Int32> (ZeroExt16to32 <typ.Int32> (Load <typ.Int16> sptr mem)) (Lsh32x32 <typ.Int32> (ZeroExt8to32 <typ.Int32> (Load <typ.Int8> (OffPtr <typ.BytePtr> [2] sptr) mem)) (Const32 <typ.Int32> [16]))) (Const32 <typ.Int32> [int32(uint32(ssa.Read16(scon,0,config.Ctxt.Arch.ByteOrder))|(uint32(ssa.Read8(scon,2))<<16))])) mem)
+	for {
+		if len(v.Args) != 4 {
+			break
+		}
+		callAux := ssa.AuxToCall(v.Aux)
+		mem := v.Args[3]
+		v_0 := v.Args[0]
+		if v_0.Op != ssaop.OpAddr {
+			break
+		}
+		scon := ssa.AuxToSym(v_0.Aux)
+		v_0_0 := v_0.Args[0]
+		if v_0_0.Op != ssaop.OpSB {
+			break
+		}
+		sptr := v.Args[1]
+		v_2 := v.Args[2]
+		if v_2.Op != ssaop.OpConst32 || ssa.AuxIntToInt32(v_2.AuxInt) != 3 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config)) {
 			break
 		}
 		v.Reset(ssaop.OpMakeResult)
@@ -35158,8 +35541,8 @@ func rewriteValue_OpStaticLECall(v *ssa.Value) bool {
 		v.AddArg2(v0, mem)
 		return true
 	}
-	// match: (StaticLECall {callAux} sptr (Addr {scon} (SB)) (Const64 [5]) mem)
-	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.PtrSize == 8
+	// match: (StaticLECall {callAux} sptr (Addr {scon} (SB)) (Const32 [5]) mem)
+	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8
 	// result: (MakeResult (Eq64 (Or64 <typ.Int64> (ZeroExt32to64 <typ.Int64> (Load <typ.Int32> sptr mem)) (Lsh64x64 <typ.Int64> (ZeroExt8to64 <typ.Int64> (Load <typ.Int8> (OffPtr <typ.BytePtr> [4] sptr) mem)) (Const64 <typ.Int64> [32]))) (Const64 <typ.Int64> [int64(uint64(ssa.Read32(scon,0,config.Ctxt.Arch.ByteOrder))|(uint64(ssa.Read8(scon,4))<<32))])) mem)
 	for {
 		if len(v.Args) != 4 {
@@ -35178,7 +35561,103 @@ func rewriteValue_OpStaticLECall(v *ssa.Value) bool {
 			break
 		}
 		v_2 := v.Args[2]
-		if v_2.Op != ssaop.OpConst64 || ssa.AuxIntToInt64(v_2.AuxInt) != 5 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.PtrSize == 8) {
+		if v_2.Op != ssaop.OpConst32 || ssa.AuxIntToInt32(v_2.AuxInt) != 5 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8) {
+			break
+		}
+		v.Reset(ssaop.OpMakeResult)
+		v0 := b.NewValue0(v.Pos, ssaop.OpEq64, typ.Bool)
+		v1 := b.NewValue0(v.Pos, ssaop.OpOr64, typ.Int64)
+		v2 := b.NewValue0(v.Pos, ssaop.OpZeroExt32to64, typ.Int64)
+		v3 := b.NewValue0(v.Pos, ssaop.OpLoad, typ.Int32)
+		v3.AddArg2(sptr, mem)
+		v2.AddArg(v3)
+		v4 := b.NewValue0(v.Pos, ssaop.OpLsh64x64, typ.Int64)
+		v5 := b.NewValue0(v.Pos, ssaop.OpZeroExt8to64, typ.Int64)
+		v6 := b.NewValue0(v.Pos, ssaop.OpLoad, typ.Int8)
+		v7 := b.NewValue0(v.Pos, ssaop.OpOffPtr, typ.BytePtr)
+		v7.AuxInt = ssa.Int64ToAuxInt(4)
+		v7.AddArg(sptr)
+		v6.AddArg2(v7, mem)
+		v5.AddArg(v6)
+		v8 := b.NewValue0(v.Pos, ssaop.OpConst64, typ.Int64)
+		v8.AuxInt = ssa.Int64ToAuxInt(32)
+		v4.AddArg2(v5, v8)
+		v1.AddArg2(v2, v4)
+		v9 := b.NewValue0(v.Pos, ssaop.OpConst64, typ.Int64)
+		v9.AuxInt = ssa.Int64ToAuxInt(int64(uint64(ssa.Read32(scon, 0, config.Ctxt.Arch.ByteOrder)) | (uint64(ssa.Read8(scon, 4)) << 32)))
+		v0.AddArg2(v1, v9)
+		v.AddArg2(v0, mem)
+		return true
+	}
+	// match: (StaticLECall {callAux} sptr (Addr {scon} (SB)) (Const64 [5]) mem)
+	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8
+	// result: (MakeResult (Eq64 (Or64 <typ.Int64> (ZeroExt32to64 <typ.Int64> (Load <typ.Int32> sptr mem)) (Lsh64x64 <typ.Int64> (ZeroExt8to64 <typ.Int64> (Load <typ.Int8> (OffPtr <typ.BytePtr> [4] sptr) mem)) (Const64 <typ.Int64> [32]))) (Const64 <typ.Int64> [int64(uint64(ssa.Read32(scon,0,config.Ctxt.Arch.ByteOrder))|(uint64(ssa.Read8(scon,4))<<32))])) mem)
+	for {
+		if len(v.Args) != 4 {
+			break
+		}
+		callAux := ssa.AuxToCall(v.Aux)
+		mem := v.Args[3]
+		sptr := v.Args[0]
+		v_1 := v.Args[1]
+		if v_1.Op != ssaop.OpAddr {
+			break
+		}
+		scon := ssa.AuxToSym(v_1.Aux)
+		v_1_0 := v_1.Args[0]
+		if v_1_0.Op != ssaop.OpSB {
+			break
+		}
+		v_2 := v.Args[2]
+		if v_2.Op != ssaop.OpConst64 || ssa.AuxIntToInt64(v_2.AuxInt) != 5 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8) {
+			break
+		}
+		v.Reset(ssaop.OpMakeResult)
+		v0 := b.NewValue0(v.Pos, ssaop.OpEq64, typ.Bool)
+		v1 := b.NewValue0(v.Pos, ssaop.OpOr64, typ.Int64)
+		v2 := b.NewValue0(v.Pos, ssaop.OpZeroExt32to64, typ.Int64)
+		v3 := b.NewValue0(v.Pos, ssaop.OpLoad, typ.Int32)
+		v3.AddArg2(sptr, mem)
+		v2.AddArg(v3)
+		v4 := b.NewValue0(v.Pos, ssaop.OpLsh64x64, typ.Int64)
+		v5 := b.NewValue0(v.Pos, ssaop.OpZeroExt8to64, typ.Int64)
+		v6 := b.NewValue0(v.Pos, ssaop.OpLoad, typ.Int8)
+		v7 := b.NewValue0(v.Pos, ssaop.OpOffPtr, typ.BytePtr)
+		v7.AuxInt = ssa.Int64ToAuxInt(4)
+		v7.AddArg(sptr)
+		v6.AddArg2(v7, mem)
+		v5.AddArg(v6)
+		v8 := b.NewValue0(v.Pos, ssaop.OpConst64, typ.Int64)
+		v8.AuxInt = ssa.Int64ToAuxInt(32)
+		v4.AddArg2(v5, v8)
+		v1.AddArg2(v2, v4)
+		v9 := b.NewValue0(v.Pos, ssaop.OpConst64, typ.Int64)
+		v9.AuxInt = ssa.Int64ToAuxInt(int64(uint64(ssa.Read32(scon, 0, config.Ctxt.Arch.ByteOrder)) | (uint64(ssa.Read8(scon, 4)) << 32)))
+		v0.AddArg2(v1, v9)
+		v.AddArg2(v0, mem)
+		return true
+	}
+	// match: (StaticLECall {callAux} (Addr {scon} (SB)) sptr (Const32 [5]) mem)
+	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8
+	// result: (MakeResult (Eq64 (Or64 <typ.Int64> (ZeroExt32to64 <typ.Int64> (Load <typ.Int32> sptr mem)) (Lsh64x64 <typ.Int64> (ZeroExt8to64 <typ.Int64> (Load <typ.Int8> (OffPtr <typ.BytePtr> [4] sptr) mem)) (Const64 <typ.Int64> [32]))) (Const64 <typ.Int64> [int64(uint64(ssa.Read32(scon,0,config.Ctxt.Arch.ByteOrder))|(uint64(ssa.Read8(scon,4))<<32))])) mem)
+	for {
+		if len(v.Args) != 4 {
+			break
+		}
+		callAux := ssa.AuxToCall(v.Aux)
+		mem := v.Args[3]
+		v_0 := v.Args[0]
+		if v_0.Op != ssaop.OpAddr {
+			break
+		}
+		scon := ssa.AuxToSym(v_0.Aux)
+		v_0_0 := v_0.Args[0]
+		if v_0_0.Op != ssaop.OpSB {
+			break
+		}
+		sptr := v.Args[1]
+		v_2 := v.Args[2]
+		if v_2.Op != ssaop.OpConst32 || ssa.AuxIntToInt32(v_2.AuxInt) != 5 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8) {
 			break
 		}
 		v.Reset(ssaop.OpMakeResult)
@@ -35207,7 +35686,7 @@ func rewriteValue_OpStaticLECall(v *ssa.Value) bool {
 		return true
 	}
 	// match: (StaticLECall {callAux} (Addr {scon} (SB)) sptr (Const64 [5]) mem)
-	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.PtrSize == 8
+	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8
 	// result: (MakeResult (Eq64 (Or64 <typ.Int64> (ZeroExt32to64 <typ.Int64> (Load <typ.Int32> sptr mem)) (Lsh64x64 <typ.Int64> (ZeroExt8to64 <typ.Int64> (Load <typ.Int8> (OffPtr <typ.BytePtr> [4] sptr) mem)) (Const64 <typ.Int64> [32]))) (Const64 <typ.Int64> [int64(uint64(ssa.Read32(scon,0,config.Ctxt.Arch.ByteOrder))|(uint64(ssa.Read8(scon,4))<<32))])) mem)
 	for {
 		if len(v.Args) != 4 {
@@ -35226,7 +35705,7 @@ func rewriteValue_OpStaticLECall(v *ssa.Value) bool {
 		}
 		sptr := v.Args[1]
 		v_2 := v.Args[2]
-		if v_2.Op != ssaop.OpConst64 || ssa.AuxIntToInt64(v_2.AuxInt) != 5 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.PtrSize == 8) {
+		if v_2.Op != ssaop.OpConst64 || ssa.AuxIntToInt64(v_2.AuxInt) != 5 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8) {
 			break
 		}
 		v.Reset(ssaop.OpMakeResult)
@@ -35254,8 +35733,8 @@ func rewriteValue_OpStaticLECall(v *ssa.Value) bool {
 		v.AddArg2(v0, mem)
 		return true
 	}
-	// match: (StaticLECall {callAux} sptr (Addr {scon} (SB)) (Const64 [6]) mem)
-	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.PtrSize == 8
+	// match: (StaticLECall {callAux} sptr (Addr {scon} (SB)) (Const32 [6]) mem)
+	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8
 	// result: (MakeResult (Eq64 (Or64 <typ.Int64> (ZeroExt32to64 <typ.Int64> (Load <typ.Int32> sptr mem)) (Lsh64x64 <typ.Int64> (ZeroExt16to64 <typ.Int64> (Load <typ.Int16> (OffPtr <typ.BytePtr> [4] sptr) mem)) (Const64 <typ.Int64> [32]))) (Const64 <typ.Int64> [int64(uint64(ssa.Read32(scon,0,config.Ctxt.Arch.ByteOrder))|(uint64(ssa.Read16(scon,4,config.Ctxt.Arch.ByteOrder))<<32))])) mem)
 	for {
 		if len(v.Args) != 4 {
@@ -35274,7 +35753,103 @@ func rewriteValue_OpStaticLECall(v *ssa.Value) bool {
 			break
 		}
 		v_2 := v.Args[2]
-		if v_2.Op != ssaop.OpConst64 || ssa.AuxIntToInt64(v_2.AuxInt) != 6 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.PtrSize == 8) {
+		if v_2.Op != ssaop.OpConst32 || ssa.AuxIntToInt32(v_2.AuxInt) != 6 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8) {
+			break
+		}
+		v.Reset(ssaop.OpMakeResult)
+		v0 := b.NewValue0(v.Pos, ssaop.OpEq64, typ.Bool)
+		v1 := b.NewValue0(v.Pos, ssaop.OpOr64, typ.Int64)
+		v2 := b.NewValue0(v.Pos, ssaop.OpZeroExt32to64, typ.Int64)
+		v3 := b.NewValue0(v.Pos, ssaop.OpLoad, typ.Int32)
+		v3.AddArg2(sptr, mem)
+		v2.AddArg(v3)
+		v4 := b.NewValue0(v.Pos, ssaop.OpLsh64x64, typ.Int64)
+		v5 := b.NewValue0(v.Pos, ssaop.OpZeroExt16to64, typ.Int64)
+		v6 := b.NewValue0(v.Pos, ssaop.OpLoad, typ.Int16)
+		v7 := b.NewValue0(v.Pos, ssaop.OpOffPtr, typ.BytePtr)
+		v7.AuxInt = ssa.Int64ToAuxInt(4)
+		v7.AddArg(sptr)
+		v6.AddArg2(v7, mem)
+		v5.AddArg(v6)
+		v8 := b.NewValue0(v.Pos, ssaop.OpConst64, typ.Int64)
+		v8.AuxInt = ssa.Int64ToAuxInt(32)
+		v4.AddArg2(v5, v8)
+		v1.AddArg2(v2, v4)
+		v9 := b.NewValue0(v.Pos, ssaop.OpConst64, typ.Int64)
+		v9.AuxInt = ssa.Int64ToAuxInt(int64(uint64(ssa.Read32(scon, 0, config.Ctxt.Arch.ByteOrder)) | (uint64(ssa.Read16(scon, 4, config.Ctxt.Arch.ByteOrder)) << 32)))
+		v0.AddArg2(v1, v9)
+		v.AddArg2(v0, mem)
+		return true
+	}
+	// match: (StaticLECall {callAux} sptr (Addr {scon} (SB)) (Const64 [6]) mem)
+	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8
+	// result: (MakeResult (Eq64 (Or64 <typ.Int64> (ZeroExt32to64 <typ.Int64> (Load <typ.Int32> sptr mem)) (Lsh64x64 <typ.Int64> (ZeroExt16to64 <typ.Int64> (Load <typ.Int16> (OffPtr <typ.BytePtr> [4] sptr) mem)) (Const64 <typ.Int64> [32]))) (Const64 <typ.Int64> [int64(uint64(ssa.Read32(scon,0,config.Ctxt.Arch.ByteOrder))|(uint64(ssa.Read16(scon,4,config.Ctxt.Arch.ByteOrder))<<32))])) mem)
+	for {
+		if len(v.Args) != 4 {
+			break
+		}
+		callAux := ssa.AuxToCall(v.Aux)
+		mem := v.Args[3]
+		sptr := v.Args[0]
+		v_1 := v.Args[1]
+		if v_1.Op != ssaop.OpAddr {
+			break
+		}
+		scon := ssa.AuxToSym(v_1.Aux)
+		v_1_0 := v_1.Args[0]
+		if v_1_0.Op != ssaop.OpSB {
+			break
+		}
+		v_2 := v.Args[2]
+		if v_2.Op != ssaop.OpConst64 || ssa.AuxIntToInt64(v_2.AuxInt) != 6 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8) {
+			break
+		}
+		v.Reset(ssaop.OpMakeResult)
+		v0 := b.NewValue0(v.Pos, ssaop.OpEq64, typ.Bool)
+		v1 := b.NewValue0(v.Pos, ssaop.OpOr64, typ.Int64)
+		v2 := b.NewValue0(v.Pos, ssaop.OpZeroExt32to64, typ.Int64)
+		v3 := b.NewValue0(v.Pos, ssaop.OpLoad, typ.Int32)
+		v3.AddArg2(sptr, mem)
+		v2.AddArg(v3)
+		v4 := b.NewValue0(v.Pos, ssaop.OpLsh64x64, typ.Int64)
+		v5 := b.NewValue0(v.Pos, ssaop.OpZeroExt16to64, typ.Int64)
+		v6 := b.NewValue0(v.Pos, ssaop.OpLoad, typ.Int16)
+		v7 := b.NewValue0(v.Pos, ssaop.OpOffPtr, typ.BytePtr)
+		v7.AuxInt = ssa.Int64ToAuxInt(4)
+		v7.AddArg(sptr)
+		v6.AddArg2(v7, mem)
+		v5.AddArg(v6)
+		v8 := b.NewValue0(v.Pos, ssaop.OpConst64, typ.Int64)
+		v8.AuxInt = ssa.Int64ToAuxInt(32)
+		v4.AddArg2(v5, v8)
+		v1.AddArg2(v2, v4)
+		v9 := b.NewValue0(v.Pos, ssaop.OpConst64, typ.Int64)
+		v9.AuxInt = ssa.Int64ToAuxInt(int64(uint64(ssa.Read32(scon, 0, config.Ctxt.Arch.ByteOrder)) | (uint64(ssa.Read16(scon, 4, config.Ctxt.Arch.ByteOrder)) << 32)))
+		v0.AddArg2(v1, v9)
+		v.AddArg2(v0, mem)
+		return true
+	}
+	// match: (StaticLECall {callAux} (Addr {scon} (SB)) sptr (Const32 [6]) mem)
+	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8
+	// result: (MakeResult (Eq64 (Or64 <typ.Int64> (ZeroExt32to64 <typ.Int64> (Load <typ.Int32> sptr mem)) (Lsh64x64 <typ.Int64> (ZeroExt16to64 <typ.Int64> (Load <typ.Int16> (OffPtr <typ.BytePtr> [4] sptr) mem)) (Const64 <typ.Int64> [32]))) (Const64 <typ.Int64> [int64(uint64(ssa.Read32(scon,0,config.Ctxt.Arch.ByteOrder))|(uint64(ssa.Read16(scon,4,config.Ctxt.Arch.ByteOrder))<<32))])) mem)
+	for {
+		if len(v.Args) != 4 {
+			break
+		}
+		callAux := ssa.AuxToCall(v.Aux)
+		mem := v.Args[3]
+		v_0 := v.Args[0]
+		if v_0.Op != ssaop.OpAddr {
+			break
+		}
+		scon := ssa.AuxToSym(v_0.Aux)
+		v_0_0 := v_0.Args[0]
+		if v_0_0.Op != ssaop.OpSB {
+			break
+		}
+		sptr := v.Args[1]
+		v_2 := v.Args[2]
+		if v_2.Op != ssaop.OpConst32 || ssa.AuxIntToInt32(v_2.AuxInt) != 6 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8) {
 			break
 		}
 		v.Reset(ssaop.OpMakeResult)
@@ -35303,7 +35878,7 @@ func rewriteValue_OpStaticLECall(v *ssa.Value) bool {
 		return true
 	}
 	// match: (StaticLECall {callAux} (Addr {scon} (SB)) sptr (Const64 [6]) mem)
-	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.PtrSize == 8
+	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8
 	// result: (MakeResult (Eq64 (Or64 <typ.Int64> (ZeroExt32to64 <typ.Int64> (Load <typ.Int32> sptr mem)) (Lsh64x64 <typ.Int64> (ZeroExt16to64 <typ.Int64> (Load <typ.Int16> (OffPtr <typ.BytePtr> [4] sptr) mem)) (Const64 <typ.Int64> [32]))) (Const64 <typ.Int64> [int64(uint64(ssa.Read32(scon,0,config.Ctxt.Arch.ByteOrder))|(uint64(ssa.Read16(scon,4,config.Ctxt.Arch.ByteOrder))<<32))])) mem)
 	for {
 		if len(v.Args) != 4 {
@@ -35322,7 +35897,7 @@ func rewriteValue_OpStaticLECall(v *ssa.Value) bool {
 		}
 		sptr := v.Args[1]
 		v_2 := v.Args[2]
-		if v_2.Op != ssaop.OpConst64 || ssa.AuxIntToInt64(v_2.AuxInt) != 6 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.PtrSize == 8) {
+		if v_2.Op != ssaop.OpConst64 || ssa.AuxIntToInt64(v_2.AuxInt) != 6 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8) {
 			break
 		}
 		v.Reset(ssaop.OpMakeResult)
@@ -35350,8 +35925,8 @@ func rewriteValue_OpStaticLECall(v *ssa.Value) bool {
 		v.AddArg2(v0, mem)
 		return true
 	}
-	// match: (StaticLECall {callAux} sptr (Addr {scon} (SB)) (Const64 [7]) mem)
-	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.PtrSize == 8
+	// match: (StaticLECall {callAux} sptr (Addr {scon} (SB)) (Const32 [7]) mem)
+	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8
 	// result: (MakeResult (Eq64 (Or64 <typ.Int64> (ZeroExt32to64 <typ.Int64> (Load <typ.Int32> sptr mem)) (Lsh64x64 <typ.Int64> (ZeroExt32to64 <typ.Int64> (Load <typ.Int32> (OffPtr <typ.BytePtr> [3] sptr) mem)) (Const64 <typ.Int64> [32]))) (Const64 <typ.Int64> [int64(uint64(ssa.Read32(scon,0,config.Ctxt.Arch.ByteOrder))|(uint64(ssa.Read32(scon,3,config.Ctxt.Arch.ByteOrder))<<32))])) mem)
 	for {
 		if len(v.Args) != 4 {
@@ -35370,7 +35945,103 @@ func rewriteValue_OpStaticLECall(v *ssa.Value) bool {
 			break
 		}
 		v_2 := v.Args[2]
-		if v_2.Op != ssaop.OpConst64 || ssa.AuxIntToInt64(v_2.AuxInt) != 7 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.PtrSize == 8) {
+		if v_2.Op != ssaop.OpConst32 || ssa.AuxIntToInt32(v_2.AuxInt) != 7 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8) {
+			break
+		}
+		v.Reset(ssaop.OpMakeResult)
+		v0 := b.NewValue0(v.Pos, ssaop.OpEq64, typ.Bool)
+		v1 := b.NewValue0(v.Pos, ssaop.OpOr64, typ.Int64)
+		v2 := b.NewValue0(v.Pos, ssaop.OpZeroExt32to64, typ.Int64)
+		v3 := b.NewValue0(v.Pos, ssaop.OpLoad, typ.Int32)
+		v3.AddArg2(sptr, mem)
+		v2.AddArg(v3)
+		v4 := b.NewValue0(v.Pos, ssaop.OpLsh64x64, typ.Int64)
+		v5 := b.NewValue0(v.Pos, ssaop.OpZeroExt32to64, typ.Int64)
+		v6 := b.NewValue0(v.Pos, ssaop.OpLoad, typ.Int32)
+		v7 := b.NewValue0(v.Pos, ssaop.OpOffPtr, typ.BytePtr)
+		v7.AuxInt = ssa.Int64ToAuxInt(3)
+		v7.AddArg(sptr)
+		v6.AddArg2(v7, mem)
+		v5.AddArg(v6)
+		v8 := b.NewValue0(v.Pos, ssaop.OpConst64, typ.Int64)
+		v8.AuxInt = ssa.Int64ToAuxInt(32)
+		v4.AddArg2(v5, v8)
+		v1.AddArg2(v2, v4)
+		v9 := b.NewValue0(v.Pos, ssaop.OpConst64, typ.Int64)
+		v9.AuxInt = ssa.Int64ToAuxInt(int64(uint64(ssa.Read32(scon, 0, config.Ctxt.Arch.ByteOrder)) | (uint64(ssa.Read32(scon, 3, config.Ctxt.Arch.ByteOrder)) << 32)))
+		v0.AddArg2(v1, v9)
+		v.AddArg2(v0, mem)
+		return true
+	}
+	// match: (StaticLECall {callAux} sptr (Addr {scon} (SB)) (Const64 [7]) mem)
+	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8
+	// result: (MakeResult (Eq64 (Or64 <typ.Int64> (ZeroExt32to64 <typ.Int64> (Load <typ.Int32> sptr mem)) (Lsh64x64 <typ.Int64> (ZeroExt32to64 <typ.Int64> (Load <typ.Int32> (OffPtr <typ.BytePtr> [3] sptr) mem)) (Const64 <typ.Int64> [32]))) (Const64 <typ.Int64> [int64(uint64(ssa.Read32(scon,0,config.Ctxt.Arch.ByteOrder))|(uint64(ssa.Read32(scon,3,config.Ctxt.Arch.ByteOrder))<<32))])) mem)
+	for {
+		if len(v.Args) != 4 {
+			break
+		}
+		callAux := ssa.AuxToCall(v.Aux)
+		mem := v.Args[3]
+		sptr := v.Args[0]
+		v_1 := v.Args[1]
+		if v_1.Op != ssaop.OpAddr {
+			break
+		}
+		scon := ssa.AuxToSym(v_1.Aux)
+		v_1_0 := v_1.Args[0]
+		if v_1_0.Op != ssaop.OpSB {
+			break
+		}
+		v_2 := v.Args[2]
+		if v_2.Op != ssaop.OpConst64 || ssa.AuxIntToInt64(v_2.AuxInt) != 7 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8) {
+			break
+		}
+		v.Reset(ssaop.OpMakeResult)
+		v0 := b.NewValue0(v.Pos, ssaop.OpEq64, typ.Bool)
+		v1 := b.NewValue0(v.Pos, ssaop.OpOr64, typ.Int64)
+		v2 := b.NewValue0(v.Pos, ssaop.OpZeroExt32to64, typ.Int64)
+		v3 := b.NewValue0(v.Pos, ssaop.OpLoad, typ.Int32)
+		v3.AddArg2(sptr, mem)
+		v2.AddArg(v3)
+		v4 := b.NewValue0(v.Pos, ssaop.OpLsh64x64, typ.Int64)
+		v5 := b.NewValue0(v.Pos, ssaop.OpZeroExt32to64, typ.Int64)
+		v6 := b.NewValue0(v.Pos, ssaop.OpLoad, typ.Int32)
+		v7 := b.NewValue0(v.Pos, ssaop.OpOffPtr, typ.BytePtr)
+		v7.AuxInt = ssa.Int64ToAuxInt(3)
+		v7.AddArg(sptr)
+		v6.AddArg2(v7, mem)
+		v5.AddArg(v6)
+		v8 := b.NewValue0(v.Pos, ssaop.OpConst64, typ.Int64)
+		v8.AuxInt = ssa.Int64ToAuxInt(32)
+		v4.AddArg2(v5, v8)
+		v1.AddArg2(v2, v4)
+		v9 := b.NewValue0(v.Pos, ssaop.OpConst64, typ.Int64)
+		v9.AuxInt = ssa.Int64ToAuxInt(int64(uint64(ssa.Read32(scon, 0, config.Ctxt.Arch.ByteOrder)) | (uint64(ssa.Read32(scon, 3, config.Ctxt.Arch.ByteOrder)) << 32)))
+		v0.AddArg2(v1, v9)
+		v.AddArg2(v0, mem)
+		return true
+	}
+	// match: (StaticLECall {callAux} (Addr {scon} (SB)) sptr (Const32 [7]) mem)
+	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8
+	// result: (MakeResult (Eq64 (Or64 <typ.Int64> (ZeroExt32to64 <typ.Int64> (Load <typ.Int32> sptr mem)) (Lsh64x64 <typ.Int64> (ZeroExt32to64 <typ.Int64> (Load <typ.Int32> (OffPtr <typ.BytePtr> [3] sptr) mem)) (Const64 <typ.Int64> [32]))) (Const64 <typ.Int64> [int64(uint64(ssa.Read32(scon,0,config.Ctxt.Arch.ByteOrder))|(uint64(ssa.Read32(scon,3,config.Ctxt.Arch.ByteOrder))<<32))])) mem)
+	for {
+		if len(v.Args) != 4 {
+			break
+		}
+		callAux := ssa.AuxToCall(v.Aux)
+		mem := v.Args[3]
+		v_0 := v.Args[0]
+		if v_0.Op != ssaop.OpAddr {
+			break
+		}
+		scon := ssa.AuxToSym(v_0.Aux)
+		v_0_0 := v_0.Args[0]
+		if v_0_0.Op != ssaop.OpSB {
+			break
+		}
+		sptr := v.Args[1]
+		v_2 := v.Args[2]
+		if v_2.Op != ssaop.OpConst32 || ssa.AuxIntToInt32(v_2.AuxInt) != 7 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8) {
 			break
 		}
 		v.Reset(ssaop.OpMakeResult)
@@ -35399,7 +36070,7 @@ func rewriteValue_OpStaticLECall(v *ssa.Value) bool {
 		return true
 	}
 	// match: (StaticLECall {callAux} (Addr {scon} (SB)) sptr (Const64 [7]) mem)
-	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.PtrSize == 8
+	// cond: ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8
 	// result: (MakeResult (Eq64 (Or64 <typ.Int64> (ZeroExt32to64 <typ.Int64> (Load <typ.Int32> sptr mem)) (Lsh64x64 <typ.Int64> (ZeroExt32to64 <typ.Int64> (Load <typ.Int32> (OffPtr <typ.BytePtr> [3] sptr) mem)) (Const64 <typ.Int64> [32]))) (Const64 <typ.Int64> [int64(uint64(ssa.Read32(scon,0,config.Ctxt.Arch.ByteOrder))|(uint64(ssa.Read32(scon,3,config.Ctxt.Arch.ByteOrder))<<32))])) mem)
 	for {
 		if len(v.Args) != 4 {
@@ -35418,7 +36089,7 @@ func rewriteValue_OpStaticLECall(v *ssa.Value) bool {
 		}
 		sptr := v.Args[1]
 		v_2 := v.Args[2]
-		if v_2.Op != ssaop.OpConst64 || ssa.AuxIntToInt64(v_2.AuxInt) != 7 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.PtrSize == 8) {
+		if v_2.Op != ssaop.OpConst64 || ssa.AuxIntToInt64(v_2.AuxInt) != 7 || !(ssa.IsSameCall(callAux, "runtime.memequal") && ssa.SymIsRO(scon) && canLoadUnaligned(config) && config.RegSize == 8) {
 			break
 		}
 		v.Reset(ssaop.OpMakeResult)
@@ -35443,6 +36114,25 @@ func rewriteValue_OpStaticLECall(v *ssa.Value) bool {
 		v9 := b.NewValue0(v.Pos, ssaop.OpConst64, typ.Int64)
 		v9.AuxInt = ssa.Int64ToAuxInt(int64(uint64(ssa.Read32(scon, 0, config.Ctxt.Arch.ByteOrder)) | (uint64(ssa.Read32(scon, 3, config.Ctxt.Arch.ByteOrder)) << 32)))
 		v0.AddArg2(v1, v9)
+		v.AddArg2(v0, mem)
+		return true
+	}
+	// match: (StaticLECall {callAux} _ _ (Const32 [0]) mem)
+	// cond: ssa.IsSameCall(callAux, "runtime.memequal")
+	// result: (MakeResult (ConstBool <typ.Bool> [true]) mem)
+	for {
+		if len(v.Args) != 4 {
+			break
+		}
+		callAux := ssa.AuxToCall(v.Aux)
+		mem := v.Args[3]
+		v_2 := v.Args[2]
+		if v_2.Op != ssaop.OpConst32 || ssa.AuxIntToInt32(v_2.AuxInt) != 0 || !(ssa.IsSameCall(callAux, "runtime.memequal")) {
+			break
+		}
+		v.Reset(ssaop.OpMakeResult)
+		v0 := b.NewValue0(v.Pos, ssaop.OpConstBool, typ.Bool)
+		v0.AuxInt = ssa.BoolToAuxInt(true)
 		v.AddArg2(v0, mem)
 		return true
 	}

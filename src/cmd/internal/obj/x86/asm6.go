@@ -2150,6 +2150,7 @@ func span6(ctxt *obj.Link, s *obj.LSym, newprog obj.ProgAlloc) {
 					binary.LittleEndian.PutUint32(s.P[q.Pc+int64(q.Isize)-4:], uint32(v))
 				}
 			}
+			p.Rel = nil
 
 			if p.As == obj.APCALIGN || p.As == obj.APCALIGNMAX {
 				v := obj.AlignmentPadding(c, p, ctxt, s)
@@ -2162,8 +2163,6 @@ func span6(ctxt *obj.Link, s *obj.LSym, newprog obj.ProgAlloc) {
 				pPrev = p
 				continue
 			}
-
-			p.Rel = nil
 
 			p.Pc = int64(c)
 			ab.asmins(ctxt, s, p)
@@ -2237,9 +2236,11 @@ func span6(ctxt *obj.Link, s *obj.LSym, newprog obj.ProgAlloc) {
 	if !CanUse1InsnTLS(ctxt) {
 		useTLS := func(p *obj.Prog) bool {
 			// Only need to mark the second instruction, which has
-			// REG_TLS as Index. (It is okay to interrupt and restart
-			// the first instruction.)
-			return p.From.Index == REG_TLS
+			// REG_TLS as Index. Rewritten Windows TLS accesses also
+			// mark the instructions that hold per-thread pointers.
+			// (It is okay to interrupt and restart the instructions
+			// before these.)
+			return p.From.Index == REG_TLS || p.Mark&unsafeTLS != 0
 		}
 		obj.MarkUnsafePoints(ctxt, s.Func().Text, newprog, useTLS, nil)
 	}
@@ -5137,9 +5138,9 @@ func (ab *AsmBuf) doasm(ctxt *obj.Link, cursym *obj.LSym, p *obj.Prog) {
 					default:
 						log.Fatalf("unknown TLS base location for %v", ctxt.Headtype)
 
-					case objabi.Hlinux, objabi.Hfreebsd:
+					case objabi.Hlinux, objabi.Hfreebsd, objabi.Hopenbsd:
 						if !ctxt.Flag_shared {
-							log.Fatalf("unknown TLS base location for linux/freebsd without -shared")
+							log.Fatalf("unknown TLS base location for %v without -shared", ctxt.Headtype)
 						}
 						// Note that this is not generating the same insn as the other cases.
 						//     MOV TLS, R_to
@@ -5347,6 +5348,27 @@ func isbadbyte(a *obj.Addr) bool {
 	return a.Type == obj.TYPE_REG && (REG_BP <= a.Reg && a.Reg <= REG_DI || REG_BPB <= a.Reg && a.Reg <= REG_DIB)
 }
 
+// highByteReg returns the first of AH, CH, DH or BH
+// used as a register operand of p, or 0 if there is none.
+func highByteReg(p *obj.Prog) int {
+	isHigh := func(r int16) bool { return REG_AH <= r && r <= REG_BH }
+	if p.From.Type == obj.TYPE_REG && isHigh(p.From.Reg) {
+		return int(p.From.Reg)
+	}
+	if isHigh(p.Reg) {
+		return int(p.Reg)
+	}
+	for _, a := range p.RestArgs {
+		if a.Type == obj.TYPE_REG && isHigh(a.Reg) {
+			return int(a.Reg)
+		}
+	}
+	if p.To.Type == obj.TYPE_REG && isHigh(p.To.Reg) {
+		return int(p.To.Reg)
+	}
+	return 0
+}
+
 func (ab *AsmBuf) asmins(ctxt *obj.Link, cursym *obj.LSym, p *obj.Prog) {
 	ab.Reset()
 
@@ -5363,6 +5385,11 @@ func (ab *AsmBuf) asmins(ctxt *obj.Link, cursym *obj.LSym, p *obj.Prog) {
 		// note that the handbook often misleadingly shows 66/f2/f3 in `opcode'.
 		if ctxt.Arch.Family != sys.AMD64 {
 			ctxt.Diag("asmins: illegal in mode %d: %v (%d %d)", ctxt.Arch.RegSize*8, p, p.Ft, p.Tt)
+		}
+		// With a REX prefix, the encodings of AH, CH, DH and BH
+		// select SPB, BPB, SIB and DIB instead.
+		if r := highByteReg(p); r != 0 {
+			ctxt.Diag("cannot use %v in instruction requiring REX prefix: %v", rconv(r), p)
 		}
 		n := ab.Len()
 		var np int

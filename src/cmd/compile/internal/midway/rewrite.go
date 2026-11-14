@@ -233,7 +233,12 @@ func (r *Rewriter) generateDispatchers(fileAST *syntax.File) {
 				continue
 			}
 
-			// Clean signature -> Replace body with dispatcher
+			// Clean signature -> Replace body with dispatcher.
+			// For methods, ensure the receiver has a name so the dispatcher
+			// can forward the call to the specialized method on the receiver.
+			if d.Recv != nil && d.Recv.Name == nil {
+				d.Recv.Name = syntax.NewName(d.Recv.Pos(), "_simdRecv")
+			}
 			d.Body = r.createDispatcherBody(d, sig)
 			newDecls = append(newDecls, d)
 
@@ -258,33 +263,46 @@ func (r *Rewriter) generateDispatchers(fileAST *syntax.File) {
 	fileAST.DeclList = newDecls
 
 	if !r.analyzer.inSimd {
-		// Inject an import to the bridge package (if not exists)
+		// Inject imports for the simd and bridge packages (if they do not already exist)
 		hasArchSimd := false
 		var simdImport *syntax.ImportDecl
 		p := fileAST.Pos()
 		for _, decl := range fileAST.DeclList {
 			if imp, ok := decl.(*syntax.ImportDecl); ok {
-				if imp.Path.Value == `"`+archFullPkg+`"` {
-					hasArchSimd = true
+				if imp.Path.Value == `"`+SimdBridgePkg+`"` {
+					if imp.LocalPkgName == nil || imp.LocalPkgName.Value == archPkg {
+						hasArchSimd = true
+					} else if imp.LocalPkgName.Value == "_" {
+						imp.LocalPkgName = nil
+						hasArchSimd = true
+					}
 					if simdImport == nil {
 						p = imp.Pos()
 					}
 				}
-				if imp.Path.Value == `"`+simdPkg+`"` {
-					simdImport = imp
+				if imp.Path.Value == `"`+SimdPkg+`"` {
+					if imp.LocalPkgName == nil || imp.LocalPkgName.Value == SimdPkg {
+						simdImport = imp
+					} else if imp.LocalPkgName.Value == "_" {
+						imp.LocalPkgName = nil
+						simdImport = imp
+					}
 					p = imp.Pos()
 				}
 			}
 		}
 
+		if simdImport == nil {
+			r.injectImport(fileAST, SimdPkg, p)
+		}
 		if !hasArchSimd {
-			r.injectImport(fileAST, archFullPkg, p)
+			r.injectImport(fileAST, SimdBridgePkg, p)
 		}
 
 		// Ensure at least one use of "simd"
 		// var _ = simd.VectorBitLen()
 		fun := &syntax.SelectorExpr{
-			X:   syntax.NewName(p, simdPkg), // Assume this is resolvable
+			X:   syntax.NewName(p, SimdPkg), // Assume this is resolvable
 			Sel: syntax.NewName(p, vectorSizeFn),
 		}
 		fun.SetPos(p)
@@ -296,6 +314,18 @@ func (r *Rewriter) generateDispatchers(fileAST *syntax.File) {
 		varDecl := &syntax.VarDecl{NameList: []*syntax.Name{name}, Values: call}
 		varDecl.SetPos(p)
 		fileAST.DeclList = append(fileAST.DeclList, varDecl)
+
+		// Ensure at least one use of "simd/internal/bridge"
+		// var _ bridge.ZeroSized
+		bridgeType := &syntax.SelectorExpr{
+			X:   syntax.NewName(p, archPkg),
+			Sel: syntax.NewName(p, "ZeroSized"),
+		}
+		bridgeType.SetPos(p)
+		bridgeName := syntax.NewName(p, "_")
+		bridgeVarDecl := &syntax.VarDecl{NameList: []*syntax.Name{bridgeName}, Type: bridgeType}
+		bridgeVarDecl.SetPos(p)
+		fileAST.DeclList = append(fileAST.DeclList, bridgeVarDecl)
 	}
 }
 
@@ -314,11 +344,13 @@ func (r *Rewriter) createDispatcherBody(d *syntax.FuncDecl, sig *types2.Signatur
 	args := func() []syntax.Expr {
 		var args []syntax.Expr
 		if d.Type.ParamList != nil {
-			for _, field := range d.Type.ParamList {
-				if field.Name != nil {
-					paramName := syntax.NewName(field.Pos(), field.Name.Value)
-					args = append(args, paramName)
+			for i, field := range d.Type.ParamList {
+				if field.Name == nil || field.Name.Value == "_" {
+					// Blank and unnamed parameters cannot be passed along, so name them.
+					field.Name = syntax.NewName(field.Pos(), fmt.Sprintf("p@%d", i))
 				}
+				paramName := syntax.NewName(field.Pos(), field.Name.Value)
+				args = append(args, paramName)
 			}
 		}
 		return args
@@ -348,7 +380,7 @@ func (r *Rewriter) createDispatcherBody(d *syntax.FuncDecl, sig *types2.Signatur
 	switchStmt := &syntax.SwitchStmt{
 		Tag: pe(&syntax.CallExpr{
 			Fun: pe(&syntax.SelectorExpr{
-				X:   syntax.NewName(d.Pos(), simdPkg), // Assume this is resolvable
+				X:   syntax.NewName(d.Pos(), SimdPkg), // Assume this is resolvable
 				Sel: syntax.NewName(d.Pos(), vectorSizeFn),
 			}),
 		}),
@@ -361,9 +393,22 @@ func (r *Rewriter) createDispatcherBody(d *syntax.FuncDecl, sig *types2.Signatur
 		fnName := fmt.Sprintf("%s@simd%d%s", d.Name.Value, k, variantSuffix)
 		fnIdent := syntax.NewName(d.Pos(), fnName)
 
+		var fun syntax.Expr
+		if d.Recv != nil && d.Recv.Name != nil {
+			// For methods, call the specialized method on the receiver rather
+			// than as a plain function, so the type-checker can resolve it.
+			recvIdent := syntax.NewName(d.Pos(), d.Recv.Name.Value)
+			selExpr := &syntax.SelectorExpr{X: recvIdent, Sel: fnIdent}
+			selExpr.SetPos(d.Pos())
+			fun = selExpr
+		} else {
+			fun = pe(fnIdent)
+		}
+
 		callExpr := pe(&syntax.CallExpr{
-			Fun:     pe(fnIdent),
+			Fun:     fun,
 			ArgList: args(),
+			HasDots: sig.Variadic(),
 		})
 
 		// callReturnStmt is either `return call(...)` or `call(...); return`
@@ -386,7 +431,7 @@ func (r *Rewriter) createDispatcherBody(d *syntax.FuncDecl, sig *types2.Signatur
 	guardCallWithCondition := func(require string, stmt syntax.Stmt) syntax.Stmt {
 		cond := pe(&syntax.CallExpr{
 			Fun: pe(&syntax.SelectorExpr{
-				X:   syntax.NewName(d.Pos(), simdPkg), // Assume this is resolvable
+				X:   syntax.NewName(d.Pos(), SimdPkg), // Assume this is resolvable
 				Sel: syntax.NewName(d.Pos(), require),
 			})})
 
@@ -505,8 +550,8 @@ func (r *Rewriter) shouldIncludeDecl(decl syntax.Decl) bool {
 	if r.analyzer.inSimd {
 		theFile := decl.Pos().Base().Filename()
 
-		lastSlash := strings.LastIndex(theFile, simdPkg+"/")
-		lastBackslash := strings.LastIndex(theFile, simdPkg+"\\")
+		lastSlash := strings.LastIndex(theFile, SimdPkg+"/")
+		lastBackslash := strings.LastIndex(theFile, SimdPkg+"\\")
 
 		// Windows paths can be chaos, all we care, is whether the very last part
 		// of the path is any-path-separator + "tofrom_" + anything-else, given that
@@ -515,8 +560,8 @@ func (r *Rewriter) shouldIncludeDecl(decl syntax.Decl) bool {
 		if maxSlash == -1 {
 			return false
 		}
-		if !strings.HasPrefix(theFile[maxSlash:], simdPkg+"/tofrom_") &&
-			!strings.HasPrefix(theFile[maxSlash:], simdPkg+"\\tofrom_") {
+		if !strings.HasPrefix(theFile[maxSlash:], SimdPkg+"/tofrom_") &&
+			!strings.HasPrefix(theFile[maxSlash:], SimdPkg+"\\tofrom_") {
 			return false
 		}
 	}

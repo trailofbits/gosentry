@@ -1,26 +1,26 @@
 [!fuzz] skip
 
-! go test -fuzz=FuzzTrivial -coverprofile=prof
+! go test -fuzz=FuzzTrivial -use-libafl=false -coverprofile=prof
 ! stdout .
 stderr '^cannot use -coverprofile flag with -fuzz flag$'
 
-! go test -fuzz=FuzzTrivial -blockprofile=prof
+! go test -fuzz=FuzzTrivial -use-libafl=false -blockprofile=prof
 ! stdout .
 stderr '^cannot use -blockprofile flag with -fuzz flag$'
 
-! go test -fuzz=FuzzTrivial -cpuprofile=prof
+! go test -fuzz=FuzzTrivial -use-libafl=false -cpuprofile=prof
 ! stdout .
 stderr '^cannot use -cpuprofile flag with -fuzz flag$'
 
-! go test -fuzz=FuzzTrivial -memprofile=prof
+! go test -fuzz=FuzzTrivial -use-libafl=false -memprofile=prof
 ! stdout .
 stderr '^cannot use -memprofile flag with -fuzz flag$'
 
-! go test -fuzz=FuzzTrivial -mutexprofile=prof
+! go test -fuzz=FuzzTrivial -use-libafl=false -mutexprofile=prof
 ! stdout .
 stderr '^cannot use -mutexprofile flag with -fuzz flag$'
 
-! go test -fuzz=FuzzTrivial -trace=prof
+! go test -fuzz=FuzzTrivial -use-libafl=false -trace=prof
 ! stdout .
 stderr '^cannot use -trace flag with -fuzz flag$'
 

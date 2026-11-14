@@ -6,1060 +6,2287 @@
 
 package simd
 
-// LoadInt8s loads a slice of int8 into an Int8s vector.
-func LoadInt8s([]int8) Int8s
+// LoadInt8s loads a slice into a vector. If len(s) < z.Len(), it panics.
+func LoadInt8s(s []int8) (z Int8s)
 
-// LoadInt8sPart loads a partial slice of int8 into an Int8s vector, returning the vector and the number of elements loaded.
-func LoadInt8sPart([]int8) (Int8s, int)
+// LoadInt8sPart loads n=min(len(s), z.Len()) elements from slice s as a
+// vector and returns the vector and n. If len(s) < z.Len(), the
+// remaining vector elements will be zero.
+func LoadInt8sPart(s []int8) (z Int8s, n int)
 
-// BroadcastInt8s fills the elements of a slice with its argument value.
-func BroadcastInt8s(int8) Int8s
+// BroadcastInt8s returns a vector with the input x assigned to all elements of the
+// result.
+func BroadcastInt8s(x int8) (z Int8s)
 
-// Abs returns the element-wise absolute value of x.
-func (x Int8s) Abs() Int8s
+// Abs returns the elementwise absolute value of x.
+func (x Int8s) Abs() (z Uint8s)
 
-// Add returns the element-wise sum of x and y.
-func (x Int8s) Add(y Int8s) Int8s
+// Add adds x and y elementwise.
+//
+//	z[i] = x[i] + y[i]
+func (x Int8s) Add(y Int8s) (z Int8s)
 
-// AddSaturated returns the element-wise saturated sum of x and y.
-func (x Int8s) AddSaturated(y Int8s) Int8s
+// AddSaturated adds x and y elementwise with saturation.
+//
+//	z[i] = sat(x[i] + y[i])
+func (x Int8s) AddSaturated(y Int8s) (z Int8s)
 
 // And returns the bitwise AND of x and y.
-func (x Int8s) And(y Int8s) Int8s
+//
+//	z[i] = x[i] & y[i]
+func (x Int8s) And(y Int8s) (z Int8s)
 
 // AndNot returns the bitwise AND NOT of x and y.
-func (x Int8s) AndNot(y Int8s) Int8s
+//
+//	z[i] = x[i] &^ y[i]
+func (x Int8s) AndNot(y Int8s) (z Int8s)
 
-// ConvertToUint8 converts the vector elements to uint8.
-func (x Int8s) ConvertToUint8() Uint8s
+// ConvertToUint8 converts each element of x to uint8.
+//
+//	z[i] = uint8(x[i])
+//
+// This wraps unrepresentable values.
+func (x Int8s) ConvertToUint8() (z Uint8s)
 
-// Equal returns a mask indicating where x and y are equal.
-func (x Int8s) Equal(y Int8s) Mask8s
+// Equal returns a mask indicating which elements of x and y are equal.
+func (x Int8s) Equal(y Int8s) (z Mask8s)
 
-// Greater returns a mask indicating where x is greater than y.
-func (x Int8s) Greater(y Int8s) Mask8s
+// ExtendToInt16 sign-extends each element of x to int16.
+//
+//	z[i] = int16(x[i])
+//
+// Only the low z.Len() elements of x are converted.
+// The remaining elements of x are ignored.
+func (x Int8s) ExtendToInt16() (z Int16s)
 
-// GreaterEqual returns a mask indicating where x is greater than or equal to y.
-func (x Int8s) GreaterEqual(y Int8s) Mask8s
+// Greater returns a mask indicating which elements of x are greater than y.
+//
+//	z[i] = x[i] > y[i]
+func (x Int8s) Greater(y Int8s) (z Mask8s)
 
-// IfElse returns a new vector with elements from x where mask is true, and y where mask is false.
-func (x Int8s) IfElse(mask Mask8s, y Int8s) Int8s
+// GreaterEqual returns a mask indicating which elements of x are greater than
+// or equal to y.
+//
+//	z[i] = x[i] >= y[i]
+func (x Int8s) GreaterEqual(y Int8s) (z Mask8s)
 
-// Len returns the number of elements in the vector.
+// HiToLo returns a vector whose low half is the high half of x and whose high
+// half is zero.
+//
+//	z = {x[n/2], x[n/2+1], ..., x[n-1], 0, ..., 0}, where n = x.Len()
+func (x Int8s) HiToLo() (z Int8s)
+
+// IfElse returns a vector with elements from x where mask is true, and y where
+// mask is false.
+//
+//	z[i] = if mask[i] { x[i] } else { y[i] }
+func (x Int8s) IfElse(mask Mask8s, y Int8s) (z Int8s)
+
+// Len returns the number of elements in x.
 func (x Int8s) Len() int
 
-// Less returns a mask indicating where x is less than y.
-func (x Int8s) Less(y Int8s) Mask8s
+// Less returns a mask indicating which elements of x are less than y.
+//
+//	z[i] = x[i] < y[i]
+func (x Int8s) Less(y Int8s) (z Mask8s)
 
-// LessEqual returns a mask indicating where x is less than or equal to y.
-func (x Int8s) LessEqual(y Int8s) Mask8s
+// LessEqual returns a mask indicating which elements of x are less than or
+// equal to y.
+//
+//	z[i] = x[i] <= y[i]
+func (x Int8s) LessEqual(y Int8s) (z Mask8s)
 
-// Masked returns a new vector with elements from x where mask is true, and zero elsewhere.
-func (x Int8s) Masked(mask Mask8s) Int8s
+// LookupOrZero permutes x, returning 0 for out-of-range indices.
+//
+//	if indices[i] < x.Len() {
+//	    z[i] = x[indices[i]]
+//	} else {
+//	    z[i] = 0
+//	}
+func (x Int8s) LookupOrZero(indices Uint8s) (z Int8s)
 
-// Max returns the element-wise maximum of x and y.
-func (x Int8s) Max(y Int8s) Int8s
+// Masked returns a vector with elements from x where mask is true, and zero
+// elsewhere.
+//
+//	z[i] = if mask[i] { x[i] } else { 0 }
+func (x Int8s) Masked(mask Mask8s) (z Int8s)
 
-// Min returns the element-wise minimum of x and y.
-func (x Int8s) Min(y Int8s) Int8s
+// Max returns the elementwise maximum of x and y.
+//
+//	z[i] = max(x[i], y[i])
+func (x Int8s) Max(y Int8s) (z Int8s)
 
-// Mul returns the element-wise product of x and y.
-func (x Int8s) Mul(y Int8s) Int8s
+// Min returns the elementwise minimum of x and y.
+//
+//	z[i] = min(x[i], y[i])
+func (x Int8s) Min(y Int8s) (z Int8s)
 
-// Neg returns the element-wise negation of x.
-func (x Int8s) Neg() Int8s
+// Mul returns the elementwise product of x and y.
+//
+//	z[i] = x[i] * y[i]
+func (x Int8s) Mul(y Int8s) (z Int8s)
 
-// Not returns the bitwise NOT of x.
-func (x Int8s) Not() Int8s
+// Neg returns the elementwise negation of x.
+//
+//	z[i] = -x[i]
+func (x Int8s) Neg() (z Int8s)
 
-// NotEqual returns a mask indicating where x and y are not equal.
-func (x Int8s) NotEqual(y Int8s) Mask8s
+// Not returns the bitwise negation of x.
+//
+//	z[i] = ^x[i]
+func (x Int8s) Not() (z Int8s)
+
+// NotEqual returns a mask indicating which elements of x and y are not equal.
+func (x Int8s) NotEqual(y Int8s) (z Mask8s)
+
+// OnesCount counts the number of one bits ("population count") in
+// each element.
+//
+//	z[i] = bits.OnesCount(x[i])
+func (x Int8s) OnesCount() (z Int8s)
 
 // Or returns the bitwise OR of x and y.
-func (x Int8s) Or(y Int8s) Int8s
+//
+//	z[i] = x[i] | y[i]
+func (x Int8s) Or(y Int8s) (z Int8s)
 
 // ReduceSum returns the scalar sum of the elements of x.
-func (x Int8s) ReduceSum() int8
+//
+//	z = x[0] + x[1] + ...
+func (x Int8s) ReduceSum() (z int8)
 
-// Store stores the vector elements into the slice s.
+// Store stores the elements of x into a slice. If len(s) < x.Len(), it panics.
 func (x Int8s) Store(s []int8)
 
-// StorePart stores a partial vector into the slice s and returns the number actually stored.
-func (x Int8s) StorePart(s []int8) int
+// StorePart stores n=min(len(s), x.Len()) elements of x into s and returns n.
+func (x Int8s) StorePart(s []int8) (n int)
 
-// String returns a string representation of the vector.
+// String returns x in the form "{x[0],x[1],...}".
 func (x Int8s) String() string
 
-// Sub returns the element-wise difference of x and y.
-func (x Int8s) Sub(y Int8s) Int8s
+// Sub subtracts y from x elementwise.
+//
+//	z[i] = x[i] - y[i]
+func (x Int8s) Sub(y Int8s) (z Int8s)
 
-// SubSaturated returns the element-wise saturated difference of x and y.
-func (x Int8s) SubSaturated(y Int8s) Int8s
+// SubSaturated subtracts y from x elementwise with saturation.
+//
+//	z[i] = sat(x[i] - y[i])
+func (x Int8s) SubSaturated(y Int8s) (z Int8s)
 
-// ToBits reinterprets the vector bits as an unsigned integer vector.
-func (x Int8s) ToBits() Uint8s
+// ToBits reinterprets the bits of each element of x as type uint8.
+func (x Int8s) ToBits() (z Uint8s)
 
-// ToMask returns a mask representation of the vector.
-func (x Int8s) ToMask() (to Mask8s)
+// ToMask returns a mask indicating which elements of x are non-zero.
+//
+//	z[i] = x[i] != 0
+func (x Int8s) ToMask() (z Mask8s)
 
 // Xor returns the bitwise XOR of x and y.
-func (x Int8s) Xor(y Int8s) Int8s
+//
+//	z[i] = x[i] ^ y[i]
+func (x Int8s) Xor(y Int8s) (z Int8s)
 
-// LoadInt16s loads a slice of int16 into an Int16s vector.
-func LoadInt16s([]int16) Int16s
+// LoadInt16s loads a slice into a vector. If len(s) < z.Len(), it panics.
+func LoadInt16s(s []int16) (z Int16s)
 
-// LoadInt16sPart loads a partial slice of int16 into an Int16s vector, returning the vector and the number of elements loaded.
-func LoadInt16sPart([]int16) (Int16s, int)
+// LoadInt16sPart loads n=min(len(s), z.Len()) elements from slice s as a
+// vector and returns the vector and n. If len(s) < z.Len(), the
+// remaining vector elements will be zero.
+func LoadInt16sPart(s []int16) (z Int16s, n int)
 
-// BroadcastInt16s fills the elements of a slice with its argument value.
-func BroadcastInt16s(int16) Int16s
+// BroadcastInt16s returns a vector with the input x assigned to all elements of the
+// result.
+func BroadcastInt16s(x int16) (z Int16s)
 
-// Abs returns the element-wise absolute value of x.
-func (x Int16s) Abs() Int16s
+// Abs returns the elementwise absolute value of x.
+func (x Int16s) Abs() (z Uint16s)
 
-// Add returns the element-wise sum of x and y.
-func (x Int16s) Add(y Int16s) Int16s
+// Add adds x and y elementwise.
+//
+//	z[i] = x[i] + y[i]
+func (x Int16s) Add(y Int16s) (z Int16s)
 
-// AddSaturated returns the element-wise saturated sum of x and y.
-func (x Int16s) AddSaturated(y Int16s) Int16s
+// AddSaturated adds x and y elementwise with saturation.
+//
+//	z[i] = sat(x[i] + y[i])
+func (x Int16s) AddSaturated(y Int16s) (z Int16s)
 
 // And returns the bitwise AND of x and y.
-func (x Int16s) And(y Int16s) Int16s
+//
+//	z[i] = x[i] & y[i]
+func (x Int16s) And(y Int16s) (z Int16s)
 
 // AndNot returns the bitwise AND NOT of x and y.
-func (x Int16s) AndNot(y Int16s) Int16s
+//
+//	z[i] = x[i] &^ y[i]
+func (x Int16s) AndNot(y Int16s) (z Int16s)
 
-// ConvertToUint16 converts the vector elements to uint16.
-func (x Int16s) ConvertToUint16() Uint16s
+// ConvertToUint16 converts each element of x to uint16.
+//
+//	z[i] = uint16(x[i])
+//
+// This wraps unrepresentable values.
+func (x Int16s) ConvertToUint16() (z Uint16s)
 
-// Equal returns a mask indicating where x and y are equal.
-func (x Int16s) Equal(y Int16s) Mask16s
+// Equal returns a mask indicating which elements of x and y are equal.
+func (x Int16s) Equal(y Int16s) (z Mask16s)
 
-// Greater returns a mask indicating where x is greater than y.
-func (x Int16s) Greater(y Int16s) Mask16s
+// ExtendToInt32 sign-extends each element of x to int32.
+//
+//	z[i] = int32(x[i])
+//
+// Only the low z.Len() elements of x are converted.
+// The remaining elements of x are ignored.
+func (x Int16s) ExtendToInt32() (z Int32s)
 
-// GreaterEqual returns a mask indicating where x is greater than or equal to y.
-func (x Int16s) GreaterEqual(y Int16s) Mask16s
+// Greater returns a mask indicating which elements of x are greater than y.
+//
+//	z[i] = x[i] > y[i]
+func (x Int16s) Greater(y Int16s) (z Mask16s)
 
-// IfElse returns a new vector with elements from x where mask is true, and y where mask is false.
-func (x Int16s) IfElse(mask Mask16s, y Int16s) Int16s
+// GreaterEqual returns a mask indicating which elements of x are greater than
+// or equal to y.
+//
+//	z[i] = x[i] >= y[i]
+func (x Int16s) GreaterEqual(y Int16s) (z Mask16s)
 
-// Len returns the number of elements in the vector.
+// HiToLo returns a vector whose low half is the high half of x and whose high
+// half is zero.
+//
+//	z = {x[n/2], x[n/2+1], ..., x[n-1], 0, ..., 0}, where n = x.Len()
+func (x Int16s) HiToLo() (z Int16s)
+
+// IfElse returns a vector with elements from x where mask is true, and y where
+// mask is false.
+//
+//	z[i] = if mask[i] { x[i] } else { y[i] }
+func (x Int16s) IfElse(mask Mask16s, y Int16s) (z Int16s)
+
+// Len returns the number of elements in x.
 func (x Int16s) Len() int
 
-// Less returns a mask indicating where x is less than y.
-func (x Int16s) Less(y Int16s) Mask16s
+// Less returns a mask indicating which elements of x are less than y.
+//
+//	z[i] = x[i] < y[i]
+func (x Int16s) Less(y Int16s) (z Mask16s)
 
-// LessEqual returns a mask indicating where x is less than or equal to y.
-func (x Int16s) LessEqual(y Int16s) Mask16s
+// LessEqual returns a mask indicating which elements of x are less than or
+// equal to y.
+//
+//	z[i] = x[i] <= y[i]
+func (x Int16s) LessEqual(y Int16s) (z Mask16s)
 
-// Masked returns a new vector with elements from x where mask is true, and zero elsewhere.
-func (x Int16s) Masked(mask Mask16s) Int16s
+// Masked returns a vector with elements from x where mask is true, and zero
+// elsewhere.
+//
+//	z[i] = if mask[i] { x[i] } else { 0 }
+func (x Int16s) Masked(mask Mask16s) (z Int16s)
 
-// Max returns the element-wise maximum of x and y.
-func (x Int16s) Max(y Int16s) Int16s
+// Max returns the elementwise maximum of x and y.
+//
+//	z[i] = max(x[i], y[i])
+func (x Int16s) Max(y Int16s) (z Int16s)
 
-// Min returns the element-wise minimum of x and y.
-func (x Int16s) Min(y Int16s) Int16s
+// Min returns the elementwise minimum of x and y.
+//
+//	z[i] = min(x[i], y[i])
+func (x Int16s) Min(y Int16s) (z Int16s)
 
-// Mul returns the element-wise product of x and y.
-func (x Int16s) Mul(y Int16s) Int16s
+// Mul returns the elementwise product of x and y.
+//
+//	z[i] = x[i] * y[i]
+func (x Int16s) Mul(y Int16s) (z Int16s)
 
-// Neg returns the element-wise negation of x.
-func (x Int16s) Neg() Int16s
+// Neg returns the elementwise negation of x.
+//
+//	z[i] = -x[i]
+func (x Int16s) Neg() (z Int16s)
 
-// Not returns the bitwise NOT of x.
-func (x Int16s) Not() Int16s
+// Not returns the bitwise negation of x.
+//
+//	z[i] = ^x[i]
+func (x Int16s) Not() (z Int16s)
 
-// NotEqual returns a mask indicating where x and y are not equal.
-func (x Int16s) NotEqual(y Int16s) Mask16s
+// NotEqual returns a mask indicating which elements of x and y are not equal.
+func (x Int16s) NotEqual(y Int16s) (z Mask16s)
 
 // Or returns the bitwise OR of x and y.
-func (x Int16s) Or(y Int16s) Int16s
+//
+//	z[i] = x[i] | y[i]
+func (x Int16s) Or(y Int16s) (z Int16s)
 
 // ReduceSum returns the scalar sum of the elements of x.
-func (x Int16s) ReduceSum() int16
+//
+//	z = x[0] + x[1] + ...
+func (x Int16s) ReduceSum() (z int16)
 
-// RotatesAllLeft rotates all elements left by y bits.
-func (x Int16s) RotateAllLeft(dist uint64) Int16s
+// SaturateToInt8 converts each element of x to int8, saturating values
+// that are outside the range of int8.
+//
+//	z[i] = sat(x[i])
+//
+// The results are stored in the low x.Len() elements of z.
+// The remaining elements of z are zero.
+func (x Int16s) SaturateToInt8() (z Int8s)
 
-// RotatesAllRight rotates all elements right by y bits.
-func (x Int16s) RotateAllRight(dist uint64) Int16s
+// SaturateToUint8 converts each element of x to uint8, saturating values
+// that are outside the range of uint8. Negative values become 0.
+//
+//	z[i] = sat(x[i])
+//
+// The results are stored in the low x.Len() elements of z.
+// The remaining elements of z are zero.
+func (x Int16s) SaturateToUint8() (z Uint8s)
 
-// ShiftAllLeft shifts all elements left by y bits.
-func (x Int16s) ShiftAllLeft(shift uint64) Int16s
+// ShiftAllLeft shifts each element of x left by shift bits.
+// If shift is greater than the element width, the result is 0.
+//
+//	z[i] = x[i] << shift
+func (x Int16s) ShiftAllLeft(shift uint64) (z Int16s)
 
-// ShiftAllRight shifts all elements right by y bits.
-func (x Int16s) ShiftAllRight(shift uint64) Int16s
+// ShiftAllRight arithmetically shifts each element of x right by shift bits.
+// If shift is greater than the element width, the result is 0 or -1.
+//
+//	z[i] = x[i] >> shift
+func (x Int16s) ShiftAllRight(shift uint64) (z Int16s)
 
-// Store stores the vector elements into the slice s.
+// Store stores the elements of x into a slice. If len(s) < x.Len(), it panics.
 func (x Int16s) Store(s []int16)
 
-// StorePart stores a partial vector into the slice s and returns the number actually stored.
-func (x Int16s) StorePart(s []int16) int
+// StorePart stores n=min(len(s), x.Len()) elements of x into s and returns n.
+func (x Int16s) StorePart(s []int16) (n int)
 
-// String returns a string representation of the vector.
+// String returns x in the form "{x[0],x[1],...}".
 func (x Int16s) String() string
 
-// Sub returns the element-wise difference of x and y.
-func (x Int16s) Sub(y Int16s) Int16s
+// Sub subtracts y from x elementwise.
+//
+//	z[i] = x[i] - y[i]
+func (x Int16s) Sub(y Int16s) (z Int16s)
 
-// SubSaturated returns the element-wise saturated difference of x and y.
-func (x Int16s) SubSaturated(y Int16s) Int16s
+// SubSaturated subtracts y from x elementwise with saturation.
+//
+//	z[i] = sat(x[i] - y[i])
+func (x Int16s) SubSaturated(y Int16s) (z Int16s)
 
-// ToBits reinterprets the vector bits as an unsigned integer vector.
-func (x Int16s) ToBits() Uint16s
+// ToBits reinterprets the bits of each element of x as type uint16.
+func (x Int16s) ToBits() (z Uint16s)
 
-// ToMask returns a mask representation of the vector.
-func (x Int16s) ToMask() (to Mask16s)
+// ToMask returns a mask indicating which elements of x are non-zero.
+//
+//	z[i] = x[i] != 0
+func (x Int16s) ToMask() (z Mask16s)
+
+// TruncToInt8 converts each element of x to int8 by discarding its high
+// bits.
+//
+//	z[i] = int8(x[i])
+//
+// The results are stored in the low x.Len() elements of z.
+// The remaining elements of z are zero.
+func (x Int16s) TruncToInt8() (z Int8s)
 
 // Xor returns the bitwise XOR of x and y.
-func (x Int16s) Xor(y Int16s) Int16s
+//
+//	z[i] = x[i] ^ y[i]
+func (x Int16s) Xor(y Int16s) (z Int16s)
 
-// LoadInt32s loads a slice of int32 into an Int32s vector.
-func LoadInt32s([]int32) Int32s
+// LoadInt32s loads a slice into a vector. If len(s) < z.Len(), it panics.
+func LoadInt32s(s []int32) (z Int32s)
 
-// LoadInt32sPart loads a partial slice of int32 into an Int32s vector, returning the vector and the number of elements loaded.
-func LoadInt32sPart([]int32) (Int32s, int)
+// LoadInt32sPart loads n=min(len(s), z.Len()) elements from slice s as a
+// vector and returns the vector and n. If len(s) < z.Len(), the
+// remaining vector elements will be zero.
+func LoadInt32sPart(s []int32) (z Int32s, n int)
 
-// BroadcastInt32s fills the elements of a slice with its argument value.
-func BroadcastInt32s(int32) Int32s
+// BroadcastInt32s returns a vector with the input x assigned to all elements of the
+// result.
+func BroadcastInt32s(x int32) (z Int32s)
 
-// Abs returns the element-wise absolute value of x.
-func (x Int32s) Abs() Int32s
+// Abs returns the elementwise absolute value of x.
+func (x Int32s) Abs() (z Uint32s)
 
-// Add returns the element-wise sum of x and y.
-func (x Int32s) Add(y Int32s) Int32s
+// Add adds x and y elementwise.
+//
+//	z[i] = x[i] + y[i]
+func (x Int32s) Add(y Int32s) (z Int32s)
 
 // And returns the bitwise AND of x and y.
-func (x Int32s) And(y Int32s) Int32s
+//
+//	z[i] = x[i] & y[i]
+func (x Int32s) And(y Int32s) (z Int32s)
 
 // AndNot returns the bitwise AND NOT of x and y.
-func (x Int32s) AndNot(y Int32s) Int32s
+//
+//	z[i] = x[i] &^ y[i]
+func (x Int32s) AndNot(y Int32s) (z Int32s)
 
-// ConvertToFloat32 converts the vector elements to float32.
-func (x Int32s) ConvertToFloat32() Float32s
+// ConvertToFloat32 converts each element of x to float32.
+//
+//	z[i] = float32(x[i])
+func (x Int32s) ConvertToFloat32() (z Float32s)
 
-// ConvertToUint32 converts the vector elements to uint32.
-func (x Int32s) ConvertToUint32() Uint32s
+// ConvertToUint32 converts each element of x to uint32.
+//
+//	z[i] = uint32(x[i])
+//
+// This wraps unrepresentable values.
+func (x Int32s) ConvertToUint32() (z Uint32s)
 
-// Equal returns a mask indicating where x and y are equal.
-func (x Int32s) Equal(y Int32s) Mask32s
+// Equal returns a mask indicating which elements of x and y are equal.
+func (x Int32s) Equal(y Int32s) (z Mask32s)
 
-// Greater returns a mask indicating where x is greater than y.
-func (x Int32s) Greater(y Int32s) Mask32s
+// ExtendToInt64 sign-extends each element of x to int64.
+//
+//	z[i] = int64(x[i])
+//
+// Only the low z.Len() elements of x are converted.
+// The remaining elements of x are ignored.
+func (x Int32s) ExtendToInt64() (z Int64s)
 
-// GreaterEqual returns a mask indicating where x is greater than or equal to y.
-func (x Int32s) GreaterEqual(y Int32s) Mask32s
+// Greater returns a mask indicating which elements of x are greater than y.
+//
+//	z[i] = x[i] > y[i]
+func (x Int32s) Greater(y Int32s) (z Mask32s)
 
-// IfElse returns a new vector with elements from x where mask is true, and y where mask is false.
-func (x Int32s) IfElse(mask Mask32s, y Int32s) Int32s
+// GreaterEqual returns a mask indicating which elements of x are greater than
+// or equal to y.
+//
+//	z[i] = x[i] >= y[i]
+func (x Int32s) GreaterEqual(y Int32s) (z Mask32s)
 
-// Len returns the number of elements in the vector.
+// HiToLo returns a vector whose low half is the high half of x and whose high
+// half is zero.
+//
+//	z = {x[n/2], x[n/2+1], ..., x[n-1], 0, ..., 0}, where n = x.Len()
+func (x Int32s) HiToLo() (z Int32s)
+
+// IfElse returns a vector with elements from x where mask is true, and y where
+// mask is false.
+//
+//	z[i] = if mask[i] { x[i] } else { y[i] }
+func (x Int32s) IfElse(mask Mask32s, y Int32s) (z Int32s)
+
+// Len returns the number of elements in x.
 func (x Int32s) Len() int
 
-// Less returns a mask indicating where x is less than y.
-func (x Int32s) Less(y Int32s) Mask32s
+// Less returns a mask indicating which elements of x are less than y.
+//
+//	z[i] = x[i] < y[i]
+func (x Int32s) Less(y Int32s) (z Mask32s)
 
-// LessEqual returns a mask indicating where x is less than or equal to y.
-func (x Int32s) LessEqual(y Int32s) Mask32s
+// LessEqual returns a mask indicating which elements of x are less than or
+// equal to y.
+//
+//	z[i] = x[i] <= y[i]
+func (x Int32s) LessEqual(y Int32s) (z Mask32s)
 
-// Masked returns a new vector with elements from x where mask is true, and zero elsewhere.
-func (x Int32s) Masked(mask Mask32s) Int32s
+// Masked returns a vector with elements from x where mask is true, and zero
+// elsewhere.
+//
+//	z[i] = if mask[i] { x[i] } else { 0 }
+func (x Int32s) Masked(mask Mask32s) (z Int32s)
 
-// Max returns the element-wise maximum of x and y.
-func (x Int32s) Max(y Int32s) Int32s
+// Max returns the elementwise maximum of x and y.
+//
+//	z[i] = max(x[i], y[i])
+func (x Int32s) Max(y Int32s) (z Int32s)
 
-// Min returns the element-wise minimum of x and y.
-func (x Int32s) Min(y Int32s) Int32s
+// Min returns the elementwise minimum of x and y.
+//
+//	z[i] = min(x[i], y[i])
+func (x Int32s) Min(y Int32s) (z Int32s)
 
-// Mul returns the element-wise product of x and y.
-func (x Int32s) Mul(y Int32s) Int32s
+// Mul returns the elementwise product of x and y.
+//
+//	z[i] = x[i] * y[i]
+func (x Int32s) Mul(y Int32s) (z Int32s)
 
-// Neg returns the element-wise negation of x.
-func (x Int32s) Neg() Int32s
+// Neg returns the elementwise negation of x.
+//
+//	z[i] = -x[i]
+func (x Int32s) Neg() (z Int32s)
 
-// Not returns the bitwise NOT of x.
-func (x Int32s) Not() Int32s
+// Not returns the bitwise negation of x.
+//
+//	z[i] = ^x[i]
+func (x Int32s) Not() (z Int32s)
 
-// NotEqual returns a mask indicating where x and y are not equal.
-func (x Int32s) NotEqual(y Int32s) Mask32s
+// NotEqual returns a mask indicating which elements of x and y are not equal.
+func (x Int32s) NotEqual(y Int32s) (z Mask32s)
 
 // Or returns the bitwise OR of x and y.
-func (x Int32s) Or(y Int32s) Int32s
+//
+//	z[i] = x[i] | y[i]
+func (x Int32s) Or(y Int32s) (z Int32s)
 
 // ReduceSum returns the scalar sum of the elements of x.
-func (x Int32s) ReduceSum() int32
+//
+//	z = x[0] + x[1] + ...
+func (x Int32s) ReduceSum() (z int32)
 
-// RotatesAllLeft rotates all elements left by y bits.
-func (x Int32s) RotateAllLeft(dist uint64) Int32s
+// SaturateToInt16 converts each element of x to int16, saturating values
+// that are outside the range of int16.
+//
+//	z[i] = sat(x[i])
+//
+// The results are stored in the low x.Len() elements of z.
+// The remaining elements of z are zero.
+func (x Int32s) SaturateToInt16() (z Int16s)
 
-// RotatesAllRight rotates all elements right by y bits.
-func (x Int32s) RotateAllRight(dist uint64) Int32s
+// SaturateToUint16 converts each element of x to uint16, saturating values
+// that are outside the range of uint16. Negative values become 0.
+//
+//	z[i] = sat(x[i])
+//
+// The results are stored in the low x.Len() elements of z.
+// The remaining elements of z are zero.
+func (x Int32s) SaturateToUint16() (z Uint16s)
 
-// ShiftAllLeft shifts all elements left by y bits.
-func (x Int32s) ShiftAllLeft(shift uint64) Int32s
+// ShiftAllLeft shifts each element of x left by shift bits.
+// If shift is greater than the element width, the result is 0.
+//
+//	z[i] = x[i] << shift
+func (x Int32s) ShiftAllLeft(shift uint64) (z Int32s)
 
-// ShiftAllRight shifts all elements right by y bits.
-func (x Int32s) ShiftAllRight(shift uint64) Int32s
+// ShiftAllRight arithmetically shifts each element of x right by shift bits.
+// If shift is greater than the element width, the result is 0 or -1.
+//
+//	z[i] = x[i] >> shift
+func (x Int32s) ShiftAllRight(shift uint64) (z Int32s)
 
-// Store stores the vector elements into the slice s.
+// Store stores the elements of x into a slice. If len(s) < x.Len(), it panics.
 func (x Int32s) Store(s []int32)
 
-// StorePart stores a partial vector into the slice s and returns the number actually stored.
-func (x Int32s) StorePart(s []int32) int
+// StorePart stores n=min(len(s), x.Len()) elements of x into s and returns n.
+func (x Int32s) StorePart(s []int32) (n int)
 
-// String returns a string representation of the vector.
+// String returns x in the form "{x[0],x[1],...}".
 func (x Int32s) String() string
 
-// Sub returns the element-wise difference of x and y.
-func (x Int32s) Sub(y Int32s) Int32s
+// Sub subtracts y from x elementwise.
+//
+//	z[i] = x[i] - y[i]
+func (x Int32s) Sub(y Int32s) (z Int32s)
 
-// ToBits reinterprets the vector bits as an unsigned integer vector.
-func (x Int32s) ToBits() Uint32s
+// ToBits reinterprets the bits of each element of x as type uint32.
+func (x Int32s) ToBits() (z Uint32s)
 
-// ToMask returns a mask representation of the vector.
-func (x Int32s) ToMask() (to Mask32s)
+// ToMask returns a mask indicating which elements of x are non-zero.
+//
+//	z[i] = x[i] != 0
+func (x Int32s) ToMask() (z Mask32s)
+
+// TruncToInt16 converts each element of x to int16 by discarding its high
+// bits.
+//
+//	z[i] = int16(x[i])
+//
+// The results are stored in the low x.Len() elements of z.
+// The remaining elements of z are zero.
+func (x Int32s) TruncToInt16() (z Int16s)
 
 // Xor returns the bitwise XOR of x and y.
-func (x Int32s) Xor(y Int32s) Int32s
+//
+//	z[i] = x[i] ^ y[i]
+func (x Int32s) Xor(y Int32s) (z Int32s)
 
-// LoadInt64s loads a slice of int64 into an Int64s vector.
-func LoadInt64s([]int64) Int64s
+// LoadInt64s loads a slice into a vector. If len(s) < z.Len(), it panics.
+func LoadInt64s(s []int64) (z Int64s)
 
-// LoadInt64sPart loads a partial slice of int64 into an Int64s vector, returning the vector and the number of elements loaded.
-func LoadInt64sPart([]int64) (Int64s, int)
+// LoadInt64sPart loads n=min(len(s), z.Len()) elements from slice s as a
+// vector and returns the vector and n. If len(s) < z.Len(), the
+// remaining vector elements will be zero.
+func LoadInt64sPart(s []int64) (z Int64s, n int)
 
-// BroadcastInt64s fills the elements of a slice with its argument value.
-func BroadcastInt64s(int64) Int64s
+// BroadcastInt64s returns a vector with the input x assigned to all elements of the
+// result.
+func BroadcastInt64s(x int64) (z Int64s)
 
-// Add returns the element-wise sum of x and y.
-func (x Int64s) Add(y Int64s) Int64s
+// Abs returns the elementwise absolute value of x.
+func (x Int64s) Abs() (z Uint64s)
+
+// Add adds x and y elementwise.
+//
+//	z[i] = x[i] + y[i]
+func (x Int64s) Add(y Int64s) (z Int64s)
 
 // And returns the bitwise AND of x and y.
-func (x Int64s) And(y Int64s) Int64s
+//
+//	z[i] = x[i] & y[i]
+func (x Int64s) And(y Int64s) (z Int64s)
 
 // AndNot returns the bitwise AND NOT of x and y.
-func (x Int64s) AndNot(y Int64s) Int64s
+//
+//	z[i] = x[i] &^ y[i]
+func (x Int64s) AndNot(y Int64s) (z Int64s)
 
-// ConvertToUint64 converts the vector elements to uint64.
-func (x Int64s) ConvertToUint64() Uint64s
+// ConvertToUint64 converts each element of x to uint64.
+//
+//	z[i] = uint64(x[i])
+//
+// This wraps unrepresentable values.
+func (x Int64s) ConvertToUint64() (z Uint64s)
 
-// Equal returns a mask indicating where x and y are equal.
-func (x Int64s) Equal(y Int64s) Mask64s
+// Equal returns a mask indicating which elements of x and y are equal.
+func (x Int64s) Equal(y Int64s) (z Mask64s)
 
-// Greater returns a mask indicating where x is greater than y.
-func (x Int64s) Greater(y Int64s) Mask64s
+// Greater returns a mask indicating which elements of x are greater than y.
+//
+//	z[i] = x[i] > y[i]
+func (x Int64s) Greater(y Int64s) (z Mask64s)
 
-// GreaterEqual returns a mask indicating where x is greater than or equal to y.
-func (x Int64s) GreaterEqual(y Int64s) Mask64s
+// GreaterEqual returns a mask indicating which elements of x are greater than
+// or equal to y.
+//
+//	z[i] = x[i] >= y[i]
+func (x Int64s) GreaterEqual(y Int64s) (z Mask64s)
 
-// IfElse returns a new vector with elements from x where mask is true, and y where mask is false.
-func (x Int64s) IfElse(mask Mask64s, y Int64s) Int64s
+// HiToLo returns a vector whose low half is the high half of x and whose high
+// half is zero.
+//
+//	z = {x[n/2], x[n/2+1], ..., x[n-1], 0, ..., 0}, where n = x.Len()
+func (x Int64s) HiToLo() (z Int64s)
 
-// Len returns the number of elements in the vector.
+// IfElse returns a vector with elements from x where mask is true, and y where
+// mask is false.
+//
+//	z[i] = if mask[i] { x[i] } else { y[i] }
+func (x Int64s) IfElse(mask Mask64s, y Int64s) (z Int64s)
+
+// Len returns the number of elements in x.
 func (x Int64s) Len() int
 
-// Less returns a mask indicating where x is less than y.
-func (x Int64s) Less(y Int64s) Mask64s
+// Less returns a mask indicating which elements of x are less than y.
+//
+//	z[i] = x[i] < y[i]
+func (x Int64s) Less(y Int64s) (z Mask64s)
 
-// LessEqual returns a mask indicating where x is less than or equal to y.
-func (x Int64s) LessEqual(y Int64s) Mask64s
+// LessEqual returns a mask indicating which elements of x are less than or
+// equal to y.
+//
+//	z[i] = x[i] <= y[i]
+func (x Int64s) LessEqual(y Int64s) (z Mask64s)
 
-// Masked returns a new vector with elements from x where mask is true, and zero elsewhere.
-func (x Int64s) Masked(mask Mask64s) Int64s
+// Masked returns a vector with elements from x where mask is true, and zero
+// elsewhere.
+//
+//	z[i] = if mask[i] { x[i] } else { 0 }
+func (x Int64s) Masked(mask Mask64s) (z Int64s)
 
-// Neg returns the element-wise negation of x.
-func (x Int64s) Neg() Int64s
+// Neg returns the elementwise negation of x.
+//
+//	z[i] = -x[i]
+func (x Int64s) Neg() (z Int64s)
 
-// Not returns the bitwise NOT of x.
-func (x Int64s) Not() Int64s
+// Not returns the bitwise negation of x.
+//
+//	z[i] = ^x[i]
+func (x Int64s) Not() (z Int64s)
 
-// NotEqual returns a mask indicating where x and y are not equal.
-func (x Int64s) NotEqual(y Int64s) Mask64s
+// NotEqual returns a mask indicating which elements of x and y are not equal.
+func (x Int64s) NotEqual(y Int64s) (z Mask64s)
 
 // Or returns the bitwise OR of x and y.
-func (x Int64s) Or(y Int64s) Int64s
+//
+//	z[i] = x[i] | y[i]
+func (x Int64s) Or(y Int64s) (z Int64s)
 
-// RotatesAllLeft rotates all elements left by y bits.
-func (x Int64s) RotateAllLeft(dist uint64) Int64s
+// SaturateToInt32 converts each element of x to int32, saturating values
+// that are outside the range of int32.
+//
+//	z[i] = sat(x[i])
+//
+// The results are stored in the low x.Len() elements of z.
+// The remaining elements of z are zero.
+func (x Int64s) SaturateToInt32() (z Int32s)
 
-// RotatesAllRight rotates all elements right by y bits.
-func (x Int64s) RotateAllRight(dist uint64) Int64s
+// SaturateToUint32 converts each element of x to uint32, saturating values
+// that are outside the range of uint32. Negative values become 0.
+//
+//	z[i] = sat(x[i])
+//
+// The results are stored in the low x.Len() elements of z.
+// The remaining elements of z are zero.
+func (x Int64s) SaturateToUint32() (z Uint32s)
 
-// ShiftAllLeft shifts all elements left by y bits.
-func (x Int64s) ShiftAllLeft(shift uint64) Int64s
+// ShiftAllLeft shifts each element of x left by shift bits.
+// If shift is greater than the element width, the result is 0.
+//
+//	z[i] = x[i] << shift
+func (x Int64s) ShiftAllLeft(shift uint64) (z Int64s)
 
-// Store stores the vector elements into the slice s.
+// ShiftAllRight arithmetically shifts each element of x right by shift bits.
+// If shift is greater than the element width, the result is 0 or -1.
+//
+//	z[i] = x[i] >> shift
+func (x Int64s) ShiftAllRight(shift uint64) (z Int64s)
+
+// Store stores the elements of x into a slice. If len(s) < x.Len(), it panics.
 func (x Int64s) Store(s []int64)
 
-// StorePart stores a partial vector into the slice s and returns the number actually stored.
-func (x Int64s) StorePart(s []int64) int
+// StorePart stores n=min(len(s), x.Len()) elements of x into s and returns n.
+func (x Int64s) StorePart(s []int64) (n int)
 
-// String returns a string representation of the vector.
+// String returns x in the form "{x[0],x[1],...}".
 func (x Int64s) String() string
 
-// Sub returns the element-wise difference of x and y.
-func (x Int64s) Sub(y Int64s) Int64s
+// Sub subtracts y from x elementwise.
+//
+//	z[i] = x[i] - y[i]
+func (x Int64s) Sub(y Int64s) (z Int64s)
 
-// ToBits reinterprets the vector bits as an unsigned integer vector.
-func (x Int64s) ToBits() Uint64s
+// ToBits reinterprets the bits of each element of x as type uint64.
+func (x Int64s) ToBits() (z Uint64s)
 
-// ToMask returns a mask representation of the vector.
-func (x Int64s) ToMask() (to Mask64s)
+// ToMask returns a mask indicating which elements of x are non-zero.
+//
+//	z[i] = x[i] != 0
+func (x Int64s) ToMask() (z Mask64s)
+
+// TruncToInt32 converts each element of x to int32 by discarding its high
+// bits.
+//
+//	z[i] = int32(x[i])
+//
+// The results are stored in the low x.Len() elements of z.
+// The remaining elements of z are zero.
+func (x Int64s) TruncToInt32() (z Int32s)
 
 // Xor returns the bitwise XOR of x and y.
-func (x Int64s) Xor(y Int64s) Int64s
+//
+//	z[i] = x[i] ^ y[i]
+func (x Int64s) Xor(y Int64s) (z Int64s)
 
-// LoadUint8s loads a slice of uint8 into an Uint8s vector.
-func LoadUint8s([]uint8) Uint8s
+// LoadUint8s loads a slice into a vector. If len(s) < z.Len(), it panics.
+func LoadUint8s(s []uint8) (z Uint8s)
 
-// LoadUint8sPart loads a partial slice of uint8 into an Uint8s vector, returning the vector and the number of elements loaded.
-func LoadUint8sPart([]uint8) (Uint8s, int)
+// LoadUint8sPart loads n=min(len(s), z.Len()) elements from slice s as a
+// vector and returns the vector and n. If len(s) < z.Len(), the
+// remaining vector elements will be zero.
+func LoadUint8sPart(s []uint8) (z Uint8s, n int)
 
-// BroadcastUint8s fills the elements of a slice with its argument value.
-func BroadcastUint8s(uint8) Uint8s
+// BroadcastUint8s returns a vector with the input x assigned to all elements of the
+// result.
+func BroadcastUint8s(x uint8) (z Uint8s)
 
-// Add returns the element-wise sum of x and y.
-func (x Uint8s) Add(y Uint8s) Uint8s
+// Add adds x and y elementwise.
+//
+//	z[i] = x[i] + y[i]
+func (x Uint8s) Add(y Uint8s) (z Uint8s)
 
-// AddSaturated returns the element-wise saturated sum of x and y.
-func (x Uint8s) AddSaturated(y Uint8s) Uint8s
+// AddSaturated adds x and y elementwise with saturation.
+//
+//	z[i] = sat(x[i] + y[i])
+func (x Uint8s) AddSaturated(y Uint8s) (z Uint8s)
 
 // And returns the bitwise AND of x and y.
-func (x Uint8s) And(y Uint8s) Uint8s
+//
+//	z[i] = x[i] & y[i]
+func (x Uint8s) And(y Uint8s) (z Uint8s)
 
 // AndNot returns the bitwise AND NOT of x and y.
-func (x Uint8s) AndNot(y Uint8s) Uint8s
+//
+//	z[i] = x[i] &^ y[i]
+func (x Uint8s) AndNot(y Uint8s) (z Uint8s)
 
-// Average returns the element-wise average of x and y.
-func (x Uint8s) Average(y Uint8s) Uint8s
+// Average returns the elementwise average of x and y, rounded toward +∞.
+//
+//	z[i] = (x[i] + y[i] + 1) / 2
+func (x Uint8s) Average(y Uint8s) (z Uint8s)
 
-// BitsToInt8 reinterprets the vector bits as an Int8s vector.
-func (x Uint8s) BitsToInt8() Int8s
+// BitsToInt8 reinterprets the bits of each element of x as type int8.
+func (x Uint8s) BitsToInt8() (z Int8s)
 
-// ConvertToInt8 converts the vector elements to int8.
-func (x Uint8s) ConvertToInt8() Int8s
+// ConvertToInt8 converts each element of x to int8.
+//
+//	z[i] = int8(x[i])
+//
+// This wraps unrepresentable values.
+func (x Uint8s) ConvertToInt8() (z Int8s)
 
-// Equal returns a mask indicating where x and y are equal.
-func (x Uint8s) Equal(y Uint8s) Mask8s
+// Equal returns a mask indicating which elements of x and y are equal.
+func (x Uint8s) Equal(y Uint8s) (z Mask8s)
 
-// IfElse returns a new vector with elements from x where mask is true, and y where mask is false.
-func (x Uint8s) IfElse(mask Mask8s, y Uint8s) Uint8s
+// ExtendToUint16 zero-extends each element of x to uint16.
+//
+//	z[i] = uint16(x[i])
+//
+// Only the low z.Len() elements of x are converted.
+// The remaining elements of x are ignored.
+func (x Uint8s) ExtendToUint16() (z Uint16s)
 
-// Len returns the number of elements in the vector.
+// Greater returns a mask indicating which elements of x are greater than y.
+//
+//	z[i] = x[i] > y[i]
+func (x Uint8s) Greater(y Uint8s) (z Mask8s)
+
+// GreaterEqual returns a mask indicating which elements of x are greater than
+// or equal to y.
+//
+//	z[i] = x[i] >= y[i]
+func (x Uint8s) GreaterEqual(y Uint8s) (z Mask8s)
+
+// HiToLo returns a vector whose low half is the high half of x and whose high
+// half is zero.
+//
+//	z = {x[n/2], x[n/2+1], ..., x[n-1], 0, ..., 0}, where n = x.Len()
+func (x Uint8s) HiToLo() (z Uint8s)
+
+// IfElse returns a vector with elements from x where mask is true, and y where
+// mask is false.
+//
+//	z[i] = if mask[i] { x[i] } else { y[i] }
+func (x Uint8s) IfElse(mask Mask8s, y Uint8s) (z Uint8s)
+
+// Len returns the number of elements in x.
 func (x Uint8s) Len() int
 
-// Masked returns a new vector with elements from x where mask is true, and zero elsewhere.
-func (x Uint8s) Masked(mask Mask8s) Uint8s
+// Less returns a mask indicating which elements of x are less than y.
+//
+//	z[i] = x[i] < y[i]
+func (x Uint8s) Less(y Uint8s) (z Mask8s)
 
-// Max returns the element-wise maximum of x and y.
-func (x Uint8s) Max(y Uint8s) Uint8s
+// LessEqual returns a mask indicating which elements of x are less than or
+// equal to y.
+//
+//	z[i] = x[i] <= y[i]
+func (x Uint8s) LessEqual(y Uint8s) (z Mask8s)
 
-// Min returns the element-wise minimum of x and y.
-func (x Uint8s) Min(y Uint8s) Uint8s
+// Masked returns a vector with elements from x where mask is true, and zero
+// elsewhere.
+//
+//	z[i] = if mask[i] { x[i] } else { 0 }
+func (x Uint8s) Masked(mask Mask8s) (z Uint8s)
 
-// Mul returns the element-wise product of x and y.
-func (x Uint8s) Mul(y Uint8s) Uint8s
+// Max returns the elementwise maximum of x and y.
+//
+//	z[i] = max(x[i], y[i])
+func (x Uint8s) Max(y Uint8s) (z Uint8s)
 
-// Not returns the bitwise NOT of x.
-func (x Uint8s) Not() Uint8s
+// Min returns the elementwise minimum of x and y.
+//
+//	z[i] = min(x[i], y[i])
+func (x Uint8s) Min(y Uint8s) (z Uint8s)
 
-// NotEqual returns a mask indicating where x and y are not equal.
-func (x Uint8s) NotEqual(y Uint8s) Mask8s
+// Mul returns the elementwise product of x and y.
+//
+//	z[i] = x[i] * y[i]
+func (x Uint8s) Mul(y Uint8s) (z Uint8s)
+
+// Not returns the bitwise negation of x.
+//
+//	z[i] = ^x[i]
+func (x Uint8s) Not() (z Uint8s)
+
+// NotEqual returns a mask indicating which elements of x and y are not equal.
+func (x Uint8s) NotEqual(y Uint8s) (z Mask8s)
+
+// OnesCount counts the number of one bits ("population count") in
+// each element.
+//
+//	z[i] = bits.OnesCount(x[i])
+func (x Uint8s) OnesCount() (z Uint8s)
 
 // Or returns the bitwise OR of x and y.
-func (x Uint8s) Or(y Uint8s) Uint8s
+//
+//	z[i] = x[i] | y[i]
+func (x Uint8s) Or(y Uint8s) (z Uint8s)
 
 // ReduceSum returns the scalar sum of the elements of x.
-func (x Uint8s) ReduceSum() uint8
+//
+//	z = x[0] + x[1] + ...
+func (x Uint8s) ReduceSum() (z uint8)
 
-// ReshapeToUint16s reinterprets the vector bits as a Uint16s vector.
-func (x Uint8s) ReshapeToUint16s() Uint16s
+// ReshapeToUint16s reinterprets the bits of x as a Uint16s vector.
+//
+// Both the vector elements and the bits of each element are interpreted in
+// little endian order.
+//
+//	⋯     x[3]      x[2]      x[1]      x[0]
+//	⋯ | 7  .. 0 | 7  .. 0 | 7  .. 0 | 7  .. 0 |
+//	⋯ | 15     ....     0 | 15     ....     0 |
+//	⋯          z[1]                z[0]
+func (x Uint8s) ReshapeToUint16s() (z Uint16s)
 
-// ReshapeToUint32s reinterprets the vector bits as a Uint32s vector.
-func (x Uint8s) ReshapeToUint32s() Uint32s
+// ReshapeToUint32s reinterprets the bits of x as a Uint32s vector.
+//
+// Both the vector elements and the bits of each element are interpreted in
+// little endian order.
+//
+//	⋯     x[7]      x[6]      x[5]      x[4]      x[3]      x[2]      x[1]      x[0]
+//	⋯ | 7  .. 0 | 7  .. 0 | 7  .. 0 | 7  .. 0 | 7  .. 0 | 7  .. 0 | 7  .. 0 | 7  .. 0 |
+//	⋯ | 31               ....               0 | 31               ....               0 |
+//	⋯                    z[1]                                    z[0]
+func (x Uint8s) ReshapeToUint32s() (z Uint32s)
 
-// ReshapeToUint64s reinterprets the vector bits as a Uint64s vector.
-func (x Uint8s) ReshapeToUint64s() Uint64s
+// ReshapeToUint64s reinterprets the bits of x as a Uint64s vector.
+//
+// Both the vector elements and the bits of each element are interpreted in
+// little endian order.
+//
+//	⋯    x[15]     x[14]    ⋯     x[9]      x[8]      x[7]      x[6]    ⋯     x[1]      x[0]
+//	⋯ | 7  .. 0 | 7  .. 0 | ⋯ | 7  .. 0 | 7  .. 0 | 7  .. 0 | 7  .. 0 | ⋯ | 7  .. 0 | 7  .. 0 |
+//	⋯ | 63                 ....                 0 | 63                 ....                 0 |
+//	⋯                      z[1]                                        z[0]
+func (x Uint8s) ReshapeToUint64s() (z Uint64s)
 
-// Store stores the vector elements into the slice s.
+// Store stores the elements of x into a slice. If len(s) < x.Len(), it panics.
 func (x Uint8s) Store(s []uint8)
 
-// StorePart stores a partial vector into the slice s and returns the number actually stored.
-func (x Uint8s) StorePart(s []uint8) int
+// StorePart stores n=min(len(s), x.Len()) elements of x into s and returns n.
+func (x Uint8s) StorePart(s []uint8) (n int)
 
-// String returns a string representation of the vector.
+// String returns x in the form "{x[0],x[1],...}".
 func (x Uint8s) String() string
 
-// Sub returns the element-wise difference of x and y.
-func (x Uint8s) Sub(y Uint8s) Uint8s
+// Sub subtracts y from x elementwise.
+//
+//	z[i] = x[i] - y[i]
+func (x Uint8s) Sub(y Uint8s) (z Uint8s)
 
-// SubSaturated returns the element-wise saturated difference of x and y.
-func (x Uint8s) SubSaturated(y Uint8s) Uint8s
+// SubSaturated subtracts y from x elementwise with saturation.
+//
+//	z[i] = sat(x[i] - y[i])
+func (x Uint8s) SubSaturated(y Uint8s) (z Uint8s)
 
 // Xor returns the bitwise XOR of x and y.
-func (x Uint8s) Xor(y Uint8s) Uint8s
+//
+//	z[i] = x[i] ^ y[i]
+func (x Uint8s) Xor(y Uint8s) (z Uint8s)
 
-// LoadUint16s loads a slice of uint16 into an Uint16s vector.
-func LoadUint16s([]uint16) Uint16s
+// LoadUint16s loads a slice into a vector. If len(s) < z.Len(), it panics.
+func LoadUint16s(s []uint16) (z Uint16s)
 
-// LoadUint16sPart loads a partial slice of uint16 into an Uint16s vector, returning the vector and the number of elements loaded.
-func LoadUint16sPart([]uint16) (Uint16s, int)
+// LoadUint16sPart loads n=min(len(s), z.Len()) elements from slice s as a
+// vector and returns the vector and n. If len(s) < z.Len(), the
+// remaining vector elements will be zero.
+func LoadUint16sPart(s []uint16) (z Uint16s, n int)
 
-// BroadcastUint16s fills the elements of a slice with its argument value.
-func BroadcastUint16s(uint16) Uint16s
+// BroadcastUint16s returns a vector with the input x assigned to all elements of the
+// result.
+func BroadcastUint16s(x uint16) (z Uint16s)
 
-// Add returns the element-wise sum of x and y.
-func (x Uint16s) Add(y Uint16s) Uint16s
+// Add adds x and y elementwise.
+//
+//	z[i] = x[i] + y[i]
+func (x Uint16s) Add(y Uint16s) (z Uint16s)
 
-// AddSaturated returns the element-wise saturated sum of x and y.
-func (x Uint16s) AddSaturated(y Uint16s) Uint16s
+// AddSaturated adds x and y elementwise with saturation.
+//
+//	z[i] = sat(x[i] + y[i])
+func (x Uint16s) AddSaturated(y Uint16s) (z Uint16s)
 
 // And returns the bitwise AND of x and y.
-func (x Uint16s) And(y Uint16s) Uint16s
+//
+//	z[i] = x[i] & y[i]
+func (x Uint16s) And(y Uint16s) (z Uint16s)
 
 // AndNot returns the bitwise AND NOT of x and y.
-func (x Uint16s) AndNot(y Uint16s) Uint16s
+//
+//	z[i] = x[i] &^ y[i]
+func (x Uint16s) AndNot(y Uint16s) (z Uint16s)
 
-// Average returns the element-wise average of x and y.
-func (x Uint16s) Average(y Uint16s) Uint16s
+// Average returns the elementwise average of x and y, rounded toward +∞.
+//
+//	z[i] = (x[i] + y[i] + 1) / 2
+func (x Uint16s) Average(y Uint16s) (z Uint16s)
 
-// BitsToInt16 reinterprets the vector bits as an Int16s vector.
-func (x Uint16s) BitsToInt16() Int16s
+// BitsToInt16 reinterprets the bits of each element of x as type int16.
+func (x Uint16s) BitsToInt16() (z Int16s)
 
-// ConvertToInt16 converts the vector elements to int16.
-func (x Uint16s) ConvertToInt16() Int16s
+// ConvertToInt16 converts each element of x to int16.
+//
+//	z[i] = int16(x[i])
+//
+// This wraps unrepresentable values.
+func (x Uint16s) ConvertToInt16() (z Int16s)
 
-// Equal returns a mask indicating where x and y are equal.
-func (x Uint16s) Equal(y Uint16s) Mask16s
+// Equal returns a mask indicating which elements of x and y are equal.
+func (x Uint16s) Equal(y Uint16s) (z Mask16s)
 
-// Greater returns a mask indicating where x is greater than y.
-func (x Uint16s) Greater(y Uint16s) Mask16s
+// ExtendToUint32 zero-extends each element of x to uint32.
+//
+//	z[i] = uint32(x[i])
+//
+// Only the low z.Len() elements of x are converted.
+// The remaining elements of x are ignored.
+func (x Uint16s) ExtendToUint32() (z Uint32s)
 
-// GreaterEqual returns a mask indicating where x is greater than or equal to y.
-func (x Uint16s) GreaterEqual(y Uint16s) Mask16s
+// Greater returns a mask indicating which elements of x are greater than y.
+//
+//	z[i] = x[i] > y[i]
+func (x Uint16s) Greater(y Uint16s) (z Mask16s)
 
-// IfElse returns a new vector with elements from x where mask is true, and y where mask is false.
-func (x Uint16s) IfElse(mask Mask16s, y Uint16s) Uint16s
+// GreaterEqual returns a mask indicating which elements of x are greater than
+// or equal to y.
+//
+//	z[i] = x[i] >= y[i]
+func (x Uint16s) GreaterEqual(y Uint16s) (z Mask16s)
 
-// Len returns the number of elements in the vector.
+// HiToLo returns a vector whose low half is the high half of x and whose high
+// half is zero.
+//
+//	z = {x[n/2], x[n/2+1], ..., x[n-1], 0, ..., 0}, where n = x.Len()
+func (x Uint16s) HiToLo() (z Uint16s)
+
+// IfElse returns a vector with elements from x where mask is true, and y where
+// mask is false.
+//
+//	z[i] = if mask[i] { x[i] } else { y[i] }
+func (x Uint16s) IfElse(mask Mask16s, y Uint16s) (z Uint16s)
+
+// Len returns the number of elements in x.
 func (x Uint16s) Len() int
 
-// Less returns a mask indicating where x is less than y.
-func (x Uint16s) Less(y Uint16s) Mask16s
+// Less returns a mask indicating which elements of x are less than y.
+//
+//	z[i] = x[i] < y[i]
+func (x Uint16s) Less(y Uint16s) (z Mask16s)
 
-// LessEqual returns a mask indicating where x is less than or equal to y.
-func (x Uint16s) LessEqual(y Uint16s) Mask16s
+// LessEqual returns a mask indicating which elements of x are less than or
+// equal to y.
+//
+//	z[i] = x[i] <= y[i]
+func (x Uint16s) LessEqual(y Uint16s) (z Mask16s)
 
-// Masked returns a new vector with elements from x where mask is true, and zero elsewhere.
-func (x Uint16s) Masked(mask Mask16s) Uint16s
+// Masked returns a vector with elements from x where mask is true, and zero
+// elsewhere.
+//
+//	z[i] = if mask[i] { x[i] } else { 0 }
+func (x Uint16s) Masked(mask Mask16s) (z Uint16s)
 
-// Max returns the element-wise maximum of x and y.
-func (x Uint16s) Max(y Uint16s) Uint16s
+// Max returns the elementwise maximum of x and y.
+//
+//	z[i] = max(x[i], y[i])
+func (x Uint16s) Max(y Uint16s) (z Uint16s)
 
-// Min returns the element-wise minimum of x and y.
-func (x Uint16s) Min(y Uint16s) Uint16s
+// Min returns the elementwise minimum of x and y.
+//
+//	z[i] = min(x[i], y[i])
+func (x Uint16s) Min(y Uint16s) (z Uint16s)
 
-// Mul returns the element-wise product of x and y.
-func (x Uint16s) Mul(y Uint16s) Uint16s
+// Mul returns the elementwise product of x and y.
+//
+//	z[i] = x[i] * y[i]
+func (x Uint16s) Mul(y Uint16s) (z Uint16s)
 
-// Not returns the bitwise NOT of x.
-func (x Uint16s) Not() Uint16s
+// Not returns the bitwise negation of x.
+//
+//	z[i] = ^x[i]
+func (x Uint16s) Not() (z Uint16s)
 
-// NotEqual returns a mask indicating where x and y are not equal.
-func (x Uint16s) NotEqual(y Uint16s) Mask16s
+// NotEqual returns a mask indicating which elements of x and y are not equal.
+func (x Uint16s) NotEqual(y Uint16s) (z Mask16s)
 
 // Or returns the bitwise OR of x and y.
-func (x Uint16s) Or(y Uint16s) Uint16s
+//
+//	z[i] = x[i] | y[i]
+func (x Uint16s) Or(y Uint16s) (z Uint16s)
 
 // ReduceSum returns the scalar sum of the elements of x.
-func (x Uint16s) ReduceSum() uint16
+//
+//	z = x[0] + x[1] + ...
+func (x Uint16s) ReduceSum() (z uint16)
 
-// ReshapeToUint32s reinterprets the vector bits as a Uint32s vector.
-func (x Uint16s) ReshapeToUint32s() Uint32s
+// ReshapeToUint32s reinterprets the bits of x as a Uint32s vector.
+//
+// Both the vector elements and the bits of each element are interpreted in
+// little endian order.
+//
+//	⋯     x[3]      x[2]      x[1]      x[0]
+//	⋯ | 15 .. 0 | 15 .. 0 | 15 .. 0 | 15 .. 0 |
+//	⋯ | 31     ....     0 | 31     ....     0 |
+//	⋯          z[1]                z[0]
+func (x Uint16s) ReshapeToUint32s() (z Uint32s)
 
-// ReshapeToUint64s reinterprets the vector bits as a Uint64s vector.
-func (x Uint16s) ReshapeToUint64s() Uint64s
+// ReshapeToUint64s reinterprets the bits of x as a Uint64s vector.
+//
+// Both the vector elements and the bits of each element are interpreted in
+// little endian order.
+//
+//	⋯     x[7]      x[6]      x[5]      x[4]      x[3]      x[2]      x[1]      x[0]
+//	⋯ | 15 .. 0 | 15 .. 0 | 15 .. 0 | 15 .. 0 | 15 .. 0 | 15 .. 0 | 15 .. 0 | 15 .. 0 |
+//	⋯ | 63               ....               0 | 63               ....               0 |
+//	⋯                    z[1]                                    z[0]
+func (x Uint16s) ReshapeToUint64s() (z Uint64s)
 
-// ReshapeToUint8s reinterprets the vector bits as a Uint8s vector.
-func (x Uint16s) ReshapeToUint8s() Uint8s
+// ReshapeToUint8s reinterprets the bits of x as a Uint8s vector.
+//
+// Both the vector elements and the bits of each element are interpreted in
+// little endian order.
+//
+//	⋯          x[1]                x[0]
+//	⋯ | 15     ....     0 | 15     ....     0 |
+//	⋯ | 7  .. 0 | 7  .. 0 | 7  .. 0 | 7  .. 0 |
+//	⋯     z[3]      z[2]      z[1]      z[0]
+func (x Uint16s) ReshapeToUint8s() (z Uint8s)
 
-// RotatesAllLeft rotates all elements left by y bits.
-func (x Uint16s) RotateAllLeft(dist uint64) Uint16s
+// RotateAllLeft rotates each element of x left by shift bits.
+//
+//	z[i] = rotateLeft(x[i], shift)
+func (x Uint16s) RotateAllLeft(shift uint64) (z Uint16s)
 
-// RotatesAllRight rotates all elements right by y bits.
-func (x Uint16s) RotateAllRight(dist uint64) Uint16s
+// RotateAllRight rotates each element of x right by shift bits.
+//
+//	z[i] = rotateRight(x[i], shift)
+func (x Uint16s) RotateAllRight(shift uint64) (z Uint16s)
 
-// ShiftAllLeft shifts all elements left by y bits.
-func (x Uint16s) ShiftAllLeft(shift uint64) Uint16s
+// SaturateToUint8 converts each element of x to uint8, saturating values
+// that are outside the range of uint8.
+//
+//	z[i] = sat(x[i])
+//
+// The results are stored in the low x.Len() elements of z.
+// The remaining elements of z are zero.
+func (x Uint16s) SaturateToUint8() (z Uint8s)
 
-// ShiftAllRight shifts all elements right by y bits.
-func (x Uint16s) ShiftAllRight(shift uint64) Uint16s
+// ShiftAllLeft shifts each element of x left by shift bits.
+// If shift is greater than the element width, the result is 0.
+//
+//	z[i] = x[i] << shift
+func (x Uint16s) ShiftAllLeft(shift uint64) (z Uint16s)
 
-// Store stores the vector elements into the slice s.
+// ShiftAllRight logically shifts each element of x right by shift bits.
+// If shift is greater than the element width, the result is 0.
+//
+//	z[i] = x[i] >> shift
+func (x Uint16s) ShiftAllRight(shift uint64) (z Uint16s)
+
+// Store stores the elements of x into a slice. If len(s) < x.Len(), it panics.
 func (x Uint16s) Store(s []uint16)
 
-// StorePart stores a partial vector into the slice s and returns the number actually stored.
-func (x Uint16s) StorePart(s []uint16) int
+// StorePart stores n=min(len(s), x.Len()) elements of x into s and returns n.
+func (x Uint16s) StorePart(s []uint16) (n int)
 
-// String returns a string representation of the vector.
+// String returns x in the form "{x[0],x[1],...}".
 func (x Uint16s) String() string
 
-// Sub returns the element-wise difference of x and y.
-func (x Uint16s) Sub(y Uint16s) Uint16s
+// Sub subtracts y from x elementwise.
+//
+//	z[i] = x[i] - y[i]
+func (x Uint16s) Sub(y Uint16s) (z Uint16s)
 
-// SubSaturated returns the element-wise saturated difference of x and y.
-func (x Uint16s) SubSaturated(y Uint16s) Uint16s
+// SubSaturated subtracts y from x elementwise with saturation.
+//
+//	z[i] = sat(x[i] - y[i])
+func (x Uint16s) SubSaturated(y Uint16s) (z Uint16s)
+
+// TruncToUint8 converts each element of x to uint8 by discarding its high
+// bits.
+//
+//	z[i] = uint8(x[i])
+//
+// The results are stored in the low x.Len() elements of z.
+// The remaining elements of z are zero.
+func (x Uint16s) TruncToUint8() (z Uint8s)
 
 // Xor returns the bitwise XOR of x and y.
-func (x Uint16s) Xor(y Uint16s) Uint16s
+//
+//	z[i] = x[i] ^ y[i]
+func (x Uint16s) Xor(y Uint16s) (z Uint16s)
 
-// LoadUint32s loads a slice of uint32 into an Uint32s vector.
-func LoadUint32s([]uint32) Uint32s
+// LoadUint32s loads a slice into a vector. If len(s) < z.Len(), it panics.
+func LoadUint32s(s []uint32) (z Uint32s)
 
-// LoadUint32sPart loads a partial slice of uint32 into an Uint32s vector, returning the vector and the number of elements loaded.
-func LoadUint32sPart([]uint32) (Uint32s, int)
+// LoadUint32sPart loads n=min(len(s), z.Len()) elements from slice s as a
+// vector and returns the vector and n. If len(s) < z.Len(), the
+// remaining vector elements will be zero.
+func LoadUint32sPart(s []uint32) (z Uint32s, n int)
 
-// BroadcastUint32s fills the elements of a slice with its argument value.
-func BroadcastUint32s(uint32) Uint32s
+// BroadcastUint32s returns a vector with the input x assigned to all elements of the
+// result.
+func BroadcastUint32s(x uint32) (z Uint32s)
 
-// Add returns the element-wise sum of x and y.
-func (x Uint32s) Add(y Uint32s) Uint32s
+// Add adds x and y elementwise.
+//
+//	z[i] = x[i] + y[i]
+func (x Uint32s) Add(y Uint32s) (z Uint32s)
 
 // And returns the bitwise AND of x and y.
-func (x Uint32s) And(y Uint32s) Uint32s
+//
+//	z[i] = x[i] & y[i]
+func (x Uint32s) And(y Uint32s) (z Uint32s)
 
 // AndNot returns the bitwise AND NOT of x and y.
-func (x Uint32s) AndNot(y Uint32s) Uint32s
+//
+//	z[i] = x[i] &^ y[i]
+func (x Uint32s) AndNot(y Uint32s) (z Uint32s)
 
-// BitsToFloat32 reinterprets the vector bits as a Float32s vector.
-func (x Uint32s) BitsToFloat32() Float32s
+// BitsToFloat32 reinterprets the bits of each element of x as type float32.
+func (x Uint32s) BitsToFloat32() (z Float32s)
 
-// BitsToInt32 reinterprets the vector bits as an Int32s vector.
-func (x Uint32s) BitsToInt32() Int32s
+// BitsToInt32 reinterprets the bits of each element of x as type int32.
+func (x Uint32s) BitsToInt32() (z Int32s)
 
-// ConvertToInt32 converts the vector elements to int32.
-func (x Uint32s) ConvertToInt32() Int32s
+// ConvertToInt32 converts each element of x to int32.
+//
+//	z[i] = int32(x[i])
+//
+// This wraps unrepresentable values.
+func (x Uint32s) ConvertToInt32() (z Int32s)
 
-// Equal returns a mask indicating where x and y are equal.
-func (x Uint32s) Equal(y Uint32s) Mask32s
+// Equal returns a mask indicating which elements of x and y are equal.
+func (x Uint32s) Equal(y Uint32s) (z Mask32s)
 
-// Greater returns a mask indicating where x is greater than y.
-func (x Uint32s) Greater(y Uint32s) Mask32s
+// ExtendToUint64 zero-extends each element of x to uint64.
+//
+//	z[i] = uint64(x[i])
+//
+// Only the low z.Len() elements of x are converted.
+// The remaining elements of x are ignored.
+func (x Uint32s) ExtendToUint64() (z Uint64s)
 
-// GreaterEqual returns a mask indicating where x is greater than or equal to y.
-func (x Uint32s) GreaterEqual(y Uint32s) Mask32s
+// Greater returns a mask indicating which elements of x are greater than y.
+//
+//	z[i] = x[i] > y[i]
+func (x Uint32s) Greater(y Uint32s) (z Mask32s)
 
-// IfElse returns a new vector with elements from x where mask is true, and y where mask is false.
-func (x Uint32s) IfElse(mask Mask32s, y Uint32s) Uint32s
+// GreaterEqual returns a mask indicating which elements of x are greater than
+// or equal to y.
+//
+//	z[i] = x[i] >= y[i]
+func (x Uint32s) GreaterEqual(y Uint32s) (z Mask32s)
 
-// Len returns the number of elements in the vector.
+// HiToLo returns a vector whose low half is the high half of x and whose high
+// half is zero.
+//
+//	z = {x[n/2], x[n/2+1], ..., x[n-1], 0, ..., 0}, where n = x.Len()
+func (x Uint32s) HiToLo() (z Uint32s)
+
+// IfElse returns a vector with elements from x where mask is true, and y where
+// mask is false.
+//
+//	z[i] = if mask[i] { x[i] } else { y[i] }
+func (x Uint32s) IfElse(mask Mask32s, y Uint32s) (z Uint32s)
+
+// Len returns the number of elements in x.
 func (x Uint32s) Len() int
 
-// Less returns a mask indicating where x is less than y.
-func (x Uint32s) Less(y Uint32s) Mask32s
+// Less returns a mask indicating which elements of x are less than y.
+//
+//	z[i] = x[i] < y[i]
+func (x Uint32s) Less(y Uint32s) (z Mask32s)
 
-// LessEqual returns a mask indicating where x is less than or equal to y.
-func (x Uint32s) LessEqual(y Uint32s) Mask32s
+// LessEqual returns a mask indicating which elements of x are less than or
+// equal to y.
+//
+//	z[i] = x[i] <= y[i]
+func (x Uint32s) LessEqual(y Uint32s) (z Mask32s)
 
-// Masked returns a new vector with elements from x where mask is true, and zero elsewhere.
-func (x Uint32s) Masked(mask Mask32s) Uint32s
+// Masked returns a vector with elements from x where mask is true, and zero
+// elsewhere.
+//
+//	z[i] = if mask[i] { x[i] } else { 0 }
+func (x Uint32s) Masked(mask Mask32s) (z Uint32s)
 
-// Max returns the element-wise maximum of x and y.
-func (x Uint32s) Max(y Uint32s) Uint32s
+// Max returns the elementwise maximum of x and y.
+//
+//	z[i] = max(x[i], y[i])
+func (x Uint32s) Max(y Uint32s) (z Uint32s)
 
-// Min returns the element-wise minimum of x and y.
-func (x Uint32s) Min(y Uint32s) Uint32s
+// Min returns the elementwise minimum of x and y.
+//
+//	z[i] = min(x[i], y[i])
+func (x Uint32s) Min(y Uint32s) (z Uint32s)
 
-// Mul returns the element-wise product of x and y.
-func (x Uint32s) Mul(y Uint32s) Uint32s
+// Mul returns the elementwise product of x and y.
+//
+//	z[i] = x[i] * y[i]
+func (x Uint32s) Mul(y Uint32s) (z Uint32s)
 
-// Not returns the bitwise NOT of x.
-func (x Uint32s) Not() Uint32s
+// Not returns the bitwise negation of x.
+//
+//	z[i] = ^x[i]
+func (x Uint32s) Not() (z Uint32s)
 
-// NotEqual returns a mask indicating where x and y are not equal.
-func (x Uint32s) NotEqual(y Uint32s) Mask32s
+// NotEqual returns a mask indicating which elements of x and y are not equal.
+func (x Uint32s) NotEqual(y Uint32s) (z Mask32s)
 
 // Or returns the bitwise OR of x and y.
-func (x Uint32s) Or(y Uint32s) Uint32s
+//
+//	z[i] = x[i] | y[i]
+func (x Uint32s) Or(y Uint32s) (z Uint32s)
 
 // ReduceSum returns the scalar sum of the elements of x.
-func (x Uint32s) ReduceSum() uint32
+//
+//	z = x[0] + x[1] + ...
+func (x Uint32s) ReduceSum() (z uint32)
 
-// ReshapeToUint16s reinterprets the vector bits as a Uint16s vector.
-func (x Uint32s) ReshapeToUint16s() Uint16s
+// ReshapeToUint16s reinterprets the bits of x as a Uint16s vector.
+//
+// Both the vector elements and the bits of each element are interpreted in
+// little endian order.
+//
+//	⋯          x[1]                x[0]
+//	⋯ | 31     ....     0 | 31     ....     0 |
+//	⋯ | 15 .. 0 | 15 .. 0 | 15 .. 0 | 15 .. 0 |
+//	⋯     z[3]      z[2]      z[1]      z[0]
+func (x Uint32s) ReshapeToUint16s() (z Uint16s)
 
-// ReshapeToUint64s reinterprets the vector bits as a Uint64s vector.
-func (x Uint32s) ReshapeToUint64s() Uint64s
+// ReshapeToUint64s reinterprets the bits of x as a Uint64s vector.
+//
+// Both the vector elements and the bits of each element are interpreted in
+// little endian order.
+//
+//	⋯     x[3]      x[2]      x[1]      x[0]
+//	⋯ | 31 .. 0 | 31 .. 0 | 31 .. 0 | 31 .. 0 |
+//	⋯ | 63     ....     0 | 63     ....     0 |
+//	⋯          z[1]                z[0]
+func (x Uint32s) ReshapeToUint64s() (z Uint64s)
 
-// ReshapeToUint8s reinterprets the vector bits as a Uint8s vector.
-func (x Uint32s) ReshapeToUint8s() Uint8s
+// ReshapeToUint8s reinterprets the bits of x as a Uint8s vector.
+//
+// Both the vector elements and the bits of each element are interpreted in
+// little endian order.
+//
+//	⋯                    x[1]                                    x[0]
+//	⋯ | 31               ....               0 | 31               ....               0 |
+//	⋯ | 7  .. 0 | 7  .. 0 | 7  .. 0 | 7  .. 0 | 7  .. 0 | 7  .. 0 | 7  .. 0 | 7  .. 0 |
+//	⋯     z[7]      z[6]      z[5]      z[4]      z[3]      z[2]      z[1]      z[0]
+func (x Uint32s) ReshapeToUint8s() (z Uint8s)
 
-// RotatesAllLeft rotates all elements left by y bits.
-func (x Uint32s) RotateAllLeft(dist uint64) Uint32s
+// RotateAllLeft rotates each element of x left by shift bits.
+//
+//	z[i] = rotateLeft(x[i], shift)
+func (x Uint32s) RotateAllLeft(shift uint64) (z Uint32s)
 
-// RotatesAllRight rotates all elements right by y bits.
-func (x Uint32s) RotateAllRight(dist uint64) Uint32s
+// RotateAllRight rotates each element of x right by shift bits.
+//
+//	z[i] = rotateRight(x[i], shift)
+func (x Uint32s) RotateAllRight(shift uint64) (z Uint32s)
 
-// ShiftAllLeft shifts all elements left by y bits.
-func (x Uint32s) ShiftAllLeft(shift uint64) Uint32s
+// SaturateToUint16 converts each element of x to uint16, saturating values
+// that are outside the range of uint16.
+//
+//	z[i] = sat(x[i])
+//
+// The results are stored in the low x.Len() elements of z.
+// The remaining elements of z are zero.
+func (x Uint32s) SaturateToUint16() (z Uint16s)
 
-// ShiftAllRight shifts all elements right by y bits.
-func (x Uint32s) ShiftAllRight(shift uint64) Uint32s
+// ShiftAllLeft shifts each element of x left by shift bits.
+// If shift is greater than the element width, the result is 0.
+//
+//	z[i] = x[i] << shift
+func (x Uint32s) ShiftAllLeft(shift uint64) (z Uint32s)
 
-// Store stores the vector elements into the slice s.
+// ShiftAllRight logically shifts each element of x right by shift bits.
+// If shift is greater than the element width, the result is 0.
+//
+//	z[i] = x[i] >> shift
+func (x Uint32s) ShiftAllRight(shift uint64) (z Uint32s)
+
+// Store stores the elements of x into a slice. If len(s) < x.Len(), it panics.
 func (x Uint32s) Store(s []uint32)
 
-// StorePart stores a partial vector into the slice s and returns the number actually stored.
-func (x Uint32s) StorePart(s []uint32) int
+// StorePart stores n=min(len(s), x.Len()) elements of x into s and returns n.
+func (x Uint32s) StorePart(s []uint32) (n int)
 
-// String returns a string representation of the vector.
+// String returns x in the form "{x[0],x[1],...}".
 func (x Uint32s) String() string
 
-// Sub returns the element-wise difference of x and y.
-func (x Uint32s) Sub(y Uint32s) Uint32s
+// Sub subtracts y from x elementwise.
+//
+//	z[i] = x[i] - y[i]
+func (x Uint32s) Sub(y Uint32s) (z Uint32s)
+
+// TruncToUint16 converts each element of x to uint16 by discarding its high
+// bits.
+//
+//	z[i] = uint16(x[i])
+//
+// The results are stored in the low x.Len() elements of z.
+// The remaining elements of z are zero.
+func (x Uint32s) TruncToUint16() (z Uint16s)
 
 // Xor returns the bitwise XOR of x and y.
-func (x Uint32s) Xor(y Uint32s) Uint32s
+//
+//	z[i] = x[i] ^ y[i]
+func (x Uint32s) Xor(y Uint32s) (z Uint32s)
 
-// LoadUint64s loads a slice of uint64 into an Uint64s vector.
-func LoadUint64s([]uint64) Uint64s
+// LoadUint64s loads a slice into a vector. If len(s) < z.Len(), it panics.
+func LoadUint64s(s []uint64) (z Uint64s)
 
-// LoadUint64sPart loads a partial slice of uint64 into an Uint64s vector, returning the vector and the number of elements loaded.
-func LoadUint64sPart([]uint64) (Uint64s, int)
+// LoadUint64sPart loads n=min(len(s), z.Len()) elements from slice s as a
+// vector and returns the vector and n. If len(s) < z.Len(), the
+// remaining vector elements will be zero.
+func LoadUint64sPart(s []uint64) (z Uint64s, n int)
 
-// BroadcastUint64s fills the elements of a slice with its argument value.
-func BroadcastUint64s(uint64) Uint64s
+// BroadcastUint64s returns a vector with the input x assigned to all elements of the
+// result.
+func BroadcastUint64s(x uint64) (z Uint64s)
 
-// Add returns the element-wise sum of x and y.
-func (x Uint64s) Add(y Uint64s) Uint64s
+// Add adds x and y elementwise.
+//
+//	z[i] = x[i] + y[i]
+func (x Uint64s) Add(y Uint64s) (z Uint64s)
 
 // And returns the bitwise AND of x and y.
-func (x Uint64s) And(y Uint64s) Uint64s
+//
+//	z[i] = x[i] & y[i]
+func (x Uint64s) And(y Uint64s) (z Uint64s)
 
 // AndNot returns the bitwise AND NOT of x and y.
-func (x Uint64s) AndNot(y Uint64s) Uint64s
-
-// BitsToFloat64 reinterprets the vector bits as a Float64s vector.
-func (x Uint64s) BitsToFloat64() Float64s
-
-// BitsToInt64 reinterprets the vector bits as an Int64s vector.
-func (x Uint64s) BitsToInt64() Int64s
-
-// CarrylessMultiplyOdd computes the carryless
-// multiplications of selected even indexed elements of x and y.
-// Each product is 128 bits wide and fills the corresponding
-// even-odd pairs in the result.
 //
-// A carryless multiplication uses bitwise XOR instead of
-// add-with-carry, for example (in base two):
+//	z[i] = x[i] &^ y[i]
+func (x Uint64s) AndNot(y Uint64s) (z Uint64s)
+
+// BitsToFloat64 reinterprets the bits of each element of x as type float64.
+func (x Uint64s) BitsToFloat64() (z Float64s)
+
+// BitsToInt64 reinterprets the bits of each element of x as type int64.
+func (x Uint64s) BitsToInt64() (z Int64s)
+
+// CarrylessMultiplyEven computes the elementwise carryless multiplication of
+// even-indexed elements of x and y. The result of each carryless multiply is
+// twice the width of the input elements. The high bits are stored in elements
+// z[2*i+1] and the low bits are stored in elements z[2*i].
 //
-//	11 * 11 = 11 * (10 ^ 1) = (11 * 10) ^ (11 * 1) = 110 ^ 11 = 101
+//	concat(z[2*i+1], z[2*i]) = clmul(x[2*i], y[2*i])
 //
-// This also models multiplication of polynomials with coefficients
-// from GF(2) -- 11 * 11 models (x+1)*(x+1) = x**2 + (1^1)x + 1 =
-// x**2 + 0x + 1 = x**2 + 1 modeled by 101.  (Note that "+" adds
-// polynomial terms, but coefficients "add" with XOR.)"
-func (x Uint64s) CarrylessMultiplyEven(y Uint64s) Uint64s
-
-// CarrylessMultiplyOdd computes the carryless
-// multiplications of selected odd indexed elements of x and y.
-// Each product is 128 bits wide and fills the corresponding
-// even-odd pairs in the result.
+// A carryless multiplication uses bitwise XOR instead of add-with-carry.
+// For example, to compute the carryless multiply of 0b1110 and 0b1011:
 //
-// A carryless multiplication uses bitwise XOR instead of
-// add-with-carry, for example (in base two):
+//	     1110
+//	   ⊗ 1011
+//	  ───────
+//	     1110
+//	    1110
+//	   0000
+//	⊕ 1110
+//	  ───────
+//	  1100010
 //
-//	11 * 11 = 11 * (10 ^ 1) = (11 * 10) ^ (11 * 1) = 110 ^ 11 = 101
+// Carryless multiply can also be viewed as multiplying polynomials with
+// coefficients from GF(2). For example, the above example can be represented as
 //
-// This also models multiplication of polynomials with coefficients
-// from GF(2) -- 11 * 11 models (x+1)*(x+1) = x**2 + (1^1)x + 1 =
-// x**2 + 0x + 1 = x**2 + 1 modeled by 101.  (Note that "+" adds
-// polynomial terms, but coefficients "add" with XOR.)"
-func (x Uint64s) CarrylessMultiplyOdd(y Uint64s) Uint64s
+//	  (x^3 + x^2 + x^1) * (x^3 + x^1 + x^0)
+//	= (x^6 + x^5 + (1^1)x^4 + (1^1)x^3 + (1^1)x^2 + x^1)
+//	= (x^6 + x^5 + x^1)
+func (x Uint64s) CarrylessMultiplyEven(y Uint64s) (z Uint64s)
 
-// ConvertToInt64 converts the vector elements to int64.
-func (x Uint64s) ConvertToInt64() Int64s
+// CarrylessMultiplyEvenOdd computes the elementwise carryless multiplication of
+// even-indexed elements of x and odd-indexed elements of y. The result of each
+// carryless multiply is twice the width of the input elements. The high bits
+// are stored in elements z[2*i+1] and the low bits are stored in elements
+// z[2*i].
+//
+//	concat(z[2*i+1], z[2*i]) = clmul(x[2*i], y[2*i+1])
+//
+// See [CarrylessMultiplyEven] for details about carryless multiply.
+func (x Uint64s) CarrylessMultiplyEvenOdd(y Uint64s) (z Uint64s)
 
-// Equal returns a mask indicating where x and y are equal.
-func (x Uint64s) Equal(y Uint64s) Mask64s
+// CarrylessMultiplyOdd computes the elementwise carryless multiplication of
+// odd-indexed elements of x and y. The result of each carryless multiply is
+// twice the width of the input elements. The high bits are stored in elements
+// z[2*i+1] and the low bits are stored in elements z[2*i].
+//
+//	concat(z[2*i+1], z[2*i]) = clmul(x[2*i+1], y[2*i+1])
+//
+// See [CarrylessMultiplyEven] for details about carryless multiply.
+func (x Uint64s) CarrylessMultiplyOdd(y Uint64s) (z Uint64s)
 
-// Greater returns a mask indicating where x is greater than y.
-func (x Uint64s) Greater(y Uint64s) Mask64s
+// CarrylessMultiplyOddEven computes the elementwise carryless multiplication of
+// odd-indexed elements of x and even-indexed elements of y. The result of each
+// carryless multiply is twice the width of the input elements. The high bits
+// are stored in elements z[2*i+1] and the low bits are stored in elements
+// z[2*i].
+//
+//	concat(z[2*i+1], z[2*i]) = clmul(x[2*i+1], y[2*i])
+//
+// See [CarrylessMultiplyEven] for details about carryless multiply.
+func (x Uint64s) CarrylessMultiplyOddEven(y Uint64s) (z Uint64s)
 
-// GreaterEqual returns a mask indicating where x is greater than or equal to y.
-func (x Uint64s) GreaterEqual(y Uint64s) Mask64s
+// ConvertToInt64 converts each element of x to int64.
+//
+//	z[i] = int64(x[i])
+//
+// This wraps unrepresentable values.
+func (x Uint64s) ConvertToInt64() (z Int64s)
 
-// IfElse returns a new vector with elements from x where mask is true, and y where mask is false.
-func (x Uint64s) IfElse(mask Mask64s, y Uint64s) Uint64s
+// Equal returns a mask indicating which elements of x and y are equal.
+func (x Uint64s) Equal(y Uint64s) (z Mask64s)
 
-// Len returns the number of elements in the vector.
+// Greater returns a mask indicating which elements of x are greater than y.
+//
+//	z[i] = x[i] > y[i]
+func (x Uint64s) Greater(y Uint64s) (z Mask64s)
+
+// GreaterEqual returns a mask indicating which elements of x are greater than
+// or equal to y.
+//
+//	z[i] = x[i] >= y[i]
+func (x Uint64s) GreaterEqual(y Uint64s) (z Mask64s)
+
+// HiToLo returns a vector whose low half is the high half of x and whose high
+// half is zero.
+//
+//	z = {x[n/2], x[n/2+1], ..., x[n-1], 0, ..., 0}, where n = x.Len()
+func (x Uint64s) HiToLo() (z Uint64s)
+
+// IfElse returns a vector with elements from x where mask is true, and y where
+// mask is false.
+//
+//	z[i] = if mask[i] { x[i] } else { y[i] }
+func (x Uint64s) IfElse(mask Mask64s, y Uint64s) (z Uint64s)
+
+// Len returns the number of elements in x.
 func (x Uint64s) Len() int
 
-// Less returns a mask indicating where x is less than y.
-func (x Uint64s) Less(y Uint64s) Mask64s
+// Less returns a mask indicating which elements of x are less than y.
+//
+//	z[i] = x[i] < y[i]
+func (x Uint64s) Less(y Uint64s) (z Mask64s)
 
-// LessEqual returns a mask indicating where x is less than or equal to y.
-func (x Uint64s) LessEqual(y Uint64s) Mask64s
+// LessEqual returns a mask indicating which elements of x are less than or
+// equal to y.
+//
+//	z[i] = x[i] <= y[i]
+func (x Uint64s) LessEqual(y Uint64s) (z Mask64s)
 
-// Masked returns a new vector with elements from x where mask is true, and zero elsewhere.
-func (x Uint64s) Masked(mask Mask64s) Uint64s
+// Masked returns a vector with elements from x where mask is true, and zero
+// elsewhere.
+//
+//	z[i] = if mask[i] { x[i] } else { 0 }
+func (x Uint64s) Masked(mask Mask64s) (z Uint64s)
 
-// Not returns the bitwise NOT of x.
-func (x Uint64s) Not() Uint64s
+// Not returns the bitwise negation of x.
+//
+//	z[i] = ^x[i]
+func (x Uint64s) Not() (z Uint64s)
 
-// NotEqual returns a mask indicating where x and y are not equal.
-func (x Uint64s) NotEqual(y Uint64s) Mask64s
+// NotEqual returns a mask indicating which elements of x and y are not equal.
+func (x Uint64s) NotEqual(y Uint64s) (z Mask64s)
 
 // Or returns the bitwise OR of x and y.
-func (x Uint64s) Or(y Uint64s) Uint64s
+//
+//	z[i] = x[i] | y[i]
+func (x Uint64s) Or(y Uint64s) (z Uint64s)
 
-// ReshapeToUint16s reinterprets the vector bits as a Uint16s vector.
-func (x Uint64s) ReshapeToUint16s() Uint16s
+// ReshapeToUint16s reinterprets the bits of x as a Uint16s vector.
+//
+// Both the vector elements and the bits of each element are interpreted in
+// little endian order.
+//
+//	⋯                    x[1]                                    x[0]
+//	⋯ | 63               ....               0 | 63               ....               0 |
+//	⋯ | 15 .. 0 | 15 .. 0 | 15 .. 0 | 15 .. 0 | 15 .. 0 | 15 .. 0 | 15 .. 0 | 15 .. 0 |
+//	⋯     z[7]      z[6]      z[5]      z[4]      z[3]      z[2]      z[1]      z[0]
+func (x Uint64s) ReshapeToUint16s() (z Uint16s)
 
-// ReshapeToUint32s reinterprets the vector bits as a Uint32s vector.
-func (x Uint64s) ReshapeToUint32s() Uint32s
+// ReshapeToUint32s reinterprets the bits of x as a Uint32s vector.
+//
+// Both the vector elements and the bits of each element are interpreted in
+// little endian order.
+//
+//	⋯          x[1]                x[0]
+//	⋯ | 63     ....     0 | 63     ....     0 |
+//	⋯ | 31 .. 0 | 31 .. 0 | 31 .. 0 | 31 .. 0 |
+//	⋯     z[3]      z[2]      z[1]      z[0]
+func (x Uint64s) ReshapeToUint32s() (z Uint32s)
 
-// ReshapeToUint8s reinterprets the vector bits as a Uint8s vector.
-func (x Uint64s) ReshapeToUint8s() Uint8s
+// ReshapeToUint8s reinterprets the bits of x as a Uint8s vector.
+//
+// Both the vector elements and the bits of each element are interpreted in
+// little endian order.
+//
+//	⋯                      x[1]                                        x[0]
+//	⋯ | 63                 ....                 0 | 63                 ....                 0 |
+//	⋯ | 7  .. 0 | 7  .. 0 | ⋯ | 7  .. 0 | 7  .. 0 | 7  .. 0 | 7  .. 0 | ⋯ | 7  .. 0 | 7  .. 0 |
+//	⋯    z[15]     z[14]    ⋯     z[9]      z[8]      z[7]      z[6]    ⋯     z[1]      z[0]
+func (x Uint64s) ReshapeToUint8s() (z Uint8s)
 
-// RotatesAllLeft rotates all elements left by y bits.
-func (x Uint64s) RotateAllLeft(dist uint64) Uint64s
+// RotateAllLeft rotates each element of x left by shift bits.
+//
+//	z[i] = rotateLeft(x[i], shift)
+func (x Uint64s) RotateAllLeft(shift uint64) (z Uint64s)
 
-// RotatesAllRight rotates all elements right by y bits.
-func (x Uint64s) RotateAllRight(dist uint64) Uint64s
+// RotateAllRight rotates each element of x right by shift bits.
+//
+//	z[i] = rotateRight(x[i], shift)
+func (x Uint64s) RotateAllRight(shift uint64) (z Uint64s)
 
-// ShiftAllLeft shifts all elements left by y bits.
-func (x Uint64s) ShiftAllLeft(shift uint64) Uint64s
+// SaturateToUint32 converts each element of x to uint32, saturating values
+// that are outside the range of uint32.
+//
+//	z[i] = sat(x[i])
+//
+// The results are stored in the low x.Len() elements of z.
+// The remaining elements of z are zero.
+func (x Uint64s) SaturateToUint32() (z Uint32s)
 
-// ShiftAllRight shifts all elements right by y bits.
-func (x Uint64s) ShiftAllRight(shift uint64) Uint64s
+// ShiftAllLeft shifts each element of x left by shift bits.
+// If shift is greater than the element width, the result is 0.
+//
+//	z[i] = x[i] << shift
+func (x Uint64s) ShiftAllLeft(shift uint64) (z Uint64s)
 
-// Store stores the vector elements into the slice s.
+// ShiftAllRight logically shifts each element of x right by shift bits.
+// If shift is greater than the element width, the result is 0.
+//
+//	z[i] = x[i] >> shift
+func (x Uint64s) ShiftAllRight(shift uint64) (z Uint64s)
+
+// Store stores the elements of x into a slice. If len(s) < x.Len(), it panics.
 func (x Uint64s) Store(s []uint64)
 
-// StorePart stores a partial vector into the slice s and returns the number actually stored.
-func (x Uint64s) StorePart(s []uint64) int
+// StorePart stores n=min(len(s), x.Len()) elements of x into s and returns n.
+func (x Uint64s) StorePart(s []uint64) (n int)
 
-// String returns a string representation of the vector.
+// String returns x in the form "{x[0],x[1],...}".
 func (x Uint64s) String() string
 
-// Sub returns the element-wise difference of x and y.
-func (x Uint64s) Sub(y Uint64s) Uint64s
+// Sub subtracts y from x elementwise.
+//
+//	z[i] = x[i] - y[i]
+func (x Uint64s) Sub(y Uint64s) (z Uint64s)
+
+// TruncToUint32 converts each element of x to uint32 by discarding its high
+// bits.
+//
+//	z[i] = uint32(x[i])
+//
+// The results are stored in the low x.Len() elements of z.
+// The remaining elements of z are zero.
+func (x Uint64s) TruncToUint32() (z Uint32s)
 
 // Xor returns the bitwise XOR of x and y.
-func (x Uint64s) Xor(y Uint64s) Uint64s
+//
+//	z[i] = x[i] ^ y[i]
+func (x Uint64s) Xor(y Uint64s) (z Uint64s)
 
-// LoadFloat32s loads a slice of float32 into an Float32s vector.
-func LoadFloat32s([]float32) Float32s
+// LoadFloat32s loads a slice into a vector. If len(s) < z.Len(), it panics.
+func LoadFloat32s(s []float32) (z Float32s)
 
-// LoadFloat32sPart loads a partial slice of float32 into an Float32s vector, returning the vector and the number of elements loaded.
-func LoadFloat32sPart([]float32) (Float32s, int)
+// LoadFloat32sPart loads n=min(len(s), z.Len()) elements from slice s as a
+// vector and returns the vector and n. If len(s) < z.Len(), the
+// remaining vector elements will be zero.
+func LoadFloat32sPart(s []float32) (z Float32s, n int)
 
-// BroadcastFloat32s fills the elements of a slice with its argument value.
-func BroadcastFloat32s(float32) Float32s
+// BroadcastFloat32s returns a vector with the input x assigned to all elements of the
+// result.
+func BroadcastFloat32s(x float32) (z Float32s)
 
-// Abs returns the element-wise absolute value of x.
-func (x Float32s) Abs() Float32s
+// Abs returns the elementwise absolute value of x.
+func (x Float32s) Abs() (z Float32s)
 
-// Add returns the element-wise sum of x and y.
-func (x Float32s) Add(y Float32s) Float32s
+// Add adds x and y elementwise.
+//
+//	z[i] = x[i] + y[i]
+func (x Float32s) Add(y Float32s) (z Float32s)
 
-// ConvertToInt32 converts the vector elements to int32.
-func (x Float32s) ConvertToInt32() Int32s
+// Ceil returns the least integer value greater than or equal to each element
+// of x.
+//
+//	z[i] = ceil(x[i])
+//
+// Special cases follow IEEE 754: Ceil(±0) = ±0, Ceil(±Inf) = ±Inf, Ceil(x) = -0
+// for -1 < x < -0, and Ceil(NaN) = NaN. The sign and payload of a NaN result
+// are unspecified.
+func (x Float32s) Ceil() (z Float32s)
 
-// Div returns the element-wise quotient of x and y.
-func (x Float32s) Div(y Float32s) Float32s
+// ConvertToFloat64 converts each element of x to float64.
+//
+//	z[i] = float64(x[i])
+//
+// Only the low z.Len() elements of x are converted.
+// The remaining elements of x are ignored.
+func (x Float32s) ConvertToFloat64() (z Float64s)
 
-// Equal returns a mask indicating where x and y are equal.
-func (x Float32s) Equal(y Float32s) Mask32s
+// ConvertToInt32 converts each element of x to int32.
+//
+//	z[i] = int32(x[i])
+//
+// When a conversion is inexact, this truncates the result (rounds toward zero).
+// If the converted result would be outside the representable range, the result
+// is architecture-dependent.
+func (x Float32s) ConvertToInt32() (z Int32s)
 
-// Greater returns a mask indicating where x is greater than y.
-func (x Float32s) Greater(y Float32s) Mask32s
+// Div divides x by y elementwise.
+//
+//	z[i] = x[i] / y[i]
+//
+// Division by zero does not panic, and the result follows IEEE 754. That is,
+// dividing a non-zero value by zero results in +/- infinity, and dividing zero
+// by zero results in NaN.
+func (x Float32s) Div(y Float32s) (z Float32s)
 
-// GreaterEqual returns a mask indicating where x is greater than or equal to y.
-func (x Float32s) GreaterEqual(y Float32s) Mask32s
+// Equal returns a mask indicating which elements of x and y are equal.
+func (x Float32s) Equal(y Float32s) (z Mask32s)
 
-// IfElse returns a new vector with elements from x where mask is true, and y where mask is false.
-func (x Float32s) IfElse(mask Mask32s, y Float32s) Float32s
+// Floor returns the greatest integer value less than or equal to each element
+// of x.
+//
+//	z[i] = floor(x[i])
+//
+// Special cases follow IEEE 754: Floor(±0) = ±0, Floor(±Inf) = ±Inf, and
+// Floor(NaN) = NaN. The sign and payload of a NaN result are unspecified.
+func (x Float32s) Floor() (z Float32s)
 
-// Len returns the number of elements in the vector.
+// Greater returns a mask indicating which elements of x are greater than y.
+//
+//	z[i] = x[i] > y[i]
+func (x Float32s) Greater(y Float32s) (z Mask32s)
+
+// GreaterEqual returns a mask indicating which elements of x are greater than
+// or equal to y.
+//
+//	z[i] = x[i] >= y[i]
+func (x Float32s) GreaterEqual(y Float32s) (z Mask32s)
+
+// HiToLo returns a vector whose low half is the high half of x and whose high
+// half is zero.
+//
+//	z = {x[n/2], x[n/2+1], ..., x[n-1], 0, ..., 0}, where n = x.Len()
+func (x Float32s) HiToLo() (z Float32s)
+
+// IfElse returns a vector with elements from x where mask is true, and y where
+// mask is false.
+//
+//	z[i] = if mask[i] { x[i] } else { y[i] }
+func (x Float32s) IfElse(mask Mask32s, y Float32s) (z Float32s)
+
+// Len returns the number of elements in x.
 func (x Float32s) Len() int
 
-// Less returns a mask indicating where x is less than y.
-func (x Float32s) Less(y Float32s) Mask32s
+// Less returns a mask indicating which elements of x are less than y.
+//
+//	z[i] = x[i] < y[i]
+func (x Float32s) Less(y Float32s) (z Mask32s)
 
-// LessEqual returns a mask indicating where x is less than or equal to y.
-func (x Float32s) LessEqual(y Float32s) Mask32s
+// LessEqual returns a mask indicating which elements of x are less than or
+// equal to y.
+//
+//	z[i] = x[i] <= y[i]
+func (x Float32s) LessEqual(y Float32s) (z Mask32s)
 
-// Masked returns a new vector with elements from x where mask is true, and zero elsewhere.
-func (x Float32s) Masked(mask Mask32s) Float32s
+// Masked returns a vector with elements from x where mask is true, and zero
+// elsewhere.
+//
+//	z[i] = if mask[i] { x[i] } else { 0 }
+func (x Float32s) Masked(mask Mask32s) (z Float32s)
 
-// Max returns the element-wise maximum of x and y.
-func (x Float32s) Max(y Float32s) Float32s
+// Max returns the elementwise maximum of x and y.
+//
+//	z[i] = max(x[i], y[i])
+//
+// The handling of NaN and signed zeroes is architecture-dependent. ARM64 and
+// WASM follow the IEEE 754-2019 maximum algorithm, which also agrees with Go's
+// max built-in. AMD64 handles these differently. Notably, AMD64 is
+// non-commutative.
+//
+//	x     y     IEEE  AMD64
+//	----- ----- ----- -----
+//	NaN   y     NaN   y
+//	x     NaN   NaN   NaN
+//	-Inf  y     y     y
+//	x     -Inf  x     x
+//	+Inf  y     +Inf  +Inf
+//	x     +Inf  +Inf  +Inf
+//	+0    -0    +0    -0
+//	-0    +0    +0    +0
+func (x Float32s) Max(y Float32s) (z Float32s)
 
-// Min returns the element-wise minimum of x and y.
-func (x Float32s) Min(y Float32s) Float32s
+// Min returns the elementwise minimum of x and y.
+//
+//	z[i] = min(x[i], y[i])
+//
+// The handling of NaN and signed zeroes is architecture-dependent. ARM64 and
+// WASM follow the IEEE 754-2019 minimum algorithm, which also agrees with Go's
+// min built-in. AMD64 handles these differently. Notably, AMD64 is
+// non-commutative.
+//
+//	x     y     IEEE  AMD64
+//	----- ----- ----- -----
+//	NaN   y     NaN   y
+//	x     NaN   NaN   NaN
+//	-Inf  y     -Inf  -Inf
+//	x     -Inf  -Inf  -Inf
+//	+Inf  y     y     y
+//	x     +Inf  x     x
+//	+0    -0    -0    -0
+//	-0    +0    -0    +0
+func (x Float32s) Min(y Float32s) (z Float32s)
 
-// Mul returns the element-wise product of x and y.
-func (x Float32s) Mul(y Float32s) Float32s
+// Mul returns the elementwise product of x and y.
+//
+//	z[i] = x[i] * y[i]
+func (x Float32s) Mul(y Float32s) (z Float32s)
 
-// MulAdd returns x * y + z element-wise.
-func (x Float32s) MulAdd(y Float32s, z Float32s) Float32s
+// MulAdd returns x * y + z elementwise.
+//
+//	w[i] = x[i] * y[i] + z[i]
+//
+// This performs a fused multiply-add, computing x[i]*y[i] + z[i] with a single
+// rounding rather than two and no intermediate overflow, except on wasm, where
+// it rounds x[i]*y[i] before adding z[i].
+func (x Float32s) MulAdd(y Float32s, z Float32s) (w Float32s)
 
-// Neg returns the element-wise negation of x.
-func (x Float32s) Neg() Float32s
+// Neg returns the elementwise negation of x.
+//
+//	z[i] = -x[i]
+func (x Float32s) Neg() (z Float32s)
 
-// NotEqual returns a mask indicating where x and y are not equal.
-func (x Float32s) NotEqual(y Float32s) Mask32s
+// NotEqual returns a mask indicating which elements of x and y are not equal.
+func (x Float32s) NotEqual(y Float32s) (z Mask32s)
 
 // ReduceSum returns the scalar sum of the elements of x.
-func (x Float32s) ReduceSum() float32
+//
+// This uses repeated pairwise summation, which may affect the final precision
+// of the result.
+//
+//	z = ((x[0] + x[1]) + (x[2] + x[3])) + ...
+func (x Float32s) ReduceSum() (z float32)
 
-// Sqrt returns the element-wise square root of x.
-func (x Float32s) Sqrt() Float32s
+// Round returns the nearest integer value to each element of x, rounding ties
+// to even.
+//
+//	z[i] = roundToEven(x[i])
+//
+// Special cases follow IEEE 754: Round(±0) = ±0, Round(±Inf) = ±Inf,
+// Round(x) = -0 for -0.5 <= x < -0, and Round(NaN) = NaN. The sign and payload
+// of a NaN result are unspecified.
+func (x Float32s) Round() (z Float32s)
 
-// Store stores the vector elements into the slice s.
+// Sqrt returns the elementwise square root of x.
+//
+//	z[i] = sqrt(x[i])
+//
+// The result is correctly rounded. Sqrt(+Inf) = +Inf, Sqrt(±0) = ±0, and
+// Sqrt(x) is NaN if x < 0 or x is NaN. The sign and payload of a NaN result
+// are unspecified.
+func (x Float32s) Sqrt() (z Float32s)
+
+// Store stores the elements of x into a slice. If len(s) < x.Len(), it panics.
 func (x Float32s) Store(s []float32)
 
-// StorePart stores a partial vector into the slice s and returns the number actually stored.
-func (x Float32s) StorePart(s []float32) int
+// StorePart stores n=min(len(s), x.Len()) elements of x into s and returns n.
+func (x Float32s) StorePart(s []float32) (n int)
 
-// String returns a string representation of the vector.
+// String returns x in the form "{x[0],x[1],...}".
 func (x Float32s) String() string
 
-// Sub returns the element-wise difference of x and y.
-func (x Float32s) Sub(y Float32s) Float32s
+// Sub subtracts y from x elementwise.
+//
+//	z[i] = x[i] - y[i]
+func (x Float32s) Sub(y Float32s) (z Float32s)
 
-// ToBits reinterprets the vector bits as an unsigned integer vector.
-func (x Float32s) ToBits() Uint32s
+// ToBits returns the IEEE 754 binary representation of each element of x.
+func (x Float32s) ToBits() (z Uint32s)
 
-// LoadFloat64s loads a slice of float64 into an Float64s vector.
-func LoadFloat64s([]float64) Float64s
+// Trunc returns the integer value of each element of x, rounded toward zero.
+//
+//	z[i] = trunc(x[i])
+//
+// Special cases follow IEEE 754: Trunc(±0) = ±0, Trunc(±Inf) = ±Inf,
+// Trunc(x) = -0 for -1 < x < -0, and Trunc(NaN) = NaN. The sign and payload of
+// a NaN result are unspecified.
+func (x Float32s) Trunc() (z Float32s)
 
-// LoadFloat64sPart loads a partial slice of float64 into an Float64s vector, returning the vector and the number of elements loaded.
-func LoadFloat64sPart([]float64) (Float64s, int)
+// LoadFloat64s loads a slice into a vector. If len(s) < z.Len(), it panics.
+func LoadFloat64s(s []float64) (z Float64s)
 
-// BroadcastFloat64s fills the elements of a slice with its argument value.
-func BroadcastFloat64s(float64) Float64s
+// LoadFloat64sPart loads n=min(len(s), z.Len()) elements from slice s as a
+// vector and returns the vector and n. If len(s) < z.Len(), the
+// remaining vector elements will be zero.
+func LoadFloat64sPart(s []float64) (z Float64s, n int)
 
-// Abs returns the element-wise absolute value of x.
-func (x Float64s) Abs() Float64s
+// BroadcastFloat64s returns a vector with the input x assigned to all elements of the
+// result.
+func BroadcastFloat64s(x float64) (z Float64s)
 
-// Add returns the element-wise sum of x and y.
-func (x Float64s) Add(y Float64s) Float64s
+// Abs returns the elementwise absolute value of x.
+func (x Float64s) Abs() (z Float64s)
 
-// Div returns the element-wise quotient of x and y.
-func (x Float64s) Div(y Float64s) Float64s
+// Add adds x and y elementwise.
+//
+//	z[i] = x[i] + y[i]
+func (x Float64s) Add(y Float64s) (z Float64s)
 
-// Equal returns a mask indicating where x and y are equal.
-func (x Float64s) Equal(y Float64s) Mask64s
+// Ceil returns the least integer value greater than or equal to each element
+// of x.
+//
+//	z[i] = ceil(x[i])
+//
+// Special cases follow IEEE 754: Ceil(±0) = ±0, Ceil(±Inf) = ±Inf, Ceil(x) = -0
+// for -1 < x < -0, and Ceil(NaN) = NaN. The sign and payload of a NaN result
+// are unspecified.
+func (x Float64s) Ceil() (z Float64s)
 
-// Greater returns a mask indicating where x is greater than y.
-func (x Float64s) Greater(y Float64s) Mask64s
+// ConvertToFloat32 converts each element of x to float32.
+//
+//	z[i] = float32(x[i])
+//
+// The results are rounded to the nearest representable value, or ±inf if they
+// cannot be represented.
+//
+// The results are stored in the low x.Len() elements of z.
+// The remaining elements of z are zero.
+func (x Float64s) ConvertToFloat32() (z Float32s)
 
-// GreaterEqual returns a mask indicating where x is greater than or equal to y.
-func (x Float64s) GreaterEqual(y Float64s) Mask64s
+// Div divides x by y elementwise.
+//
+//	z[i] = x[i] / y[i]
+//
+// Division by zero does not panic, and the result follows IEEE 754. That is,
+// dividing a non-zero value by zero results in +/- infinity, and dividing zero
+// by zero results in NaN.
+func (x Float64s) Div(y Float64s) (z Float64s)
 
-// IfElse returns a new vector with elements from x where mask is true, and y where mask is false.
-func (x Float64s) IfElse(mask Mask64s, y Float64s) Float64s
+// Equal returns a mask indicating which elements of x and y are equal.
+func (x Float64s) Equal(y Float64s) (z Mask64s)
 
-// Len returns the number of elements in the vector.
+// Floor returns the greatest integer value less than or equal to each element
+// of x.
+//
+//	z[i] = floor(x[i])
+//
+// Special cases follow IEEE 754: Floor(±0) = ±0, Floor(±Inf) = ±Inf, and
+// Floor(NaN) = NaN. The sign and payload of a NaN result are unspecified.
+func (x Float64s) Floor() (z Float64s)
+
+// Greater returns a mask indicating which elements of x are greater than y.
+//
+//	z[i] = x[i] > y[i]
+func (x Float64s) Greater(y Float64s) (z Mask64s)
+
+// GreaterEqual returns a mask indicating which elements of x are greater than
+// or equal to y.
+//
+//	z[i] = x[i] >= y[i]
+func (x Float64s) GreaterEqual(y Float64s) (z Mask64s)
+
+// HiToLo returns a vector whose low half is the high half of x and whose high
+// half is zero.
+//
+//	z = {x[n/2], x[n/2+1], ..., x[n-1], 0, ..., 0}, where n = x.Len()
+func (x Float64s) HiToLo() (z Float64s)
+
+// IfElse returns a vector with elements from x where mask is true, and y where
+// mask is false.
+//
+//	z[i] = if mask[i] { x[i] } else { y[i] }
+func (x Float64s) IfElse(mask Mask64s, y Float64s) (z Float64s)
+
+// Len returns the number of elements in x.
 func (x Float64s) Len() int
 
-// Less returns a mask indicating where x is less than y.
-func (x Float64s) Less(y Float64s) Mask64s
+// Less returns a mask indicating which elements of x are less than y.
+//
+//	z[i] = x[i] < y[i]
+func (x Float64s) Less(y Float64s) (z Mask64s)
 
-// LessEqual returns a mask indicating where x is less than or equal to y.
-func (x Float64s) LessEqual(y Float64s) Mask64s
+// LessEqual returns a mask indicating which elements of x are less than or
+// equal to y.
+//
+//	z[i] = x[i] <= y[i]
+func (x Float64s) LessEqual(y Float64s) (z Mask64s)
 
-// Masked returns a new vector with elements from x where mask is true, and zero elsewhere.
-func (x Float64s) Masked(mask Mask64s) Float64s
+// Masked returns a vector with elements from x where mask is true, and zero
+// elsewhere.
+//
+//	z[i] = if mask[i] { x[i] } else { 0 }
+func (x Float64s) Masked(mask Mask64s) (z Float64s)
 
-// Max returns the element-wise maximum of x and y.
-func (x Float64s) Max(y Float64s) Float64s
+// Max returns the elementwise maximum of x and y.
+//
+//	z[i] = max(x[i], y[i])
+//
+// The handling of NaN and signed zeroes is architecture-dependent. ARM64 and
+// WASM follow the IEEE 754-2019 maximum algorithm, which also agrees with Go's
+// max built-in. AMD64 handles these differently. Notably, AMD64 is
+// non-commutative.
+//
+//	x     y     IEEE  AMD64
+//	----- ----- ----- -----
+//	NaN   y     NaN   y
+//	x     NaN   NaN   NaN
+//	-Inf  y     y     y
+//	x     -Inf  x     x
+//	+Inf  y     +Inf  +Inf
+//	x     +Inf  +Inf  +Inf
+//	+0    -0    +0    -0
+//	-0    +0    +0    +0
+func (x Float64s) Max(y Float64s) (z Float64s)
 
-// Min returns the element-wise minimum of x and y.
-func (x Float64s) Min(y Float64s) Float64s
+// Min returns the elementwise minimum of x and y.
+//
+//	z[i] = min(x[i], y[i])
+//
+// The handling of NaN and signed zeroes is architecture-dependent. ARM64 and
+// WASM follow the IEEE 754-2019 minimum algorithm, which also agrees with Go's
+// min built-in. AMD64 handles these differently. Notably, AMD64 is
+// non-commutative.
+//
+//	x     y     IEEE  AMD64
+//	----- ----- ----- -----
+//	NaN   y     NaN   y
+//	x     NaN   NaN   NaN
+//	-Inf  y     -Inf  -Inf
+//	x     -Inf  -Inf  -Inf
+//	+Inf  y     y     y
+//	x     +Inf  x     x
+//	+0    -0    -0    -0
+//	-0    +0    -0    +0
+func (x Float64s) Min(y Float64s) (z Float64s)
 
-// Mul returns the element-wise product of x and y.
-func (x Float64s) Mul(y Float64s) Float64s
+// Mul returns the elementwise product of x and y.
+//
+//	z[i] = x[i] * y[i]
+func (x Float64s) Mul(y Float64s) (z Float64s)
 
-// MulAdd returns x * y + z element-wise.
-func (x Float64s) MulAdd(y Float64s, z Float64s) Float64s
+// MulAdd returns x * y + z elementwise.
+//
+//	w[i] = x[i] * y[i] + z[i]
+//
+// This performs a fused multiply-add, computing x[i]*y[i] + z[i] with a single
+// rounding rather than two and no intermediate overflow, except on wasm, where
+// it rounds x[i]*y[i] before adding z[i].
+func (x Float64s) MulAdd(y Float64s, z Float64s) (w Float64s)
 
-// Neg returns the element-wise negation of x.
-func (x Float64s) Neg() Float64s
+// Neg returns the elementwise negation of x.
+//
+//	z[i] = -x[i]
+func (x Float64s) Neg() (z Float64s)
 
-// NotEqual returns a mask indicating where x and y are not equal.
-func (x Float64s) NotEqual(y Float64s) Mask64s
+// NotEqual returns a mask indicating which elements of x and y are not equal.
+func (x Float64s) NotEqual(y Float64s) (z Mask64s)
 
 // ReduceSum returns the scalar sum of the elements of x.
-func (x Float64s) ReduceSum() float64
+//
+// This uses repeated pairwise summation, which may affect the final precision
+// of the result.
+//
+//	z = ((x[0] + x[1]) + (x[2] + x[3])) + ...
+func (x Float64s) ReduceSum() (z float64)
 
-// Sqrt returns the element-wise square root of x.
-func (x Float64s) Sqrt() Float64s
+// Round returns the nearest integer value to each element of x, rounding ties
+// to even.
+//
+//	z[i] = roundToEven(x[i])
+//
+// Special cases follow IEEE 754: Round(±0) = ±0, Round(±Inf) = ±Inf,
+// Round(x) = -0 for -0.5 <= x < -0, and Round(NaN) = NaN. The sign and payload
+// of a NaN result are unspecified.
+func (x Float64s) Round() (z Float64s)
 
-// Store stores the vector elements into the slice s.
+// Sqrt returns the elementwise square root of x.
+//
+//	z[i] = sqrt(x[i])
+//
+// The result is correctly rounded. Sqrt(+Inf) = +Inf, Sqrt(±0) = ±0, and
+// Sqrt(x) is NaN if x < 0 or x is NaN. The sign and payload of a NaN result
+// are unspecified.
+func (x Float64s) Sqrt() (z Float64s)
+
+// Store stores the elements of x into a slice. If len(s) < x.Len(), it panics.
 func (x Float64s) Store(s []float64)
 
-// StorePart stores a partial vector into the slice s and returns the number actually stored.
-func (x Float64s) StorePart(s []float64) int
+// StorePart stores n=min(len(s), x.Len()) elements of x into s and returns n.
+func (x Float64s) StorePart(s []float64) (n int)
 
-// String returns a string representation of the vector.
+// String returns x in the form "{x[0],x[1],...}".
 func (x Float64s) String() string
 
-// Sub returns the element-wise difference of x and y.
-func (x Float64s) Sub(y Float64s) Float64s
+// Sub subtracts y from x elementwise.
+//
+//	z[i] = x[i] - y[i]
+func (x Float64s) Sub(y Float64s) (z Float64s)
 
-// ToBits reinterprets the vector bits as an unsigned integer vector.
-func (x Float64s) ToBits() Uint64s
+// ToBits returns the IEEE 754 binary representation of each element of x.
+func (x Float64s) ToBits() (z Uint64s)
+
+// Trunc returns the integer value of each element of x, rounded toward zero.
+//
+//	z[i] = trunc(x[i])
+//
+// Special cases follow IEEE 754: Trunc(±0) = ±0, Trunc(±Inf) = ±Inf,
+// Trunc(x) = -0 for -1 < x < -0, and Trunc(NaN) = NaN. The sign and payload of
+// a NaN result are unspecified.
+func (x Float64s) Trunc() (z Float64s)
+
+// All returns true when all positions in mask x are true.
+func (x Mask8s) All() bool
 
 // And returns the bitwise AND of x and y.
-func (x Mask8s) And(y Mask8s) Mask8s
+//
+//	z[i] = x[i] & y[i]
+func (x Mask8s) And(y Mask8s) (z Mask8s)
+
+// AndNot returns the bitwise AND NOT of x and y.
+//
+//	z[i] = x[i] &^ y[i]
+func (x Mask8s) AndNot(y Mask8s) (z Mask8s)
+
+// Any returns true when any position in mask x is true.
+func (x Mask8s) Any() bool
+
+// None returns true when no positions in mask x are set.
+func (x Mask8s) None() bool
+
+// Not returns the bitwise negation of x.
+//
+//	z[i] = ^x[i]
+func (x Mask8s) Not() (z Mask8s)
 
 // Or returns the bitwise OR of x and y.
-func (x Mask8s) Or(y Mask8s) Mask8s
+//
+//	z[i] = x[i] | y[i]
+func (x Mask8s) Or(y Mask8s) (z Mask8s)
 
-// String returns a string representation of the vector.
+// String returns x in the form "{x[0],x[1],...}", where 0 means false and 1
+// means true.
 func (x Mask8s) String() string
 
-// ToInt8s converts the mask to an Int8s vector.
-func (x Mask8s) ToInt8s() (to Int8s)
+// ToInt8s converts the mask to a vector, where element i is set to ^0 (all bits
+// set, e.g., -1) if mask element i is "true", and 0 otherwise.
+func (x Mask8s) ToInt8s() (z Int8s)
+
+// TrailingZeros returns the number of low-order false (zero) elements in mask
+// x. If the mask is entirely false, it returns x.Len().
+func (x Mask8s) TrailingZeros() int
+
+// Xor returns the bitwise XOR of x and y.
+//
+//	z[i] = x[i] ^ y[i]
+func (x Mask8s) Xor(y Mask8s) (z Mask8s)
+
+// All returns true when all positions in mask x are true.
+func (x Mask16s) All() bool
 
 // And returns the bitwise AND of x and y.
-func (x Mask16s) And(y Mask16s) Mask16s
+//
+//	z[i] = x[i] & y[i]
+func (x Mask16s) And(y Mask16s) (z Mask16s)
+
+// AndNot returns the bitwise AND NOT of x and y.
+//
+//	z[i] = x[i] &^ y[i]
+func (x Mask16s) AndNot(y Mask16s) (z Mask16s)
+
+// Any returns true when any position in mask x is true.
+func (x Mask16s) Any() bool
+
+// None returns true when no positions in mask x are set.
+func (x Mask16s) None() bool
+
+// Not returns the bitwise negation of x.
+//
+//	z[i] = ^x[i]
+func (x Mask16s) Not() (z Mask16s)
 
 // Or returns the bitwise OR of x and y.
-func (x Mask16s) Or(y Mask16s) Mask16s
+//
+//	z[i] = x[i] | y[i]
+func (x Mask16s) Or(y Mask16s) (z Mask16s)
 
-// String returns a string representation of the vector.
+// String returns x in the form "{x[0],x[1],...}", where 0 means false and 1
+// means true.
 func (x Mask16s) String() string
 
-// ToInt16s converts the mask to an Int16s vector.
-func (x Mask16s) ToInt16s() (to Int16s)
+// ToInt16s converts the mask to a vector, where element i is set to ^0 (all bits
+// set, e.g., -1) if mask element i is "true", and 0 otherwise.
+func (x Mask16s) ToInt16s() (z Int16s)
+
+// TrailingZeros returns the number of low-order false (zero) elements in mask
+// x. If the mask is entirely false, it returns x.Len().
+func (x Mask16s) TrailingZeros() int
+
+// Xor returns the bitwise XOR of x and y.
+//
+//	z[i] = x[i] ^ y[i]
+func (x Mask16s) Xor(y Mask16s) (z Mask16s)
+
+// All returns true when all positions in mask x are true.
+func (x Mask32s) All() bool
 
 // And returns the bitwise AND of x and y.
-func (x Mask32s) And(y Mask32s) Mask32s
+//
+//	z[i] = x[i] & y[i]
+func (x Mask32s) And(y Mask32s) (z Mask32s)
+
+// AndNot returns the bitwise AND NOT of x and y.
+//
+//	z[i] = x[i] &^ y[i]
+func (x Mask32s) AndNot(y Mask32s) (z Mask32s)
+
+// Any returns true when any position in mask x is true.
+func (x Mask32s) Any() bool
+
+// None returns true when no positions in mask x are set.
+func (x Mask32s) None() bool
+
+// Not returns the bitwise negation of x.
+//
+//	z[i] = ^x[i]
+func (x Mask32s) Not() (z Mask32s)
 
 // Or returns the bitwise OR of x and y.
-func (x Mask32s) Or(y Mask32s) Mask32s
+//
+//	z[i] = x[i] | y[i]
+func (x Mask32s) Or(y Mask32s) (z Mask32s)
 
-// String returns a string representation of the vector.
+// String returns x in the form "{x[0],x[1],...}", where 0 means false and 1
+// means true.
 func (x Mask32s) String() string
 
-// ToInt32s converts the mask to an Int32s vector.
-func (x Mask32s) ToInt32s() (to Int32s)
+// ToInt32s converts the mask to a vector, where element i is set to ^0 (all bits
+// set, e.g., -1) if mask element i is "true", and 0 otherwise.
+func (x Mask32s) ToInt32s() (z Int32s)
+
+// TrailingZeros returns the number of low-order false (zero) elements in mask
+// x. If the mask is entirely false, it returns x.Len().
+func (x Mask32s) TrailingZeros() int
+
+// Xor returns the bitwise XOR of x and y.
+//
+//	z[i] = x[i] ^ y[i]
+func (x Mask32s) Xor(y Mask32s) (z Mask32s)
+
+// All returns true when all positions in mask x are true.
+func (x Mask64s) All() bool
 
 // And returns the bitwise AND of x and y.
-func (x Mask64s) And(y Mask64s) Mask64s
+//
+//	z[i] = x[i] & y[i]
+func (x Mask64s) And(y Mask64s) (z Mask64s)
+
+// AndNot returns the bitwise AND NOT of x and y.
+//
+//	z[i] = x[i] &^ y[i]
+func (x Mask64s) AndNot(y Mask64s) (z Mask64s)
+
+// Any returns true when any position in mask x is true.
+func (x Mask64s) Any() bool
+
+// None returns true when no positions in mask x are set.
+func (x Mask64s) None() bool
+
+// Not returns the bitwise negation of x.
+//
+//	z[i] = ^x[i]
+func (x Mask64s) Not() (z Mask64s)
 
 // Or returns the bitwise OR of x and y.
-func (x Mask64s) Or(y Mask64s) Mask64s
+//
+//	z[i] = x[i] | y[i]
+func (x Mask64s) Or(y Mask64s) (z Mask64s)
 
-// String returns a string representation of the vector.
+// String returns x in the form "{x[0],x[1],...}", where 0 means false and 1
+// means true.
 func (x Mask64s) String() string
 
-// ToInt64s converts the mask to an Int64s vector.
-func (x Mask64s) ToInt64s() (to Int64s)
+// ToInt64s converts the mask to a vector, where element i is set to ^0 (all bits
+// set, e.g., -1) if mask element i is "true", and 0 otherwise.
+func (x Mask64s) ToInt64s() (z Int64s)
+
+// TrailingZeros returns the number of low-order false (zero) elements in mask
+// x. If the mask is entirely false, it returns x.Len().
+func (x Mask64s) TrailingZeros() int
+
+// Xor returns the bitwise XOR of x and y.
+//
+//	z[i] = x[i] ^ y[i]
+func (x Mask64s) Xor(y Mask64s) (z Mask64s)

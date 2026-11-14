@@ -6,7 +6,6 @@ package ssa
 
 import (
 	"fmt"
-	"math/bits"
 	"strings"
 
 	"cmd/compile/internal/abt"
@@ -17,10 +16,12 @@ import (
 	"cmd/internal/obj"
 )
 
+type slotSet = abt.T[*liveSlot]
+
 type BlockDebug struct {
 	// State at the start and end of the block. These are initialized,
 	// and updated from new information that flows on back edges.
-	startState, endState abt.T
+	startState, endState slotSet
 	// Use these to avoid excess work in the merge. If none of the
 	// predecessors has changed since the last check, the old answer is
 	// still good.
@@ -110,7 +111,7 @@ type LocListEntry struct {
 }
 
 // RegisterSet is a bitmap of registers, indexed by Register.num.
-type RegisterSet uint64
+type RegisterSet = ssaop.RegMask
 
 type SlotID int32
 
@@ -156,7 +157,7 @@ func canMerge(pending, new VarLoc) bool {
 		// must be the same (StackOffset encodes onStack).
 		return false
 	}
-	if pending.Registers&new.Registers != pending.Registers {
+	if pending.Registers.Intersect(new.Registers) != pending.Registers {
 		// There is at least one register in pending not mentioned in new.
 		return false
 	}
@@ -165,12 +166,12 @@ func canMerge(pending, new VarLoc) bool {
 
 // firstReg returns the first register in set that is present.
 func firstReg(set RegisterSet) uint8 {
-	if set == 0 {
+	if set.Empty() {
 		// This is wrong, but there seem to be some situations where we
 		// produce locations with no storage.
 		return 0
 	}
-	return uint8(bits.TrailingZeros64(uint64(set)))
+	return uint8(set.PickReg())
 }
 
 // A liveSlot is a slot that's live in loc at entry/exit of a block.
@@ -189,7 +190,7 @@ type pendingEntry struct {
 }
 
 func (ls *liveSlot) String() string {
-	return fmt.Sprintf("0x%x.%d.%d", ls.Registers, ls.stackOffsetValue(), int32(ls.StackOffset)&1)
+	return fmt.Sprintf("[%v].%d.%d", ls.Registers, ls.stackOffsetValue(), int32(ls.StackOffset)&1)
 }
 
 func (s StackOffset) onStack() bool {
@@ -201,28 +202,23 @@ func (s StackOffset) stackOffsetValue() int32 {
 }
 
 // reset fills state with the live variables from live.
-func (state *StateAtPC) reset(live abt.T) {
+func (state *StateAtPC) reset(live slotSet) {
 	slots, registers := state.slots, state.registers
 	clear(slots)
 	for i := range registers {
 		registers[i] = registers[i][:0]
 	}
 	for it := live.Iterator(); !it.Done(); {
-		k, d := it.Next()
-		live := d.(*liveSlot)
+		k, live := it.Next()
 		slots[k] = live.VarLoc
-		if live.VarLoc.Registers == 0 {
+		if live.VarLoc.Registers.Empty() {
 			continue
 		}
 
-		mask := uint64(live.VarLoc.Registers)
-		for {
-			if mask == 0 {
-				break
-			}
-			reg := uint8(bits.TrailingZeros64(mask))
-			mask &^= 1 << reg
-
+		mask := live.VarLoc.Registers
+		for !mask.Empty() {
+			reg := uint8(mask.PickReg())
+			mask = mask.RemoveReg(ssaop.Register(reg))
 			registers[reg] = append(registers[reg], SlotID(k))
 		}
 	}
@@ -239,28 +235,24 @@ func (s *DebugState) LocString(loc VarLoc) string {
 		storage = append(storage, fmt.Sprintf("@%+d", loc.stackOffsetValue()))
 	}
 
-	mask := uint64(loc.Registers)
-	for {
-		if mask == 0 {
-			break
-		}
-		reg := uint8(bits.TrailingZeros64(mask))
-		mask &^= 1 << reg
-
+	mask := loc.Registers
+	for !mask.Empty() {
+		reg := uint8(mask.PickReg())
+		mask = mask.RemoveReg(ssaop.Register(reg))
 		storage = append(storage, s.Registers[reg].String())
 	}
 	return strings.Join(storage, ",")
 }
 
 func (loc VarLoc) absent() bool {
-	return loc.Registers == 0 && !loc.onStack()
+	return loc.Registers.Empty() && !loc.onStack()
 }
 
 func (loc VarLoc) intersect(other VarLoc) VarLoc {
 	if !loc.onStack() || !other.onStack() || loc.StackOffset != other.StackOffset {
 		loc.StackOffset = 0
 	}
-	loc.Registers &= other.Registers
+	loc.Registers = loc.Registers.Intersect(other.Registers)
 	return loc
 }
 
@@ -474,7 +466,7 @@ func (state *DebugState) Liveness() []*BlockDebug {
 							continue
 						}
 						old := startState.Find(int32(slotID)) // do NOT replace existing values
-						if oldLS, ok := old.(*liveSlot); !ok || oldLS.VarLoc != slotLoc {
+						if old == nil || old.VarLoc != slotLoc {
 							startState.Insert(int32(slotID),
 								&liveSlot{VarLoc: slotLoc})
 						}
@@ -523,7 +515,7 @@ func (state *DebugState) Liveness() []*BlockDebug {
 // one is a small delta from the other.  Doing this does require a
 // little care in how sets are updated, both in mergePredecessors, and
 // using its result.
-func (state *DebugState) mergePredecessors(b *Block, blockLocs []*BlockDebug, previousBlock *Block, forLocationLists bool) (abt.T, bool) {
+func (state *DebugState) mergePredecessors(b *Block, blockLocs []*BlockDebug, previousBlock *Block, forLocationLists bool) (slotSet, bool) {
 	// Filter out back branches.
 	var predsBuf [10]*Block
 
@@ -554,7 +546,7 @@ func (state *DebugState) mergePredecessors(b *Block, blockLocs []*BlockDebug, pr
 
 	state.changedVars.Clear()
 
-	markChangedVars := func(slots, merged abt.T) {
+	markChangedVars := func(slots, merged slotSet) {
 		if !forLocationLists {
 			return
 		}
@@ -564,13 +556,13 @@ func (state *DebugState) mergePredecessors(b *Block, blockLocs []*BlockDebug, pr
 		for it := slots.Iterator(); !it.Done(); {
 			k, v := it.Next()
 			m := merged.Find(k)
-			if m == nil || v.(*liveSlot).VarLoc != m.(*liveSlot).VarLoc {
+			if m == nil || v.VarLoc != m.VarLoc {
 				state.changedVars.Add(ID(state.SlotVars[k]))
 			}
 		}
 	}
 
-	reset := func(ourStartState abt.T) {
+	reset := func(ourStartState slotSet) {
 		if !(forLocationLists || blockChanged) {
 			// there is no change and this is not for location lists, do
 			// not bother to reset currentState because it will not be
@@ -586,8 +578,8 @@ func (state *DebugState) mergePredecessors(b *Block, blockLocs []*BlockDebug, pr
 			state.F.Fatalf("Function %v, block %s with no predecessors is not first block, has previous %s", state.F, b.String(), previousBlock.String())
 		}
 		// startState is empty
-		reset(abt.T{})
-		return abt.T{}, blockChanged
+		reset(slotSet{})
+		return slotSet{}, blockChanged
 	}
 
 	// One predecessor
@@ -662,7 +654,7 @@ func (state *DebugState) mergePredecessors(b *Block, blockLocs []*BlockDebug, pr
 		}
 	}
 
-	state.currentState.reset(abt.T{})
+	state.currentState.reset(slotSet{})
 	// The normal logic of "reset" is included in the intersection loop below.
 
 	slotLocs := state.currentState.slots
@@ -677,8 +669,7 @@ func (state *DebugState) mergePredecessors(b *Block, blockLocs []*BlockDebug, pr
 	}
 
 	for it := newState.Iterator(); !it.Done(); {
-		k, d := it.Next()
-		thisSlot := d.(*liveSlot)
+		k, thisSlot := it.Next()
 		x := thisSlot.VarLoc
 		x0 := x // initial value in newState
 
@@ -692,7 +683,7 @@ func (state *DebugState) mergePredecessors(b *Block, blockLocs []*BlockDebug, pr
 				x = VarLoc{}
 				break
 			}
-			y := otherSlot.(*liveSlot).VarLoc
+			y := otherSlot.VarLoc
 			x = x.intersect(y)
 			if x.absent() {
 				x = VarLoc{}
@@ -715,13 +706,10 @@ func (state *DebugState) mergePredecessors(b *Block, blockLocs []*BlockDebug, pr
 		}
 
 		slotLocs[k] = x
-		mask := uint64(x.Registers)
-		for {
-			if mask == 0 {
-				break
-			}
-			reg := uint8(bits.TrailingZeros64(mask))
-			mask &^= 1 << reg
+		mask := x.Registers
+		for !mask.Empty() {
+			reg := uint8(mask.PickReg())
+			mask = mask.RemoveReg(ssaop.Register(reg))
 			state.currentState.registers[reg] = append(state.currentState.registers[reg], SlotID(k))
 		}
 	}
@@ -768,7 +756,7 @@ func (state *DebugState) processValue(v *Value, vSlots []SlotID, vReg *ssabase.R
 				state.F.Fatalf("at %v: slot %v in register %v with no location entry", v, state.Slots[slot], &state.Registers[reg])
 				continue
 			}
-			regs := last.Registers &^ (1 << reg)
+			regs := last.Registers.RemoveReg(ssaop.Register(reg))
 			setSlot(slot, VarLoc{regs, last.StackOffset})
 		}
 
@@ -787,7 +775,7 @@ func (state *DebugState) processValue(v *Value, vSlots []SlotID, vReg *ssabase.R
 		if v.Op == ssaop.OpVarDef {
 			stackOffset = StackOffset(state.StackOffset(state.Slots[slotID])<<1 | 1)
 		}
-		setSlot(slotID, VarLoc{0, stackOffset})
+		setSlot(slotID, VarLoc{RegisterSet{}, stackOffset})
 		if state.LoggingLevel > 1 {
 			if v.Op == ssaop.OpVarDef {
 				state.Logf("at %v: stack-only var %v now live\n", v, state.Slots[slotID])
@@ -807,7 +795,7 @@ func (state *DebugState) processValue(v *Value, vSlots []SlotID, vReg *ssabase.R
 				}
 			}
 
-			setSlot(slot, VarLoc{0, StackOffset(stackOffset)})
+			setSlot(slot, VarLoc{RegisterSet{}, StackOffset(stackOffset)})
 		}
 
 	case v.Op == ssaop.OpStoreReg:
@@ -844,7 +832,7 @@ func (state *DebugState) processValue(v *Value, vSlots []SlotID, vReg *ssabase.R
 
 		for _, slot := range locs.registers[vReg.Num] {
 			last := locs.slots[slot]
-			setSlot(slot, VarLoc{last.Registers &^ (1 << uint8(vReg.Num)), last.StackOffset})
+			setSlot(slot, VarLoc{last.Registers.RemoveReg(ssaop.Register(vReg.Num)), last.StackOffset})
 		}
 		locs.registers[vReg.Num] = locs.registers[vReg.Num][:0]
 		locs.registers[vReg.Num] = append(locs.registers[vReg.Num], vSlots...)
@@ -854,7 +842,7 @@ func (state *DebugState) processValue(v *Value, vSlots []SlotID, vReg *ssabase.R
 			}
 
 			last := locs.slots[slot]
-			setSlot(slot, VarLoc{1<<uint8(vReg.Num) | last.Registers, last.StackOffset})
+			setSlot(slot, VarLoc{last.Registers.AddReg(ssaop.Register(vReg.Num)), last.StackOffset})
 		}
 	}
 	return changed

@@ -15,11 +15,13 @@ import (
 	"internal/platform"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -38,6 +40,7 @@ import (
 	"cmd/go/internal/str"
 	"cmd/go/internal/trace"
 	"cmd/go/internal/work"
+	"cmd/internal/par"
 	"cmd/internal/test2json"
 
 	"golang.org/x/mod/module"
@@ -782,6 +785,14 @@ func runTest(ctx context.Context, cmd *base.Command, args []string) {
 	pkgArgs, testArgs = testFlags(args)
 	moduleLoader.InitWorkfile() // The test command does custom flag processing; initialize workspaces after that.
 
+	if cfg.Experiment.VetFiles {
+		if runAnalysisToolChild(ctx, moduleLoader) {
+			// This process is 'go test' running as a child of 'go test'
+			// in a special mode to build the analysis tool for its parent.
+			return
+		}
+	}
+
 	// gosentry defaults:
 	// - When fuzzing, default to LibAFL mode.
 	//
@@ -797,7 +808,6 @@ func runTest(ctx context.Context, cmd *base.Command, args []string) {
 		if !flagsSet["use-libafl"] {
 			testUseLibAFL = true
 		}
-
 	}
 
 	if cfg.DebugTrace != "" {
@@ -1252,6 +1262,11 @@ func runTest(ctx context.Context, cmd *base.Command, args []string) {
 		prints = append(prints, printTest)
 	}
 
+	// Link the analysis tool, if any packages need it.
+	if cfg.Experiment.VetFiles {
+		buildAnalysisTool(moduleLoader, ctx, b, pkgOpts)
+	}
+
 	// Order runs for coordinating start JSON prints via two mechanisms:
 	// 1. Channel locking forces runTest actions to start in-order.
 	// 2. Barrier tasks force runTest actions to be scheduled in-order.
@@ -1563,13 +1578,13 @@ func init() {
 	queueDir := filepath.Join(gosentryLibAFLOutputDir, "queue")
 	fi, err := os.Stat(queueDir)
 	if err != nil || !fi.IsDir() {
-		fmt.Fprintf(os.Stderr, "gosentry: libafl queue dir not found: %s\n", queueDir)
+		fmt.Fprintf(os.Stderr, "gosentry: libafl queue dir not found: %%s\n", queueDir)
 		os.Exit(2)
 	}
 
 	re, err := regexp.Compile(gosentryFuzzPattern)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "gosentry: invalid -fuzz regexp: %v\n", err)
+		fmt.Fprintf(os.Stderr, "gosentry: invalid -fuzz regexp: %%v\n", err)
 		os.Exit(2)
 	}
 
@@ -1595,7 +1610,7 @@ func init() {
 	}
 
 	if err := testing.LibAFLInit(t.Name, t.Fn); err != nil {
-		fmt.Fprintf(os.Stderr, "gosentry: libafl init failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "gosentry: libafl init failed: %%v\n", err)
 		os.Exit(2)
 	}
 
@@ -1618,11 +1633,11 @@ func init() {
 		testing.LibAFLFuzzOneInput(data)
 		return nil
 	}); err != nil {
-		fmt.Fprintf(os.Stderr, "gosentry: failed to replay libafl queue corpus: %v\n", err)
+		fmt.Fprintf(os.Stderr, "gosentry: failed to replay libafl queue corpus: %%v\n", err)
 		os.Exit(2)
 	}
 	if inputs == 0 {
-		fmt.Fprintf(os.Stderr, "gosentry: no inputs found in libafl queue dir: %s\n", queueDir)
+		fmt.Fprintf(os.Stderr, "gosentry: no inputs found in libafl queue dir: %%s\n", queueDir)
 		os.Exit(2)
 	}
 }
@@ -1733,6 +1748,13 @@ func init() {
 			// so add a dependence edge from writeCoverMetaAct to the
 			// run action.
 			runAction.Deps = append(runAction.Deps, writeCoverMetaAct)
+			// The link action calls runAction.TryCache, which hashes
+			// the build IDs of writeCoverMetaAct's dependencies. Those
+			// include packages that are not linked into this test
+			// binary, so add a dependence edge from writeCoverMetaAct
+			// to the link action to make sure they have all finished
+			// building before their build IDs are read.
+			buildAction.Deps = append(buildAction.Deps, writeCoverMetaAct)
 			if !p.IsTestOnly() {
 				// Package p is not test only, meaning that the build
 				// action for p may generate a static meta-data file.
@@ -1783,6 +1805,11 @@ func init() {
 
 func addTestVet(ld *modload.Loader, b *work.Builder, p *load.Package, runAction, installAction *work.Action) {
 	if testVet.off {
+		return
+	}
+	if cfg.Experiment.VetFiles {
+		// Use the analysis driver instead of cmd/vet (see analysis.go).
+		addTestAnalysis(ld, b, p, runAction, installAction)
 		return
 	}
 
@@ -3042,6 +3069,8 @@ func (c *runCache) tryCacheWithID(b *work.Builder, a *work.Action, id string) bo
 	// its deps to ensure the cache invalidates when covered packages change.
 	// Note: the run action's original deps may be wrapped inside a "test barrier"
 	// action, so we search both a.Deps and any barrier's deps.
+	// builderTest makes the link action depend on writeCoverMetaAct, so the
+	// build IDs read here are final even when called from tryCache.
 	if len(testCoverPkgs) != 0 {
 		searchDeps := a.Deps
 		for _, dep := range a.Deps {
@@ -3155,7 +3184,7 @@ func (c *runCache) tryCacheWithID(b *work.Builder, a *work.Action, id string) bo
 		}
 		return false
 	}
-	testInputsID, err := computeTestInputsID(a, data)
+	testInputsID, err := computeTestInputsID(a, data, nil)
 	if err != nil {
 		return false
 	}
@@ -3236,17 +3265,47 @@ func (c *runCache) tryCacheWithID(b *work.Builder, a *work.Action, id string) bo
 }
 
 var errBadTestInputs = errors.New("error parsing test inputs")
+var errFileNotInRoot = errors.New("file used as input is not in package root")
 var testlogMagic = []byte("# test log\n") // known to testing/internal/testdeps/deps.go
+
+// logOp is a test log operation like stat or getenv.
+type logOp struct {
+	op   string
+	name string
+}
+
+// testInputsQueue limits total concurrency for computeTestInputsID.
+var testInputsQueue = par.NewQueue(runtime.GOMAXPROCS(0))
 
 // computeTestInputsID computes the "test inputs ID"
 // (see comment in tryCacheWithID above) for the
-// test log.
-func computeTestInputsID(a *work.Action, testlog []byte) (cache.ActionID, error) {
+// test log. If inputs is not nil, computeTestInputsID writes
+// to it a test log of just the entries that the ID depends on.
+//
+// testing/internal/testdeps omits an entry it has already written
+// since the last chdir, so what an entry contributes here must not
+// depend on how many times the test used that input.
+func computeTestInputsID(a *work.Action, testlog []byte, inputs *bytes.Buffer) (cache.ActionID, error) {
 	testlog = bytes.TrimPrefix(testlog, testlogMagic)
 	h := cache.NewHash("testInputs")
 	// The runtime always looks at GODEBUG, without telling us in the testlog.
-	fmt.Fprintf(h, "env GODEBUG %x\n", hashGetenv("GODEBUG"))
+	fmt.Fprintf(h, "getenv GODEBUG %x\n", hashGetenv("GODEBUG"))
 	pwd := a.Package.Dir
+
+	// We do two passes. First, we build up the list of test log ops and resolve those concurrently.
+	// Second, we compute our final hash combining all our operations in the original test log order.
+	// The error checking of the test log file is done on the first pass.
+	// Returning errors for file operations is delayed until the second pass (to keep error reporting deterministic).
+
+	// Gather our test log ops.
+	var logOps []logOp
+	var logOpCache par.ErrCache[logOp, cache.ActionID]
+	work := make(map[logOp]func())
+	add := func(op, name string, f func() (cache.ActionID, error)) {
+		logOp := logOp{op: op, name: name}
+		logOps = append(logOps, logOp)
+		work[logOp] = func() { logOpCache.Do(logOp, f) }
+	}
 	for _, line := range bytes.Split(testlog, []byte("\n")) {
 		if len(line) == 0 {
 			continue
@@ -3266,37 +3325,81 @@ func computeTestInputsID(a *work.Action, testlog []byte) (cache.ActionID, error)
 			}
 			return cache.ActionID{}, errBadTestInputs
 		case "getenv":
-			fmt.Fprintf(h, "env %s %x\n", name, hashGetenv(name))
+			add(op, name, func() (cache.ActionID, error) {
+				return hashGetenv(name), nil
+			})
 		case "chdir":
 			pwd = name // always absolute
-			fmt.Fprintf(h, "chdir %s %x\n", name, hashStat(name))
+			add(op, name, func() (cache.ActionID, error) {
+				return hashStat(name), nil
+			})
 		case "stat":
 			if !filepath.IsAbs(name) {
 				name = filepath.Join(pwd, name)
 			}
-			if a.Package.Root == "" || search.InDir(name, a.Package.Root) == "" {
-				// Do not recheck files outside the module, GOPATH, or GOROOT root.
-				break
-			}
-			fmt.Fprintf(h, "stat %s %x\n", name, hashStat(name))
+			add(op, name, func() (cache.ActionID, error) {
+				if a.Package.Root == "" || search.InDir(name, a.Package.Root) == "" {
+					// Do not recheck files outside the module, GOPATH, or GOROOT root.
+					return cache.ActionID{}, errFileNotInRoot
+				}
+				return hashStat(name), nil
+			})
 		case "open":
 			if !filepath.IsAbs(name) {
 				name = filepath.Join(pwd, name)
 			}
-			if a.Package.Root == "" || search.InDir(name, a.Package.Root) == "" {
-				// Do not recheck files outside the module, GOPATH, or GOROOT root.
-				break
-			}
-			fh, err := hashOpen(name)
-			if err != nil {
-				if cache.DebugTest {
-					fmt.Fprintf(os.Stderr, "testcache: %s: input file %s: %s\n", a.Package.ImportPath, name, err)
+			add(op, name, func() (cache.ActionID, error) {
+				if a.Package.Root == "" || search.InDir(name, a.Package.Root) == "" {
+					// Do not recheck files outside the module, GOPATH, or GOROOT root.
+					return cache.ActionID{}, errFileNotInRoot
 				}
-				return cache.ActionID{}, err
-			}
-			fmt.Fprintf(h, "open %s %x\n", name, fh)
+				return hashOpen(name)
+			})
 		}
 	}
+
+	// Create chunks of work and do the operations.
+	// The chunks are randomized courtesy of the map.
+	chunkCount := 10 * runtime.GOMAXPROCS(0)                 // above GOMAXPROCS to help stragglers
+	chunkSize := max((len(work)+chunkCount-1)/chunkCount, 1) // round up, at least 1
+	var wg sync.WaitGroup
+	for chunk := range slices.Chunk(slices.Collect(maps.Values(work)), chunkSize) {
+		wg.Add(1)
+		testInputsQueue.Add(func() {
+			defer wg.Done()
+			for _, f := range chunk {
+				f()
+			}
+		})
+	}
+	wg.Wait()
+
+	// We have all the test log op results now.
+	// Next, combine them in the original order for the final hash.
+	if inputs != nil {
+		inputs.Write(testlogMagic)
+	}
+	for _, l := range logOps {
+		op, name := l.op, l.name
+		actionID, err := logOpCache.Get(logOp{op: op, name: name})
+		switch {
+		case errors.Is(err, par.ErrCacheEntryNotFound):
+			panic("failed to find expected test log cache result")
+		case errors.Is(err, errFileNotInRoot):
+			continue
+		case err != nil:
+			if cache.DebugTest {
+				fmt.Fprintf(os.Stderr, "testcache: %s: input file %s: %s\n", a.Package.ImportPath, name, err)
+			}
+			return cache.ActionID{}, err
+		}
+
+		fmt.Fprintf(h, "%s %s %x\n", op, name, actionID)
+		if inputs != nil {
+			fmt.Fprintf(inputs, "%s %s\n", op, name)
+		}
+	}
+
 	sum := h.Sum()
 	return sum, nil
 }
@@ -3408,10 +3511,15 @@ func (c *runCache) saveOutput(a *work.Action) {
 		}
 		return
 	}
-	testInputsID, err := computeTestInputsID(a, testlog)
+	// Store only the entries that went into testInputsID: the rest are
+	// outside the package root, and checking them again on every cache
+	// lookup can take longer than running the test (go.dev/issue/26562).
+	var inputs bytes.Buffer
+	testInputsID, err := computeTestInputsID(a, testlog, &inputs)
 	if err != nil {
 		return
 	}
+	testlog = inputs.Bytes()
 	var coverProfile []byte
 	if testCoverProfile != "" {
 		coverProfile, err = os.ReadFile(coverProfTempFile(a))

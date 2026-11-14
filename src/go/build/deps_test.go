@@ -73,7 +73,8 @@ var depsRules = `
 	internal/byteorder, internal/cpu, internal/goarch < internal/chacha8rand;
 	internal/goarch, math/bits < internal/strconv;
 
-	internal/cpu, internal/strconv < simd/archsimd;
+	internal/strconv < simd/internal/simdfmt;
+	internal/cpu, simd/internal/simdfmt < simd/archsimd;
 
 	# RUNTIME is the core runtime group of packages, all of them very light-weight.
 	internal/abi,
@@ -180,10 +181,6 @@ var depsRules = `
 	MATH
 	< runtime/metrics;
 
-	MATH
-	< simd/internal/spec
-	< simd/internal/simdref;
-
 	MATH, unicode/utf8
 	< strconv;
 
@@ -264,6 +261,10 @@ var depsRules = `
 	< encoding/binary;
 
 	FMT, encoding < flag;
+
+	FMT, MATH
+	< simd/internal/spec
+	< simd/internal/simdref;
 
 	FMT, simd/archsimd < simd/internal/bridge;
 
@@ -637,9 +638,37 @@ var depsRules = `
 	hash/maphash, container/heap, go/constant, go/parser, internal/buildcfg, internal/goversion, internal/types/errors
 	< go/types;
 
-	DEBUG, go/build, go/types, text/scanner, crypto/sha256
-	< internal/pkgbits, internal/exportdata
-	< go/internal/gcimporter, go/internal/gccgoimporter, go/internal/srcimporter
+	# x/tools
+	# These are the only allowed dependencies of gcexportdata. Any change here
+	# must be mirrored in x/tools/go/gcexportdata/deps_test.go.
+	FMT, STR, crypto/md5, encoding/binary, encoding/json, go/build, go/token, go/types
+	< golang.org/x/tools/go/types/objectpath,
+	  golang.org/x/tools/internal/pkgbits
+	< golang.org/x/tools/internal/gcimporter
+	< golang.org/x/tools/go/gcexportdata;
+
+	# The vendored golang.org/x/tools analysis framework (passes and
+	# unitchecker), for cmd/vet and cmd/fix (via internal/analysis/...).
+	# Its packages that have no rule of their own form a single node,
+	# golang.org/x/tools/... (see TestDependencies): imports among them
+	# are x/tools' business; only their imports of other packages, and
+	# their importers, are policy.
+	FMT, archive/zip, crypto/sha256, encoding/gob, flag, go/format, log,
+	golang.org/x/tools/go/gcexportdata
+	< golang.org/x/tools/...
+	< internal/analysis/suite/fix, internal/analysis/suite/vet, internal/analysis/unitchecker;
+
+	# go/importer
+	DEBUG, crypto/sha256, go/build, go/types, text/scanner
+	< internal/exportdata, internal/pkgbits;
+
+	golang.org/x/tools/go/gcexportdata, internal/exportdata, internal/pkgbits
+	< go/internal/gcimporter;
+
+	internal/exportdata, internal/pkgbits
+	< go/internal/gccgoimporter, go/internal/srcimporter;
+
+	go/internal/gccgoimporter, go/internal/gcimporter, go/internal/srcimporter
 	< go/importer;
 
 	NET, crypto/rand, mime/quotedprintable
@@ -727,11 +756,14 @@ var depsRules = `
 	FMT, flag, math/rand
 	< testing/quick;
 
-	FMT, DEBUG, flag, runtime/trace, internal/sysinfo, math/rand
+	# Gosentry's LibAFL leak detector is a testing dependency.
+	FMT < go.uber.org/goleak/internal/stack < go.uber.org/goleak;
+
+	FMT, DEBUG, flag, runtime/trace, internal/sysinfo, math/rand, go.uber.org/goleak
 	< testing;
 
 	testing, math
-	< simd/archsimd/internal/test_helpers;
+	< simd/archsimd/internal/test_helpers, simd/internal/test_helpers;
 
 	log/slog, testing
 	< testing/slogtest;
@@ -933,6 +965,19 @@ func TestDependencies(t *testing.T) {
 	sawImport := map[string]map[string]bool{} // from package => to package => true
 	policy := depsPolicy(t)
 
+	// The vendored golang.org/x/tools packages that have no rule of
+	// their own form a single node (see depsRules).
+	defined := make(map[string]bool)
+	for _, n := range policy.Nodes {
+		defined[n] = true
+	}
+	node := func(pkg string) string {
+		if strings.HasPrefix(pkg, "golang.org/x/tools/") && !defined[pkg] {
+			return "golang.org/x/tools/..."
+		}
+		return pkg
+	}
+
 	for _, pkg := range all {
 		imports, err := findImports(pkg)
 		if err != nil {
@@ -945,7 +990,11 @@ func TestDependencies(t *testing.T) {
 		var bad []string
 		for _, imp := range imports {
 			sawImport[pkg][imp] = true
-			if !policy.HasEdge(pkg, imp) {
+			from, to := node(pkg), node(imp)
+			if from == to {
+				continue // within golang.org/x/tools/...
+			}
+			if !policy.HasEdge(from, to) {
 				bad = append(bad, imp)
 			}
 		}
@@ -959,7 +1008,7 @@ var buildIgnore = []byte("\n//go:build ignore")
 
 func findImports(pkg string) ([]string, error) {
 	vpkg := pkg
-	if strings.HasPrefix(pkg, "golang.org") {
+	if strings.HasPrefix(pkg, "golang.org") || strings.HasPrefix(pkg, "go.uber.org") {
 		vpkg = "vendor/" + pkg
 	}
 	dir := filepath.Join(Default.GOROOT, "src", vpkg)

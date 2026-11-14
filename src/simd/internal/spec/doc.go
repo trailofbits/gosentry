@@ -29,7 +29,7 @@
 //
 // Consider a simple example, the Add operation:
 //
-//	// Add adds corresponding elements of two vectors.
+//	// Add adds x and y elementwise.
 //	func Add[E Nums, W Width](x, y Vec[E, W]) (z Vec[E, W]) {
 //	    ...
 //	}
@@ -106,32 +106,37 @@
 //
 // ### Width rounding
 //
-// Some operations would naturally result in an impossible vector size. For
-// example, converting a Float64x2 vector to float32s would naturally result in
+// Some shape constraints would naturally describe an impossible vector size.
+// For example, the shape Float32x{xL} where x is Float64x2 would naturally be
 // Float32x2, which is only 64 bits and thus smaller than the smallest vector
-// size. For operations like this, we use "width rounding".
+// size. For constraints like this, we use "width rounding".
 //
 // Width rounding is applied specifically by the vector expression form BaseNxL.
 // If NxL would be < 128, the result rounds L up to 128/N.
 //
+// Width rounding was used for conversions between element types of different
+// sizes, but those now keep the vector width the same. No operation currently
+// relies on width rounding, so it may be possible to remove this feature.
+//
 // ## Name and doc templates
 //
 // For some operations, the API name or documentation depends on type
-// parameters. For these we support a simple template system where constraint
-// variables can be referenced in curly braces, like {vE}, similar to {}
-// expressions in shape constraints. For doc comments, these can be included
-// directly in the doc comment. For names, we use a `//specgen:name` directive,
-// such as
+// parameters. For these we use Go's text/template system where constraint
+// variables can be referenced in double curly braces, like {{.vE}}. For doc
+// comments, template actions can be included directly in the doc comment
+// (including conditionals like {{if lt .zL .xL}}). For names, we use a
+// `//specgen:name` directive, such as
 //
-//	//specgen:name Load{z}
+//	//specgen:name Load{{.z}}
 //	func LoadZ[E Elt, W Width](s []E) (z Vec[E, W]) {
 //
 // In this case, the spec function itself can be named anything (as long as it's
 // exported), and the API name is generated from the directive. For example,
 // when LoadZ is instantiated on uint32 and Width128, the API name generated
-// from the template will be LoadUint32x4. This is particularly useful for
-// constructor functions and conversion functions where types must appear in the
-// name, such as LoadZ.
+// from the template will be LoadUint32x4. When interpolating element types into
+// identifiers, the title filter can be used: ConvertTo{{.zE | title}}. This is
+// particularly useful for constructor functions and conversion functions where
+// types must appear in the name, such as LoadZ.
 //
 // ## The spec type system
 //
@@ -152,4 +157,56 @@
 // constraints.
 //
 // Pointer and slice types translate directly to the API.
+//
+// ### Vector widths and scalable execution
+//
+// Fixed vector widths are represented by [Width128], [Width256], and [Width512].
+// Scalable vectors are represented by [WidthScalable]. At the specification level,
+// scalable vector width is symbolic. To execute scalable operations in the spec
+// (for example, as an oracle or via simdref), the concrete bit width must be
+// configured via [SetScalableWidth] (up to 2048 bits, matching the architectural
+// maximum of ARM SVE); executing without setting the width panics.
+//
+// Calls to [SetScalableWidth] return a restore function and must follow a
+// strict set/restore sequence. Concurrency or nested sets panic.
+//
+// ### Platform variations
+//
+// While we try to make operations exactly equivalent across all architectures,
+// there are occasional edge cases where we intentionally decide to permit
+// variation. We express these variations using the [Variation[E]] wrapper type,
+// which describes a set of permitted values of type E. Variation can be used
+// directly for a scalar result, or as the lane type of a vector, e.g.,
+// Vec[Variation[float64], W].
+//
+// ## Documentation conventions
+//
+// Look at other functions in this package and try to follow their example.
+//
+// Be sure to document behavior in corner cases such as overflow, rounding, or
+// unusual floating-point values. The default assumed oveflow behavior for ints
+// and uints is that they wrap like in Go. Any deviation must be documented. If
+// rounding is possible, document the type of rounding (e.g., rounding toward
+// +/-∞, rounding toward 0, rounding ties to even, rounding ties away from 0).
+//
+// When feasible, doc comments should include a mathematical statement of the
+// operation. This should balance precision and clarity. We follow various
+// conventions for this:
+//
+// - Vectors are written in a succinct variant of Go slice syntax. For example,
+// to refer to element i of vector x, use "x[i]". To construct a whole vector,
+// use syntax like "{x[0]+y[0], x[1]+y[1], ...}".
+//
+// - Expressions can be quantified over all elements of a vector without
+// explicitly saying so. E.g., "z[i] = x[i] + y[i]" implicitly "loops" over all
+// indexes of z.
+//
+// - Operators like +, *, etc have infinite precision, and assignment to a
+// fixed-width type behaves like a Go cast (wrapping for int/uint, rounding for
+// float). When this matters, it should generally be clarified in a comment. For
+// example, the intermediate step of dot-product is written "w[i] = x[i] * y[i]
+// // Double width" to clarify the precision.
+//
+// - Saturating operations are common and are written like "sat(expr)", where
+// "sat" saturates the result to the appropriate range, rather than wrapping it.
 package spec

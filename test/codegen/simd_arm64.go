@@ -36,6 +36,18 @@ var (
 	sinkM16 archsimd.Mask16x8
 	sinkM32 archsimd.Mask32x4
 	sinkM64 archsimd.Mask64x2
+
+	sinkScalarI8  int8
+	sinkScalarI8b int8
+	sinkScalarI64 int64
+	sinkScalarU64 uint64
+	sinkI64a      int64
+	sinkI64b      int64
+	sinkI64c      int64
+	sinkI64d      int64
+	sinkU64b      uint64
+	sinkU64c      uint64
+	sinkU64d      uint64
 )
 
 func broadcastConstImmFold(k int) {
@@ -73,11 +85,42 @@ func broadcastConstImmFold(k int) {
 func shiftAllImmFold(k int) {
 	switch k {
 	case 100:
-		// arm64:`VMOVI [$]100,` `VSSHL` -`VDUP`
+		// arm64:`VMOVI [$]0,` -`VSSHL` -`VDUP`
 		sinkI8 = sinkI8.ShiftAllLeft(100)
-		// arm64:`VMOVI [$]156,` `VUSHL` -`VDUP`
+		// arm64:`VUSHR [$]8,` -`VUSHL` -`VDUP`
 		sinkU8 = sinkU8.ShiftAllRight(100)
 	}
+}
+
+// Shifts by a constant use the immediate forms.
+func shiftAllLeftConst8(x archsimd.Int8x16) archsimd.Int8x16 {
+	// arm64:`VSHL [$]3, V\d+.B16` -`VSSHL`
+	return x.ShiftAllLeft(3)
+}
+
+func shiftAllRightConst16(x archsimd.Int16x8) archsimd.Int16x8 {
+	// arm64:`VSSHR [$]7, V\d+.H8` -`VSSHL`
+	return x.ShiftAllRight(7)
+}
+
+func shiftAllRightConst32(x archsimd.Int32x4) archsimd.Int32x4 {
+	// arm64:`VSSHR [$]24, V\d+.S4` -`VSSHL`
+	return x.ShiftAllRight(24)
+}
+
+func shiftAllRightConstHuge32(x archsimd.Int32x4) archsimd.Int32x4 {
+	// arm64:`VSSHR [$]32, V\d+.S4` -`VSSHL`
+	return x.ShiftAllRight(1000)
+}
+
+func shiftAllRightConstWidth64(x archsimd.Uint64x2) archsimd.Uint64x2 {
+	// arm64:`VUSHR [$]64, V\d+.D2` -`VUSHL`
+	return x.ShiftAllRight(64)
+}
+
+func shiftAllLeftConst64(x archsimd.Uint64x2) archsimd.Uint64x2 {
+	// arm64:`VSHL [$]63, V\d+.D2` -`VUSHL`
+	return x.ShiftAllLeft(63)
 }
 
 func setHiUint32(x, lo archsimd.Uint32x4) {
@@ -100,6 +143,31 @@ func getHiFloat64(x archsimd.Float64x2) {
 	sinkF64 = x.HiToLo()
 }
 
+func getElemExtFold(x8 archsimd.Int8x16, u8 archsimd.Uint8x16, x16 archsimd.Int16x8, x32 archsimd.Int32x4, u16 archsimd.Uint16x8, u32 archsimd.Uint32x4) {
+	// arm64:`VSMOV V0.B\[3\],` -`MOVB`
+	sinkI64a = int64(x8.GetElem(3))
+	// arm64:`VSMOV V0.B\[5\],`
+	sinkScalarI8 = x8.GetElem(5)
+	// arm64:`VSMOV V[0-9]+.H\[5\],` -`MOVH`
+	sinkI64b = int64(x16.GetElem(5))
+	// arm64:`VSMOV V[0-9]+.S\[2\],` -`MOVW`
+	sinkI64c = int64(x32.GetElem(2))
+	// arm64:`VMOV V1.B\[7\],` -`MOVBU`
+	sinkScalarU64 = uint64(u8.GetElem(7))
+	// arm64:`VMOV V[0-9]+.H\[3\],` -`MOVHU`
+	sinkU64b = uint64(u16.GetElem(3))
+	// arm64:`VMOV V[0-9]+.S\[1\],` -`MOVWU`
+	sinkU64c = uint64(u32.GetElem(1))
+	// arm64:`VSMOV V1.B\[7\],` -`MOVB`
+	sinkI64d = int64(int8(u8.GetElem(7)))
+	// arm64:`VMOV V0.B\[6\],` -`VSMOV`
+	sinkU64d = uint64(uint8(x8.GetElem(6)))
+	// arm64:`VSMOV V0.B\[4\],`
+	e := x8.GetElem(4)
+	sinkScalarI64 = int64(e)
+	sinkScalarI8b = e
+}
+
 // does x.And(y).Equal(zero) peephole to the expected cmtst?
 func cmtst(x8, y8 archsimd.Uint8x16, x16, y16 archsimd.Uint16x8,
 	x32, y32 archsimd.Uint32x4, x64, y64 archsimd.Uint64x2) {
@@ -111,6 +179,13 @@ func cmtst(x8, y8 archsimd.Uint8x16, x16, y16 archsimd.Uint16x8,
 	sinkM16 = x16.And(y16).Equal(z16).Not() // arm64: `VCMTST V[0-9]+.H8, V[0-9]+.H8, V[0-9]+.H8`
 	sinkM32 = x32.And(y32).Equal(z32).Not() // arm64: `VCMTST V[0-9]+.S4, V[0-9]+.S4, V[0-9]+.S4`
 	sinkM64 = x64.And(y64).Equal(z64).Not() // arm64: `VCMTST V[0-9]+.D2, V[0-9]+.D2, V[0-9]+.D2`
+}
+
+// does x.Or(y.Not()) peephole to the expected orn?
+func orNot(x8, y8 archsimd.Uint8x16, x32, y32 archsimd.Uint32x4, m, n archsimd.Mask64x2) {
+	sinkU8 = x8.Or(y8.Not())    // arm64: `VORN V[0-9]+.B16, V[0-9]+.B16, V[0-9]+.B16` -`VNOT` -`VORR`
+	sinkU32 = y32.Not().Or(x32) // arm64: `VORN V[0-9]+.B16, V[0-9]+.B16, V[0-9]+.B16` -`VNOT` -`VORR`
+	sinkM64 = m.Or(n.Not())     // arm64: `VORN V[0-9]+.B16, V[0-9]+.B16, V[0-9]+.B16` -`VNOT` -`VORR`
 }
 
 func foldGetHiSetHiMuls(a, b archsimd.Uint16x8) archsimd.Uint16x8 {
@@ -191,16 +266,6 @@ func sveMaskedFoldsIntoMerging(x, y archsimd.Int8s, m archsimd.Mask8s) archsimd.
 //go:noinline
 func sinkInt8s(archsimd.Int8s) {}
 
-func sveIfElseMovprfx(x, y archsimd.Int8s, m archsimd.Mask8s) archsimd.Int8s {
-	// The else operand is a source, but x stays live so the destructive add
-	// cannot write it. The whole register is copied, not just the active lanes,
-	// so this prefix is the unpredicated MOVPRFX.
-	// arm64:`ZMOVPRFX` `ZADD.*P[0-9]+\.M` -`ZMOVPRFX.*P[0-9]+`
-	r := x.Add(y).IfElse(m, x)
-	sinkInt8s(x)
-	return r
-}
-
 // A non-commutative operation is more restricted. Its destructive operand is
 // fixed, so only an "else" operand that is already that one folds, and there is
 // no prefixed form to place any other.
@@ -225,12 +290,12 @@ func sveIfElseKeepsSelectSubArbitrary(x, y, z archsimd.Int8s, m archsimd.Mask8s)
 // an all-true predicate. A select over it replaces that predicate instead of
 // adding an instruction.
 
-func sveAbsSynthesizesAllTrue(x archsimd.Int8s) archsimd.Int8s {
+func sveAbsSynthesizesAllTrue(x archsimd.Int8s) archsimd.Uint8s {
 	// arm64:`PWHILELT` `ZABS.*P[0-9]+\.M`
 	return x.Abs()
 }
 
-func sveAbsIfElseFoldsToMerging(x, z archsimd.Int8s, m archsimd.Mask8s) archsimd.Int8s {
+func sveAbsIfElseFoldsToMerging(x archsimd.Int8s, z archsimd.Uint8s, m archsimd.Mask8s) archsimd.Uint8s {
 	// ABS names its destination apart from its source, so the else operand is an
 	// operand of the instruction: no select, no MOVPRFX, and the all-true
 	// predicate is gone because the select's mask took its place.
@@ -238,7 +303,7 @@ func sveAbsIfElseFoldsToMerging(x, z archsimd.Int8s, m archsimd.Mask8s) archsimd
 	return x.Abs().IfElse(m, z)
 }
 
-func sveAbsMaskedFoldsToMerging(x archsimd.Int8s, m archsimd.Mask8s) archsimd.Int8s {
+func sveAbsMaskedFoldsToMerging(x archsimd.Int8s, m archsimd.Mask8s) archsimd.Uint8s {
 	// Masked folds through the same rule, with the zero vector as the else
 	// operand. Zeroing predication would save the ZDUP, but ABS only has a
 	// zeroing encoding from Armv9.6-A on.
@@ -246,15 +311,98 @@ func sveAbsMaskedFoldsToMerging(x archsimd.Int8s, m archsimd.Mask8s) archsimd.In
 	return x.Abs().Masked(m)
 }
 
+func sveOnesCountSynthesizesAllTrue(x archsimd.Int8s) archsimd.Int8s {
+	// arm64:`PWHILELT` `ZCNT.*P[0-9]+\.M`
+	return x.OnesCount()
+}
+
+func sveOnesCountIfElseFoldsToMerging(x, z archsimd.Int8s, m archsimd.Mask8s) archsimd.Int8s {
+	// CNT is predicated-only, like ABS, and names its destination apart from
+	// its source, so the else operand is an operand of the instruction.
+	// arm64:`ZCNT.*P[0-9]+\.M` -`ZSEL` -`PWHILELT` -`ZMOVPRFX`
+	return x.OnesCount().IfElse(m, z)
+}
+
+func sveOnesCountMaskedFoldsToMerging(x archsimd.Int8s, m archsimd.Mask8s) archsimd.Int8s {
+	// Masked folds through the same rule, with the zero vector as the else
+	// operand, as it does for ABS.
+	// arm64:`ZCNT.*P[0-9]+\.M` -`ZSEL` -`PWHILELT`
+	return x.OnesCount().Masked(m)
+}
+
+func sveCeilIfElseFoldsToMerging(x, z archsimd.Float32s, m archsimd.Mask32s) archsimd.Float32s {
+	// FRINTP is predicated-only, like ABS, and folds the same way.
+	// arm64:`ZFRINTP.*P[0-9]+\.M` -`ZSEL` -`PWHILELT` -`ZMOVPRFX`
+	return x.Ceil().IfElse(m, z)
+}
+
 func sveIfElseFloat(x, y archsimd.Float64s, m archsimd.Mask64s) archsimd.Float64s {
 	// arm64:`ZFADD.*P[0-9]+\.M` -`ZSEL`
 	return x.Add(y).IfElse(m, x)
 }
 
+// A reduction leaves its result in the SIMD&FP scalar register that a float
+// is returned in.
+func sveReduceSum(x archsimd.Float32s) float32 {
+	// arm64:`ZFADDVS\s+Z[0-9]+\.S, P[0-9]+, V[0-9]+` -`FMOV`
+	return x.ReduceSum()
+}
+
+func sveReduceMax(x archsimd.Float64s) float64 {
+	// arm64:`ZFMAXVD\s+Z[0-9]+\.D, P[0-9]+, V[0-9]+` -`FMOV`
+	return x.ReduceMax()
+}
+
+// ShiftAllLeft by a constant below the element width is LSL (immediate), and
+// by a larger constant the zero vector. A variable amount is broadcast to
+// 64-bit lanes and shifts by wide elements, which gives zero for an amount of
+// the element width or more, so the amount needs no clamping.
+
+func sveShiftAllLeftConst(x archsimd.Int32s) archsimd.Int32s {
+	// arm64:`ZLSL\s+\$23, Z[0-9]+\.S, Z[0-9]+\.S` -`ZDUP`
+	return x.ShiftAllLeft(23)
+}
+
+func sveShiftAllLeftConst64(x archsimd.Int64s) archsimd.Int64s {
+	// arm64:`ZLSL\s+\$63, Z[0-9]+\.D, Z[0-9]+\.D` -`ZDUP` -`PWHILELT`
+	return x.ShiftAllLeft(63)
+}
+
+func sveShiftAllLeftConstTooBig(x archsimd.Int32s) archsimd.Int32s {
+	// arm64:`ZDUP\s+\$0,` -`ZLSL`
+	return x.ShiftAllLeft(32)
+}
+
+func sveShiftAllLeftConstHuge(x archsimd.Uint64s) archsimd.Uint64s {
+	// arm64:`ZDUP\s+\$0,` -`ZLSL` -`PWHILELT`
+	return x.ShiftAllLeft(1 << 40)
+}
+
+func sveShiftAllLeftConstTooBigIfElse(x archsimd.Int8s, m archsimd.Mask8s) archsimd.Int8s {
+	// arm64:`ZCPY\s+\$0, P[0-9]+\.M, Z[0-9]+\.B` -`ZLSL` -`ZSEL`
+	return x.ShiftAllLeft(8).IfElse(m, x)
+}
+
+func sveShiftAllLeftConstIfElse(x archsimd.Int16s, m archsimd.Mask16s) archsimd.Int16s {
+	// arm64:`ZLSL\s+\$3, Z[0-9]+\.H, P[0-9]+\.M, Z[0-9]+\.H` -`ZSEL`
+	return x.ShiftAllLeft(3).IfElse(m, x)
+}
+
+func sveShiftAllLeftVar(x archsimd.Int16s, s uint64) archsimd.Int16s {
+	// arm64:`ZDUP\s+R[0-9]+, Z[0-9]+\.D` `ZLSL\s+Z[0-9]+\.D, Z[0-9]+\.H, Z[0-9]+\.H` -`CSEL`
+	return x.ShiftAllLeft(s)
+}
+
+func sveShiftAllLeftVar64(x archsimd.Uint64s, s uint64) archsimd.Uint64s {
+	// LSL has no wide form for 64-bit elements; LSL (vectors) is predicated.
+	// arm64:`ZLSL\s+Z[0-9]+\.D, Z[0-9]+\.D, P[0-9]+\.M, Z[0-9]+\.D`
+	return x.ShiftAllLeft(s)
+}
+
 // The zero value of a mask is an all-false predicate.
 func sveZeroMask() archsimd.Mask8s {
-	// arm64:`PPFALSE` -`ZDUP`
 	var m archsimd.Mask8s
+	// arm64:`PPFALSE` -`ZDUP`
 	return m
 }
 
@@ -266,4 +414,59 @@ func sveMulSVE2Gate(x, y archsimd.Int8s) archsimd.Int8s {
 		return x.Mul(y) // arm64:`ZMUL\s+Z[0-9]+\.B, Z[0-9]+\.B, Z[0-9]+\.B`
 	}
 	return x.Mul(y) // arm64:`PWHILELT` `ZMUL.*P[0-9]+\.M`
+}
+
+//go:noinline
+func forceArgSpill(a int8) int8 { return a + 1 }
+
+// Test spill area instructions around call to morestack.
+// arm64:`MOVB R0, 40\(RSP\)`
+// arm64:2`MOVD \$8\(RSP\), R27`
+// arm64:`ZSTR Z0, \(VL\*0\)\(R27\)`
+// arm64:2`MOVD \$48\(RSP\), R27`
+// arm64:`ZSTR Z1, \(VL\*0\)\(R27\)`
+// arm64:`ZLDR \(VL\*0\)\(R27\), Z1`
+// arm64:`ZLDR \(VL\*0\)\(R27\), Z0`
+// arm64:`FMOVS F2, 80\(RSP\)`
+func sveArgSpillMixed(v archsimd.Int8s, a int8, w archsimd.Uint16s, f float32) int8 {
+	return forceArgSpill(a)
+}
+
+// --- SVE destructive operations under an all-true predicate ---
+
+func sveMaxBothSourcesLive(x, y archsimd.Int8s) archsimd.Int8s {
+	// SMAX has only a predicated, destructive encoding. Both sources stay
+	// live, so the result goes to a third register through an unpredicated
+	// MOVPRFX: with every lane active, no lane of that register survives.
+	// arm64:`ZMOVPRFX` `ZSMAX.*P[0-9]+\.M` -`ZMOVPRFX.*P[0-9]+`
+	r := x.Max(y)
+	sinkInt8s(x)
+	sinkInt8s(y)
+	return r
+}
+
+func sveMaskToInt(m archsimd.Mask8s) archsimd.Int8s {
+	// Broadcast(-1).Masked(m) folds into a single zeroing CPY.
+	// arm64:`ZCPY\s+\$-1, P[0-9]+\.Z, Z[0-9]+\.B` -`ZDUP` -`ZSEL`
+	return m.ToInt8s()
+}
+
+func sveBroadcastConstIfElse(m archsimd.Mask16s, z archsimd.Int16s) archsimd.Int16s {
+	// arm64:`ZCPY\s+\$5, P[0-9]+\.M, Z[0-9]+\.H` -`ZDUP` -`ZSEL`
+	return archsimd.BroadcastInt16s(5).IfElse(m, z)
+}
+
+func sveBroadcastGpIfElse32(x int32, m archsimd.Mask32s, z archsimd.Int32s) archsimd.Int32s {
+	// arm64:`ZCPYW\s+R[0-9]+, P[0-9]+\.M, Z[0-9]+\.S` -`ZDUP` -`ZSEL`
+	return archsimd.BroadcastInt32s(x).IfElse(m, z)
+}
+
+func sveBroadcastGpIfElse64(x int64, m archsimd.Mask64s, z archsimd.Int64s) archsimd.Int64s {
+	// arm64:`ZCPY\s+R[0-9]+, P[0-9]+\.M, Z[0-9]+\.D` -`ZDUP` -`ZSEL`
+	return archsimd.BroadcastInt64s(x).IfElse(m, z)
+}
+
+func sveBroadcastFloatIfElse(x float32, m archsimd.Mask32s, z archsimd.Float32s) archsimd.Float32s {
+	// arm64:`ZCPYS\s+V[0-9]+, P[0-9]+\.M, Z[0-9]+\.S` -`ZDUP` -`ZSEL`
+	return archsimd.BroadcastFloat32s(x).IfElse(m, z)
 }

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build amd64 || arm64 || loong64
+//go:build amd64 || arm64 || loong64 || ppc64 || ppc64le
 
 // This provides common support for architectures that use extended register
 // state in asynchronous preemption.
@@ -63,6 +63,8 @@ var xRegAlloc struct {
 func xRegInitAlloc() {
 	lockInit(&xRegAlloc.lock, lockRankXRegAlloc)
 	xRegAlloc.alloc.init(unsafe.Sizeof(xRegState{}), nil, nil, &memstats.other_sys)
+	// xRegSave overwrites the whole block before the GC can see it.
+	xRegAlloc.alloc.zero = false
 }
 
 // xRegSave saves the extended register state on this P to gp.

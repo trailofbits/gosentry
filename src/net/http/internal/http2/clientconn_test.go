@@ -160,9 +160,8 @@ func newTestClientConn(t *testing.T, opts ...any) *testClientConn {
 	t.Helper()
 
 	tt := newTestTransport(t, opts...)
-	const singleUse = false
 	tr := transportFromH1Transport(tt.tr1).(*Transport)
-	_, err := tr.TestNewClientConn(nil, singleUse, nil)
+	_, err := tr.TestNewClientConn(nil, nil)
 	if err != nil {
 		t.Fatalf("newClientConn: %v", err)
 	}
@@ -308,7 +307,6 @@ func (tc *testClientConn) roundTrip(req *http.Request) *testRoundTrip {
 			Trailer:       Header(req.Trailer),
 			Body:          req.Body,
 			Host:          req.Host,
-			GetBody:       req.GetBody,
 			ContentLength: req.ContentLength,
 			Cancel:        req.Cancel,
 			Close:         req.Close,
@@ -518,13 +516,15 @@ type testTransport struct {
 	t   *testing.T
 	tr1 *http.Transport
 
-	ccs []*testClientConn
+	hasCC chan struct{} // contains a value when len(ccs) > 0
+	ccs   []*testClientConn
 }
 
 func newTestTransport(t *testing.T, opts ...any) *testTransport {
 	t.Helper()
 	tt := &testTransport{
-		t: t,
+		t:     t,
+		hasCC: make(chan struct{}, 1),
 	}
 
 	tr1 := &http.Transport{
@@ -567,6 +567,9 @@ func newTestTransport(t *testing.T, opts ...any) *testTransport {
 	tr2 := transportFromH1Transport(tr1).(*Transport)
 	tr2.TestSetNewClientConnHook(func(cc *ClientConn) {
 		tc := newTestClientConnFromClientConn(t, tr2, cc)
+		if len(tt.ccs) == 0 {
+			tt.hasCC <- struct{}{}
+		}
 		tt.ccs = append(tt.ccs, tc)
 	})
 
@@ -581,6 +584,7 @@ func newTestTransport(t *testing.T, opts ...any) *testTransport {
 }
 
 func (tt *testTransport) hasConn() bool {
+	synctest.Wait()
 	return len(tt.ccs) > 0
 }
 
@@ -592,6 +596,9 @@ func (tt *testTransport) getConn() *testClientConn {
 	}
 	tc := tt.ccs[0]
 	tt.ccs = tt.ccs[1:]
+	if len(tt.ccs) == 0 {
+		<-tt.hasCC
+	}
 	tc.readClientPreface()
 	synctest.Wait()
 	return tc

@@ -97,6 +97,9 @@ var Register = map[string]int16{
 	"PC_B": REG_PC_B,
 }
 
+// The index at which to insert special continuation and its block type, for WasmFX extension.
+const ContinuationTypeIndex = 2
+
 var registerNames []string
 
 func init() {
@@ -130,6 +133,8 @@ var unaryDst = map[obj.As]bool{
 	AI64Store8:    true,
 	AI64Store16:   true,
 	AI64Store32:   true,
+	AV128Store:    true,
+	ASuspend:      true,
 	ACALLNORESUME: true,
 }
 
@@ -394,17 +399,24 @@ func preprocess(ctxt *obj.Link, s *obj.LSym, newprog obj.ProgAlloc) {
 		p = appendp(p, AEnd)
 	}
 
+	resumeIdx := func(p *obj.Prog) uint64 {
+		return tableIdxs[min(p.Pc, int64(len(tableIdxs)-1))] // the last entry is the default
+	}
+
 	// record the branches targeting the entry loop and the unwind exit,
 	// their targets will be filled in later
 	var entryPointLoopBranches []*obj.Prog
 	var unwindExitBranches []*obj.Prog
-	currentDepth := 0
+	currentExplicitDepth := 0
 	for p := s.Func().Text; p != nil; p = p.Link {
 		switch p.As {
 		case ABlock, ALoop, AIf:
-			currentDepth++
+			currentExplicitDepth++
 		case AEnd:
-			currentDepth--
+			// A resume point is an End at depth 0. Its Block is added later.
+			if currentExplicitDepth > 0 {
+				currentExplicitDepth--
+			}
 		}
 
 		switch p.As {
@@ -414,7 +426,14 @@ func preprocess(ctxt *obj.Link, s *obj.LSym, newprog obj.ProgAlloc) {
 
 			if jmp.To.Type == obj.TYPE_BRANCH {
 				// jump to basic block
-				p = appendp(p, AI32Const, constAddr(jmp.To.Val.(*obj.Prog).Pc))
+				target := jmp.To.Val.(*obj.Prog)
+				if idx, here := resumeIdx(target), resumeIdx(p); idx > here {
+					// Branch out of the currentExplicitDepth explicit blocks,
+					// then over the idx-here-1 resume points before the target.
+					p = appendp(p, ABr, constAddr(int64(currentExplicitDepth)+int64(idx-here-1)))
+					break
+				}
+				p = appendp(p, AI32Const, constAddr(target.Pc))
 				p = appendp(p, ASet, regAddr(REG_PC_B)) // write next basic block to PC_B
 				p = appendp(p, ABr)                     // jump to beginning of entryPointLoop
 				entryPointLoopBranches = append(entryPointLoopBranches, p)
@@ -741,7 +760,7 @@ func preprocess(ctxt *obj.Link, s *obj.LSym, newprog obj.ProgAlloc) {
 		}
 	}
 
-	currentDepth = 0
+	currentDepth := 0
 	blockDepths := make(map[*obj.Prog]int)
 	for p := s.Func().Text; p != nil; p = p.Link {
 		switch p.As {
@@ -853,11 +872,12 @@ func genWasmImportWrapper(s *obj.LSym, appendp func(p *obj.Prog, as obj.As, args
 			// calls back into Go, the Go stack may have moved.
 			switch f.Type {
 			case obj.WasmI32:
-				p = appendp(p, AI64ExtendI32U) // the register is 64-bit, so we have to extend
-				p = appendp(p, ASet, regAddr(REG_R0))
+				// PC_B is no longer needed after the import returns. Reuse
+				// its i32 local without widening the result to an i64 local.
+				p = appendp(p, ASet, regAddr(REG_PC_B))
 				p = appendp(p, AGet, regAddr(REG_SP))
-				p = appendp(p, AGet, regAddr(REG_R0))
-				p = appendp(p, AI64Store32, constAddr(storeOffset))
+				p = appendp(p, AGet, regAddr(REG_PC_B))
+				p = appendp(p, AI32Store, constAddr(storeOffset))
 			case obj.WasmI64:
 				p = appendp(p, ASet, regAddr(REG_R0))
 				p = appendp(p, AGet, regAddr(REG_SP))
@@ -885,11 +905,10 @@ func genWasmImportWrapper(s *obj.LSym, appendp func(p *obj.Prog, as obj.As, args
 				p = appendp(p, AGet, regAddr(REG_R0))
 				p = appendp(p, AI64Store, constAddr(storeOffset))
 			case obj.WasmBool:
-				p = appendp(p, AI64ExtendI32U)
-				p = appendp(p, ASet, regAddr(REG_R0))
+				p = appendp(p, ASet, regAddr(REG_PC_B))
 				p = appendp(p, AGet, regAddr(REG_SP))
-				p = appendp(p, AGet, regAddr(REG_R0))
-				p = appendp(p, AI64Store8, constAddr(storeOffset))
+				p = appendp(p, AGet, regAddr(REG_PC_B))
+				p = appendp(p, AI32Store8, constAddr(storeOffset))
 			default:
 				panic("bad result type")
 			}
@@ -1037,6 +1056,8 @@ func regAddr(reg int16) obj.Addr {
 
 // Most of the Go functions have a single parameter (PC_B) in the
 // Wasm ABI. This is a list of exceptions.
+// Keep in sync with the special cases in assemble and with
+// wasmFuncTypes in cmd/link/internal/wasm.
 var notUsePC_B = map[string]bool{
 	"_rt0_wasm_js":            true,
 	"_rt0_wasm_wasip1":        true,
@@ -1063,6 +1084,10 @@ var notUsePC_B = map[string]bool{
 	"memeqbody":               true,
 	"memcmp":                  true,
 	"memchr":                  true,
+	"runtime.wasm_goentry":    true,
+	"runtime.wasm_g0entry":    true,
+	"wasm_scheduler_loop":     true,
+	"wasm_resume":             true,
 }
 
 func assemble(ctxt *obj.Link, s *obj.LSym, newprog obj.ProgAlloc) {
@@ -1096,10 +1121,12 @@ func assemble(ctxt *obj.Link, s *obj.LSym, newprog obj.ProgAlloc) {
 
 	// Function starts with declaration of locals: numbers and types.
 	// Some functions use a special calling convention.
+	// Keep in sync with notUsePC_B and with wasmFuncTypes in cmd/link/internal/wasm.
 	switch s.Name {
 	case "_rt0_wasm_js", "_rt0_wasm_wasip1", "_rt0_wasm_wasip1_lib",
 		"wasm_export_run", "wasm_export_resume", "wasm_export_getsp",
-		"wasm_pc_f_loop", "runtime.wasmDiv", "runtime.wasmTruncS", "runtime.wasmTruncU", "memeqbody":
+		"wasm_pc_f_loop", "runtime.wasmDiv", "runtime.wasmTruncS", "runtime.wasmTruncU", "memeqbody",
+		"runtime.wasm_goentry", "runtime.wasm_g0entry", "wasm_scheduler_loop", "wasm_resume":
 		varDecls = []*varDecl{}
 		useAssemblyRegMap()
 	case "wasm_pc_f_loop_export":
@@ -1290,6 +1317,23 @@ func assemble(ctxt *obj.Link, s *obj.LSym, newprog obj.ProgAlloc) {
 				writeUleb128(w, idx)
 			}
 
+		case ARefFunc:
+			// This instruction looks like ACall but instead of jumping to the function,
+			// it leaves a reference to it on the stack.
+			if p.From.Name != obj.NAME_EXTERN && p.From.Name != obj.NAME_STATIC {
+				panic("bad name for RefFunc")
+			}
+			typ := objabi.R_CALL
+			if p.Mark&WasmImport != 0 {
+				typ = objabi.R_WASMIMPORT
+			}
+			s.AddRel(ctxt, obj.Reloc{
+				Type: typ,
+				Off:  int32(w.Len()),
+				Siz:  1, // actually variable sized
+				Sym:  p.From.Sym,
+			})
+
 		case ACall:
 			switch p.To.Type {
 			case obj.TYPE_CONST:
@@ -1393,10 +1437,41 @@ func assemble(ctxt *obj.Link, s *obj.LSym, newprog obj.ProgAlloc) {
 		case ACurrentMemory, AGrowMemory, AMemoryFill:
 			w.WriteByte(0x00)
 
+		case ATableGet, ATableSet, ATableGrow, ATableSize:
+			writeUleb128(w, uint64(p.From.Offset))
+
+		case ARefNull:
+			// Note this is the type index of the one type we use this
+			// instruction for.
+			w.WriteByte(ContinuationTypeIndex)
+
+		case AContNew:
+			// As with ARefNull, there is only one type at which we use this instruction.
+			w.WriteByte(ContinuationTypeIndex)
+
+		case ASuspend:
+			// Hard coded tag index: We only need one tag, call it "yield" for
+			// the WasmFX implementation of the goroutine scheduler.
+			w.WriteByte(0x00)
+			if hasLocalSP {
+				// The stack may have moved while suspended.
+				updateLocalSP(w)
+			}
+
+		case ASwitch:
+			panic("Unimplemented: Wasm Switch instruction.")
+
+		case AResume:
+			// As with ARefNull, there is only one type at which we use this instruction.
+			w.WriteByte(ContinuationTypeIndex) // Continuation type index.
+			w.WriteByte(0x01)                  // size of handler table
+			w.WriteByte(0x00)                  // "on" clause with handler, not switch
+			w.WriteByte(0x00)                  // tag 0 ->
+			w.WriteByte(0x00)                  //   label 0  (hard-coded for the implementation in asm_wasm.s)
+
 		case AMemoryCopy:
 			w.WriteByte(0x00)
 			w.WriteByte(0x00)
-
 		}
 	}
 
@@ -1424,22 +1499,21 @@ func writeOpcode(w *bytes.Buffer, as obj.As) {
 		w.WriteByte(byte(as - ADrop + 0x1A))
 	case as < AI32Load:
 		w.WriteByte(byte(as - ALocalGet + 0x20))
-	case as < AI32TruncSatF32S:
+	case as < ARefNull:
 		w.WriteByte(byte(as - AI32Load + 0x28))
+	case as < AContNew:
+		w.WriteByte(byte(as - ARefNull + 0xD0))
+	case as < AI32TruncSatF32S:
+		w.WriteByte(byte(as - AContNew + 0xE0))
 	case as < AV128Load:
 		w.WriteByte(0xFC)
 		w.WriteByte(byte(as - AI32TruncSatF32S + 0x00))
-	case as < AI16x8Abs: // [AV128Load, AI16x8Abs)
+	case as <= AI32x4RelaxedDotI8x16I7x16AddS: // [AV128Load, AI32x4RelaxedDotI8x16I7x16AddS]
+		// Vector instructions are the 0xFD prefix followed by a
+		// ULEB128-encoded opcode index. The opcodes are declared in
+		// index order, so one subtraction covers all of them.
 		w.WriteByte(0xFD)
-		writeUleb128(w, uint64(as-AV128Load+0x00))
-	case as < AI8x16RelaxedSwizzle: // [AI16x8Abs, AI8x16RelaxedSwizzle)
-		w.WriteByte(0xFD)
-		writeUleb128(w, uint64(as-AI16x8Abs+0x80))
-		w.WriteByte(0x01)
-	case as <= AI32x4RelaxedDotI8x16I7x16AddS: // [AI8x16RelaxedSwizzle, AI32x4RelaxedDotI8x16I7x16AddS]
-		w.WriteByte(0xFD)
-		writeUleb128(w, uint64(as-AI8x16RelaxedSwizzle+0x80))
-		w.WriteByte(0x02)
+		writeUleb128(w, uint64(as-AV128Load))
 
 	default:
 		panic(fmt.Sprintf("unexpected assembler op: %s", as))

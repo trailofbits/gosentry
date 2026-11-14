@@ -277,7 +277,7 @@ func isHexes(s string) bool {
 // the standard file:line: prefix,
 // but that's not where we are today.
 // It might be at the beginning but it might be in the middle of the printed instruction.
-var fileLineRE = regexp.MustCompile(`(?:^|\()(testdata[/\\][\da-z]+\.s:\d+)(?:$|\)|:)`)
+var fileLineRE = regexp.MustCompile(`(?:^|\()(testdata[/\\][\da-z_]+\.s:\d+)(?:$|\)|:)`)
 
 // Same as in test/run.go
 var (
@@ -311,6 +311,8 @@ func testErrors(t *testing.T, goarch, file string, flags ...string) {
 		switch flag {
 		case "dynlink":
 			ctxt.Flag_dynlink = true
+		case "shared":
+			ctxt.Flag_shared = true
 		default:
 			t.Errorf("unknown flag %s", flag)
 		}
@@ -419,6 +421,7 @@ func TestARM64SVEEncoder(t *testing.T) {
 		t.Skip("test requires GOEXPERIMENT=simd")
 	}
 	testEndToEnd(t, "arm64", "arm64sveenc")
+	testEndToEnd(t, "arm64", "arm64sveenc_extra")
 }
 
 func TestARM64SVEErrors(t *testing.T) {
@@ -426,6 +429,7 @@ func TestARM64SVEErrors(t *testing.T) {
 		t.Skip("test requires GOEXPERIMENT=simd")
 	}
 	testErrors(t, "arm64", "arm64sveerror")
+	testErrors(t, "arm64", "arm64sveerror_extra")
 }
 
 func TestARM64Errors(t *testing.T) {
@@ -438,6 +442,12 @@ func TestAMD64EndToEnd(t *testing.T) {
 
 func Test386Encoder(t *testing.T) {
 	testEndToEnd(t, "386", "386enc")
+}
+
+func Test386Errors(t *testing.T) {
+	testErrors(t, "386", "386error")
+	testErrors(t, "386", "386error", "shared")
+	testErrors(t, "386", "386error", "dynlink")
 }
 
 func TestAMD64Encoder(t *testing.T) {
@@ -486,7 +496,6 @@ func TestLOONG64Encoder(t *testing.T) {
 	testEndToEnd(t, "loong64", "loong64enc3")
 	testEndToEnd(t, "loong64", "loong64enc4")
 	testEndToEnd(t, "loong64", "loong64enc5")
-	testEndToEnd(t, "loong64", "loong64enc6")
 	testEndToEnd(t, "loong64", "loong64")
 }
 

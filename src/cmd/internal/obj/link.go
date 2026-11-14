@@ -41,6 +41,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"internal/abi"
+	"strings"
 	"sync"
 	"sync/atomic"
 )
@@ -981,6 +982,18 @@ const (
 	// LinknameStd indicates this is a go:linknamestd'd symbol.
 	AttrLinknameStd
 
+	// WeakDef indicates that this definition of a dupok symbol is to be
+	// used only if no other object defines the symbol without it. The
+	// compiler marks the type descriptor of a noalg type this way: it
+	// describes the same type as the descriptor emitted by a package that
+	// does need the type's hash and equality algorithms, but it leaves
+	// those out, so the other one has to win. See reflectdata.writeType.
+	AttrWeakDef
+
+	// Unnumbered indicates the symbol was not numbered when writing
+	// export data. It's used to check that it wouldn't be numbered later.
+	AttrUnnumbered
+
 	// attrABIBase is the value at which the ABI is encoded in
 	// Attribute. This must be last; all bits after this are
 	// assumed to be an ABI value.
@@ -1009,6 +1022,7 @@ func (a *Attribute) UsedInIface() bool        { return a.load()&AttrUsedInIface 
 func (a *Attribute) ContentAddressable() bool { return a.load()&AttrContentAddressable != 0 }
 func (a *Attribute) ABIWrapper() bool         { return a.load()&AttrABIWrapper != 0 }
 func (a *Attribute) IsPcdata() bool           { return a.load()&AttrPcdata != 0 }
+func (a *Attribute) WeakDef() bool            { return a.load()&AttrWeakDef != 0 }
 func (a *Attribute) IsPkgInit() bool          { return a.load()&AttrPkgInit != 0 }
 func (a *Attribute) IsLinkname() bool         { return a.load()&AttrLinkname != 0 }
 func (a *Attribute) IsLinknameStd() bool      { return a.load()&AttrLinknameStd != 0 }
@@ -1059,6 +1073,7 @@ var textAttrStrings = [...]struct {
 	{bit: AttrWasInlined, s: ""},
 	{bit: AttrIndexed, s: ""},
 	{bit: AttrContentAddressable, s: ""},
+	{bit: AttrWeakDef, s: ""},
 	{bit: AttrABIWrapper, s: "ABIWRAPPER"},
 	{bit: AttrPkgInit, s: "PKGINIT"},
 	{bit: AttrLinkname, s: "LINKNAME"},
@@ -1106,6 +1121,17 @@ func (s *LSym) TextAttrString() string {
 
 func (s *LSym) String() string {
 	return s.Name
+}
+
+// IsGoType reports whether s is a Go type descriptor symbol, based on its name.
+//
+// Other kinds of symbol share the "type:" prefix, in particular the closures
+// for the generated equality and hash functions, type:.eqfunc.* and
+// type:.hashfunc.*. Those are not type descriptors; what tells them apart is
+// the "." that follows the prefix.
+func (s *LSym) IsGoType() bool {
+	const prefix = "type:"
+	return len(s.Name) > len(prefix) && strings.HasPrefix(s.Name, prefix) && s.Name[len(prefix)] != '.'
 }
 
 // The compiler needs *LSym to be assignable to cmd/compile/internal/ssa.Sym.
@@ -1215,6 +1241,9 @@ type Link struct {
 	// symbol reference in the object file.
 	pkgIdx map[string]int32
 
+	// By the time we do symbol numbering we should have saved each symbol in either predefs or unnumbered.
+	predefs      []*LSym // list of symbols appearing in export data that we've preassigned indices for
+	unnumbered   []*LSym // list of symbols not numbered when writing export data; used to check they wouldn't be numbered later
 	defs         []*LSym // list of defined symbols in the current package
 	hashed64defs []*LSym // list of defined short (64-bit or less) hashed (content-addressable) symbols
 	hasheddefs   []*LSym // list of defined hashed (content-addressable) symbols

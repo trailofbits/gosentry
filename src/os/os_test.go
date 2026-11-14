@@ -2267,6 +2267,12 @@ func writeFile(t *testing.T, r *Root, fname string, flag int, text string) strin
 }
 
 func TestAppend(t *testing.T) {
+	if runtime.GOOS == "wasip1" {
+		// A bug in the Linux kernel of the builder container image breaks
+		// Wasmtime's O_APPEND writes.
+		// TODO(go.dev/issue/82862): remove when the infrastructure is upgraded.
+		t.Skip("skipping on wasip1; see go.dev/issue/82862")
+	}
 	testMaybeRooted(t, func(t *testing.T, r *Root) {
 		const f = "append.txt"
 		s := writeFile(t, r, f, O_CREATE|O_TRUNC|O_RDWR, "new")
@@ -2971,6 +2977,41 @@ func TestRemoveAllRace(t *testing.T) {
 	}
 	close(hold) // let workers race to remove root
 	wg.Wait()
+}
+
+// Test that simultaneous Mkdir of one directory succeed once
+// and report that the directory exists otherwise.
+func TestMkdirRace(t *testing.T) {
+	n := runtime.GOMAXPROCS(16)
+	defer runtime.GOMAXPROCS(n)
+	root := t.TempDir()
+	for i := range 20 {
+		dir := filepath.Join(root, strconv.Itoa(i))
+		hold := make(chan struct{})
+		errs := make([]error, 4)
+		var wg sync.WaitGroup
+		for j := range errs {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-hold
+				errs[j] = Mkdir(dir, 0777)
+			}()
+		}
+		close(hold) // let workers race to create dir
+		wg.Wait()
+		created := 0
+		for _, err := range errs {
+			if err == nil {
+				created++
+			} else if !errors.Is(err, fs.ErrExist) {
+				t.Errorf("Mkdir(%q) = %v, want an error matching fs.ErrExist", dir, err)
+			}
+		}
+		if created != 1 {
+			t.Errorf("Mkdir(%q) succeeded %d times, want 1", dir, created)
+		}
+	}
 }
 
 // Test that reading from a pipe doesn't use up a thread.
@@ -3999,6 +4040,12 @@ func TestCopyFSWithSymlinks(t *testing.T) {
 }
 
 func TestAppendDoesntOverwrite(t *testing.T) {
+	if runtime.GOOS == "wasip1" {
+		// A bug in the Linux kernel of the builder container image breaks
+		// Wasmtime's O_APPEND writes.
+		// TODO(go.dev/issue/82862): remove when the infrastructure is upgraded.
+		t.Skip("skipping on wasip1; see go.dev/issue/82862")
+	}
 	testMaybeRooted(t, func(t *testing.T, r *Root) {
 		name := "file"
 		if err := WriteFile(name, []byte("hello"), 0666); err != nil {

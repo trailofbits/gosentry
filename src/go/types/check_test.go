@@ -60,13 +60,14 @@ var (
 	verifyErrors = flag.Bool("verify", false, "verify errors (rather than list them) in TestManual")
 )
 
-var fset = token.NewFileSet()
+// The *FileSet used by tests.
+var testFSet = token.NewFileSet()
 
 func parseFiles(t *testing.T, filenames []string, srcs [][]byte, mode parser.Mode) ([]*ast.File, []error) {
 	var files []*ast.File
 	var errlist []error
 	for i, filename := range filenames {
-		file, err := parser.ParseFile(fset, filename, srcs[i], mode)
+		file, err := parser.ParseFile(testFSet, filename, srcs[i], mode)
 		if file == nil {
 			t.Fatalf("%s: %s", filename, err)
 		}
@@ -155,7 +156,7 @@ func testFiles(t *testing.T, filenames []string, srcs [][]byte, manual bool, opt
 	// set up typechecker
 	var conf Config
 	*boolFieldAddr(&conf, "_Trace") = manual && testing.Verbose()
-	conf.Importer = defaultImporter(fset)
+	conf.Importer = defaultImporter(testFSet)
 	conf.Error = func(err error) {
 		if *haltOnError {
 			defer panic(err)
@@ -204,7 +205,15 @@ func testFiles(t *testing.T, filenames []string, srcs [][]byte, manual bool, opt
 	}
 
 	// typecheck
-	conf.Check(pkgName, fset, files, &info)
+	pkg, err := conf.Check(pkgName, testFSet, files, &info)
+	// errlist holds parse errors from parseFiles (and type-checking errors from
+	// conf.Error when !listErrors); err is the first type-checking error from Check.
+	hasErrors := len(errlist) > 0 || err != nil
+	if errs := checkInvariants(pkg, &info, hasErrors); len(errs) > 0 {
+		for _, err := range errs {
+			t.Errorf("%s: invariant failure: %v", pkgName, err)
+		}
+	}
 	if listErrors {
 		return
 	}
@@ -220,7 +229,7 @@ func testFiles(t *testing.T, filenames []string, srcs [][]byte, manual bool, opt
 	// match against found errors
 	var indices []int // list indices of matching errors, reused for each error
 	for _, err := range errlist {
-		gotPos, gotMsg := unpackError(fset, err)
+		gotPos, gotMsg := unpackError(testFSet, err)
 
 		// find list of errors for the respective error line
 		filename := gotPos.Filename
@@ -385,6 +394,7 @@ func TestManual(t *testing.T) {
 }
 
 func TestLongConstants(t *testing.T) {
+	t.Parallel()
 	format := `package longconst; const _ = %s /* ERROR "constant overflow" */; const _ = %s // ERROR "excessively long constant"`
 	src := fmt.Sprintf(format, strings.Repeat("1", 9999), strings.Repeat("1", 10001))
 	testFiles(t, []string{"longconst.go"}, [][]byte{[]byte(src)}, false)
@@ -400,11 +410,13 @@ func withSizes(sizes Sizes) func(*Config) {
 // be representable as int even if they already have a type that can
 // represent larger values.
 func TestIndexRepresentability(t *testing.T) {
+	t.Parallel()
 	const src = `package index; var s []byte; var _ = s[int64 /* ERRORx "int64\\(1\\) << 40 \\(.*\\) overflows int" */ (1) << 40]`
 	testFiles(t, []string{"index.go"}, [][]byte{[]byte(src)}, false, withSizes(&StdSizes{4, 4}))
 }
 
 func TestIssue47243_TypedRHS(t *testing.T) {
+	t.Parallel()
 	// The RHS of the shift expression below overflows uint on 32bit platforms,
 	// but this is OK as it is explicitly typed.
 	const src = `package issue47243; var a uint64; var _ = a << uint64(4294967296)` // uint64(1<<32)

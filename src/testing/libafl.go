@@ -6,9 +6,9 @@ package testing
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
+	"internal/byteorder"
 	"io/fs"
 	"math"
 	"os"
@@ -72,7 +72,38 @@ const (
 	libaflMaxVarLen       = 1 << 20
 	libaflMaxContainerLen = 4096
 	libaflMaxDepth        = 32
+	libaflMaxVarintLen64  = 10
 )
+
+func libaflPutUvarint(buf []byte, x uint64) int {
+	i := 0
+	for x >= 0x80 {
+		buf[i] = byte(x) | 0x80
+		x >>= 7
+		i++
+	}
+	buf[i] = byte(x)
+	return i + 1
+}
+
+func libaflUvarint(buf []byte) (uint64, int) {
+	var x uint64
+	var s uint
+	for i, b := range buf {
+		if i == libaflMaxVarintLen64 {
+			return 0, -(i + 1)
+		}
+		if b < 0x80 {
+			if i == libaflMaxVarintLen64-1 && b > 1 {
+				return 0, -(i + 1)
+			}
+			return x | uint64(b)<<s, i + 1
+		}
+		x |= uint64(b&0x7f) << s
+		s += 7
+	}
+	return 0, 0
+}
 
 // LibAFLInit initializes gosentry's LibAFL fuzz harness for the given fuzz test.
 // This is used by the generated test main when 'go test -fuzz ... -use-libafl'
@@ -296,7 +327,7 @@ func libaflMarshalInputs(values []any, types []reflect.Type) ([]byte, bool) {
 	}
 
 	var b []byte
-	var scratch [binary.MaxVarintLen64]byte
+	var scratch [libaflMaxVarintLen64]byte
 	for i, t := range types {
 		var ok bool
 		b, ok = libaflAppendValue(b, reflect.ValueOf(values[i]), t, &scratch, 0)
@@ -307,7 +338,7 @@ func libaflMarshalInputs(values []any, types []reflect.Type) ([]byte, bool) {
 	return b, true
 }
 
-func libaflAppendValue(dst []byte, v reflect.Value, t reflect.Type, scratch *[binary.MaxVarintLen64]byte, depth int) ([]byte, bool) {
+func libaflAppendValue(dst []byte, v reflect.Value, t reflect.Type, scratch *[libaflMaxVarintLen64]byte, depth int) ([]byte, bool) {
 	if depth > libaflMaxDepth {
 		return dst, true
 	}
@@ -327,54 +358,54 @@ func libaflAppendValue(dst []byte, v reflect.Value, t reflect.Type, scratch *[bi
 
 	case reflect.Int:
 		var tmp [8]byte
-		binary.LittleEndian.PutUint64(tmp[:], uint64(v.Int()))
+		byteorder.LEPutUint64(tmp[:], uint64(v.Int()))
 		return append(dst, tmp[:]...), true
 	case reflect.Int8:
 		return append(dst, byte(v.Int())), true
 	case reflect.Int16:
 		var tmp [2]byte
-		binary.LittleEndian.PutUint16(tmp[:], uint16(v.Int()))
+		byteorder.LEPutUint16(tmp[:], uint16(v.Int()))
 		return append(dst, tmp[:]...), true
 	case reflect.Int32:
 		var tmp [4]byte
-		binary.LittleEndian.PutUint32(tmp[:], uint32(v.Int()))
+		byteorder.LEPutUint32(tmp[:], uint32(v.Int()))
 		return append(dst, tmp[:]...), true
 	case reflect.Int64:
 		var tmp [8]byte
-		binary.LittleEndian.PutUint64(tmp[:], uint64(v.Int()))
+		byteorder.LEPutUint64(tmp[:], uint64(v.Int()))
 		return append(dst, tmp[:]...), true
 
 	case reflect.Uint:
 		var tmp [8]byte
-		binary.LittleEndian.PutUint64(tmp[:], v.Uint())
+		byteorder.LEPutUint64(tmp[:], v.Uint())
 		return append(dst, tmp[:]...), true
 	case reflect.Uint8:
 		return append(dst, byte(v.Uint())), true
 	case reflect.Uint16:
 		var tmp [2]byte
-		binary.LittleEndian.PutUint16(tmp[:], uint16(v.Uint()))
+		byteorder.LEPutUint16(tmp[:], uint16(v.Uint()))
 		return append(dst, tmp[:]...), true
 	case reflect.Uint32:
 		var tmp [4]byte
-		binary.LittleEndian.PutUint32(tmp[:], uint32(v.Uint()))
+		byteorder.LEPutUint32(tmp[:], uint32(v.Uint()))
 		return append(dst, tmp[:]...), true
 	case reflect.Uint64:
 		var tmp [8]byte
-		binary.LittleEndian.PutUint64(tmp[:], v.Uint())
+		byteorder.LEPutUint64(tmp[:], v.Uint())
 		return append(dst, tmp[:]...), true
 
 	case reflect.Float32:
 		var tmp [4]byte
-		binary.LittleEndian.PutUint32(tmp[:], math.Float32bits(float32(v.Float())))
+		byteorder.LEPutUint32(tmp[:], math.Float32bits(float32(v.Float())))
 		return append(dst, tmp[:]...), true
 	case reflect.Float64:
 		var tmp [8]byte
-		binary.LittleEndian.PutUint64(tmp[:], math.Float64bits(v.Float()))
+		byteorder.LEPutUint64(tmp[:], math.Float64bits(v.Float()))
 		return append(dst, tmp[:]...), true
 
 	case reflect.String:
 		s := v.String()
-		n := binary.PutUvarint(scratch[:], uint64(len(s)))
+		n := libaflPutUvarint(scratch[:], uint64(len(s)))
 		dst = append(dst, scratch[:n]...)
 		dst = append(dst, s...)
 		return dst, true
@@ -385,7 +416,7 @@ func libaflAppendValue(dst []byte, v reflect.Value, t reflect.Type, scratch *[bi
 			if n > libaflMaxVarLen {
 				n = libaflMaxVarLen
 			}
-			nn := binary.PutUvarint(scratch[:], uint64(n))
+			nn := libaflPutUvarint(scratch[:], uint64(n))
 			dst = append(dst, scratch[:nn]...)
 			for i := 0; i < n; i++ {
 				dst = append(dst, byte(v.Index(i).Uint()))
@@ -397,7 +428,7 @@ func libaflAppendValue(dst []byte, v reflect.Value, t reflect.Type, scratch *[bi
 		if n > libaflMaxContainerLen {
 			n = libaflMaxContainerLen
 		}
-		nn := binary.PutUvarint(scratch[:], uint64(n))
+		nn := libaflPutUvarint(scratch[:], uint64(n))
 		dst = append(dst, scratch[:nn]...)
 		for i := 0; i < n; i++ {
 			var ok bool
@@ -469,7 +500,7 @@ func (r *libaflReader) readUvarint() uint64 {
 	if r.empty() {
 		return 0
 	}
-	v, n := binary.Uvarint(r.b[r.i:])
+	v, n := libaflUvarint(r.b[r.i:])
 	if n > 0 {
 		r.i += n
 		return v
@@ -496,19 +527,19 @@ func (r *libaflReader) takeBytes(n int) []byte {
 func (r *libaflReader) readUint16() uint16 {
 	var tmp [2]byte
 	copy(tmp[:], r.takeBytes(2))
-	return binary.LittleEndian.Uint16(tmp[:])
+	return byteorder.LEUint16(tmp[:])
 }
 
 func (r *libaflReader) readUint32() uint32 {
 	var tmp [4]byte
 	copy(tmp[:], r.takeBytes(4))
-	return binary.LittleEndian.Uint32(tmp[:])
+	return byteorder.LEUint32(tmp[:])
 }
 
 func (r *libaflReader) readUint64() uint64 {
 	var tmp [8]byte
 	copy(tmp[:], r.takeBytes(8))
-	return binary.LittleEndian.Uint64(tmp[:])
+	return byteorder.LEUint64(tmp[:])
 }
 
 func libaflUnmarshalArgs(data []byte, argTypes []reflect.Type) []reflect.Value {

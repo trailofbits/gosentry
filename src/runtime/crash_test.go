@@ -427,6 +427,16 @@ func TestGoexitCrash(t *testing.T) {
 	}
 }
 
+// A frame that Goexit unwinds must not keep its own dead stack objects alive
+// through the panic record. See issue 82394.
+func TestGCPanicFramePointer(t *testing.T) {
+	output := runTestProg(t, "testprog", "GCPanicFramePointer")
+	want := "OK\n"
+	if output != want {
+		t.Fatalf("output:\n%s\n\nwant output:\n%s", output, want)
+	}
+}
+
 func TestGoexitDefer(t *testing.T) {
 	c := make(chan struct{})
 	go func() {
@@ -1010,6 +1020,9 @@ func TestCrashWhileTracing(t *testing.T) {
 	cmd := testenv.CleanCmdEnv(testenv.Command(t, testenv.Executable(t)))
 	cmd.Env = append(cmd.Env, "TEST_CRASH_WHILE_TRACING=1")
 	stdOut, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatalf("could not create stdout pipe: %v", err)
+	}
 	var errOut bytes.Buffer
 	cmd.Stderr = &errOut
 

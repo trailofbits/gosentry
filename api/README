@@ -8,6 +8,8 @@ shipped. Each file adds new lines but does not remove any.
 except.txt lists features that may disappear without breaking true
 compatibility.
 
+gosentry.txt records public APIs added by Gosentry.
+
 Starting with go1.19.txt, each API feature line must end in "#nnnnn"
 giving the GitHub issue number of the proposal issue that accepted
 the new API. This helps with our end-of-cycle audit of new APIs.

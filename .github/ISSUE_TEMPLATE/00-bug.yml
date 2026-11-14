@@ -89,6 +89,14 @@ body:
     id: expected-behavior
     attributes:
       label: "What did you expect to see?"
-      description: Why is the current output incorrect, and any additional context we may need to understand the issue.
+      description: Why is the current output incorrect, and any additional context we may need to understand the issue. Do not post patches in the issue tracker, patches must be sent in a CL / PR with a signed CLA.
+    validations:
+      required: true
+
+  - type: textarea
+    id: discovery
+    attributes:
+      label: "How did you discover this issue?"
+      description: For example, did this issue occur in your production application? Alternatively, did you find this issue via inspection or fuzzing of the source code?
     validations:
       required: true

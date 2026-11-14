@@ -55,14 +55,18 @@ func TestTransportInitEndpointError(t *testing.T) {
 		activeConns: make(map[*clientConn]struct{}),
 	}
 
-	if err := tr.initEndpoint(); err == nil {
-		t.Fatal("initEndpoint() = nil, want error")
+	endpoint, err := tr.endpoint()
+	if err == nil {
+		t.Fatal("tr.endpoint() = nil, want error")
 	}
-	if tr.endpoint != nil {
-		t.Errorf("after failed initEndpoint, transport.endpoint = %v, want nil", tr.endpoint)
+	if endpoint != nil {
+		t.Errorf("after failed tr.endpoint(), returned endpoint = %v, want nil", endpoint)
+	}
+	if tr.lazyEndpoint != nil {
+		t.Errorf("after failed tr.endpoint(), transport.lazyEndpoint = %v, want nil", tr.lazyEndpoint)
 	}
 	if !conn.closed {
-		t.Errorf("after failed initEndpoint, the net.PacketConn was not closed")
+		t.Errorf("after failed tr.endpoint(), the net.PacketConn was not closed")
 	}
 
 	// dial must report the error rather than panicking on the nil endpoint.
@@ -89,13 +93,16 @@ func TestTransportServerCreatesBidirectionalStream(t *testing.T) {
 func TestClientConnMethods(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		var called bool
-		hook := func() {
+		hook := func() error {
+			t.Helper()
 			if called {
 				t.Error("state hook was unexpectedly called")
 			}
 			called = true
+			return nil
 		}
 		verifyHookWasCalled := func() {
+			t.Helper()
 			if !called {
 				t.Error("state hook was unexpectedly not called")
 			}
@@ -168,6 +175,23 @@ func TestClientConnMethods(t *testing.T) {
 			resp.Body.Close()
 			if inFlight := tc.cc.InFlight(); inFlight != 0 {
 				t.Errorf("after body close, cc.InFlight() = %v, want 0", inFlight)
+			}
+			verifyHookWasCalled()
+		}
+
+		// RoundTrip with NoBody response.
+		{
+			req, _ := http.NewRequest("HEAD", "https://example.com/", nil)
+			rt := tc.roundTrip(req)
+			st := tc.wantStream(streamTypeRequest)
+			st.wantHeaders(nil)
+			st.writeHeaders(http.Header{":status": []string{"200"}})
+			resp := rt.response()
+			if resp.StatusCode != 200 {
+				t.Errorf("resp.StatusCode = %v, want 200", resp.StatusCode)
+			}
+			if inFlight := tc.cc.InFlight(); inFlight != 0 {
+				t.Errorf("after RoundTrip with no response body, cc.InFlight() = %v, want 0", inFlight)
 			}
 			verifyHookWasCalled()
 		}
@@ -597,12 +621,12 @@ type testClientConn struct {
 	control *testQUICStream
 }
 
-func newTestClientConnWithHook(t testing.TB, stateHook func()) *testClientConn {
+func newTestClientConnWithHook(t testing.TB, stateHook func() error) *testClientConn {
 	e1, e2 := newQUICEndpointPair(t)
 	tr := &transport{
-		endpoint:    e1,
-		tr1:         new(http.Transport),
-		activeConns: make(map[*clientConn]struct{}),
+		lazyEndpoint: e1,
+		tr1:          new(http.Transport),
+		activeConns:  make(map[*clientConn]struct{}),
 	}
 
 	cc, err := tr.dial(t.Context(), e2.LocalAddr().String(), testTLSConfig, stateHook)

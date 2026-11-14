@@ -15,11 +15,9 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 
 	"cmd/go/internal/base"
 	"cmd/go/internal/cfg"
@@ -115,15 +113,10 @@ func DownloadDir(ctx context.Context, m module.Version) (string, error) {
 		return dir, err
 	}
 
-	// Special case: ziphash is not required for the golang.org/fips140 module,
-	// because it is unpacked from a file in GOROOT, not downloaded.
-	// We've already checked that it's not a partial unpacking, so we're happy.
-	if m.Path == "golang.org/fips140" {
-		return dir, nil
-	}
-
-	// Check if a .ziphash file exists. It should be created before the
-	// zip is extracted, but if it was deleted (by another program?), we need
+	// Check if a .ziphash file exists. For downloaded modules it is created
+	// before the zip is extracted; for GOFIPS140 snapshots, which Fetcher.Unzip
+	// unpacks from GOROOT, it is created only after extraction completes.
+	// Either way, if it is missing (deleted by another program?), we need
 	// to re-calculate it. Note that checkMod will repopulate the ziphash
 	// file if it doesn't exist, but if the module is excluded by checks
 	// through GONOSUMDB or GOPRIVATE, that check and repopulation won't happen.
@@ -690,24 +683,6 @@ func writeDiskCache(ctx context.Context, file string, data []byte) error {
 		rewriteVersionList(ctx, filepath.Dir(file))
 	}
 	return nil
-}
-
-// isErrReadOnlyFS reports whether err is a read-only filesystem error
-// (syscall.EROFS on Unix/wasip1, ERROR_NOT_SUPPORTED on Windows).
-func isErrReadOnlyFS(err error) bool {
-	switch runtime.GOOS {
-	case "plan9":
-		return false
-	case "windows":
-		const ERROR_NOT_SUPPORTED = 50
-		return errors.Is(err, syscall.Errno(ERROR_NOT_SUPPORTED))
-	case "wasip1":
-		const EROFS = 69
-		return errors.Is(err, syscall.Errno(EROFS))
-	default: // unix and js
-		const EROFS = 30
-		return errors.Is(err, syscall.Errno(EROFS))
-	}
 }
 
 // tempFile creates a new temporary file with given permission bits.

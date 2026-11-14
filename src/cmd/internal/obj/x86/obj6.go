@@ -62,7 +62,7 @@ func CanUse1InsnTLS(ctxt *obj.Link) bool {
 	switch ctxt.Headtype {
 	case objabi.Hplan9, objabi.Hwindows:
 		return false
-	case objabi.Hlinux, objabi.Hfreebsd:
+	case objabi.Hlinux, objabi.Hfreebsd, objabi.Hopenbsd:
 		return !ctxt.Flag_shared
 	}
 
@@ -159,38 +159,80 @@ func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
 		}
 	}
 
-	// Android and Windows use a tls offset determined at runtime. Rewrite
+	// Android uses a tls offset determined at runtime. Rewrite
 	//	MOVQ TLS, BX
 	// to
 	//	MOVQ runtime.tls_g(SB), BX
-	if (isAndroid || ctxt.Headtype == objabi.Hwindows) &&
+	if isAndroid &&
 		(p.As == AMOVQ || p.As == AMOVL) && p.From.Type == obj.TYPE_REG && p.From.Reg == REG_TLS && p.To.Type == obj.TYPE_REG && REG_AX <= p.To.Reg && p.To.Reg <= REG_R15 {
 		p.From.Type = obj.TYPE_MEM
 		p.From.Name = obj.NAME_EXTERN
 		p.From.Reg = REG_NONE
 		p.From.Sym = ctxt.Lookup("runtime.tls_g")
 		p.From.Index = REG_NONE
-		if ctxt.Headtype == objabi.Hwindows {
-			// Windows requires an additional indirection
-			// to retrieve the TLS pointer,
-			// as runtime.tls_g contains the TLS offset from GS or FS.
-			// on AMD64 add
-			//	MOVQ 0(BX)(GS*1), BX
-			// on 386 add
-			//	MOVQ 0(BX)(FS*1), BX4
-			q := obj.Appendp(p, newprog)
-			q.As = p.As
-			q.From = obj.Addr{}
-			q.From.Type = obj.TYPE_MEM
-			q.From.Reg = p.To.Reg
-			if ctxt.Arch.Family == sys.AMD64 {
-				q.From.Index = REG_GS
-			} else {
-				q.From.Index = REG_FS
-			}
-			q.From.Scale = 1
-			q.From.Offset = 0
-			q.To = p.To
+	}
+
+	// Windows uses loader-provided static TLS. Rewrite
+	//	MOVQ TLS, BX
+	// to a lookup through the TEB ThreadLocalStoragePointer array.
+	if ctxt.Headtype == objabi.Hwindows &&
+		(p.As == AMOVQ || p.As == AMOVL) && p.From.Type == obj.TYPE_REG && p.From.Reg == REG_TLS && p.To.Type == obj.TYPE_REG && REG_AX <= p.To.Reg && p.To.Reg <= REG_R15 {
+		mov, dst := p.As, p.To.Reg
+		scratch := int16(REG_AX)
+		// These TEB.ThreadLocalStoragePointer offsets match
+		// TEB_ThreadLocalStoragePointer in runtime/go_tls.h.
+		tebTLS, scale := int64(0x2c), int16(4)
+		segment := int16(REG_FS)
+		if ctxt.Arch.Family == sys.AMD64 {
+			// Use a Go ABI scratch register to preserve arguments already
+			// loaded for an ABI0-to-ABIInternal call.
+			scratch = REG_R12
+			tebTLS, scale = 0x58, 8
+			segment = REG_GS
+		} else if dst == scratch {
+			scratch = REG_DX
+		}
+
+		// Load the module's 32-bit TLS index, zero-extending it on amd64.
+		p.As = AMOVL
+		p.From = obj.Addr{Type: obj.TYPE_MEM, Name: obj.NAME_EXTERN, Sym: ctxt.Lookup("_tls_index")}
+
+		q := obj.Appendp(p, newprog)
+		q.As = mov
+		q.From = obj.Addr{Type: obj.TYPE_MEM, Index: segment, Scale: 1, Offset: tebTLS}
+		q.To = obj.Addr{Type: obj.TYPE_REG, Reg: scratch}
+
+		q = obj.Appendp(q, newprog)
+		q.As = mov
+		q.From = obj.Addr{Type: obj.TYPE_MEM, Reg: scratch, Index: dst, Scale: scale}
+		q.To = obj.Addr{Type: obj.TYPE_REG, Reg: dst}
+		q.Mark |= unsafeTLS
+
+		q = obj.Appendp(q, newprog)
+		q.As = AADDL
+		if ctxt.Arch.Family == sys.AMD64 {
+			q.As = AADDQ
+		}
+		q.From = obj.Addr{Type: obj.TYPE_MEM, Name: obj.NAME_EXTERN, Sym: ctxt.Lookup("runtime.tls_g")}
+		q.To = obj.Addr{Type: obj.TYPE_REG, Reg: dst}
+		q.Mark |= unsafeTLS
+	}
+
+	// A global symbol is addressed absolutely or relative to the PC,
+	// so it cannot also have a base register. sym(SB)(AX) parses as
+	// a base of AX. The address of a global symbol is a constant, so
+	// $sym(SB) cannot have an index register either. Reject these
+	// here, before the encoder or the -dynlink and -shared rewrites
+	// below silently discard the register.
+	// Skip progs with RegTo2 set: on x86 only rewriteToUseGot and
+	// rewriteToPcrel set it, on progs they insert. Their operands are
+	// copied from a prog already checked here, and rewriteToPcrel
+	// deliberately puts the PC thunk register in the base.
+	if p.RegTo2 == 0 {
+		checkSymOperand(ctxt, p, &p.From)
+		checkSymOperand(ctxt, p, &p.To)
+		for i := range p.RestArgs {
+			checkSymOperand(ctxt, p, &p.RestArgs[i].Addr)
 		}
 	}
 
@@ -316,6 +358,30 @@ func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
 
 	if ctxt.Flag_shared && ctxt.Arch.Family == sys.I386 {
 		rewriteToPcrel(ctxt, p, newprog)
+	}
+}
+
+// checkSymOperand reports an error if a, an operand of p, refers to a
+// global symbol and also has a base register, or is the address of a
+// global symbol and has an index register.
+func checkSymOperand(ctxt *obj.Link, p *obj.Prog, a *obj.Addr) {
+	if a.Type != obj.TYPE_MEM && a.Type != obj.TYPE_ADDR {
+		return
+	}
+	switch a.Name {
+	case obj.NAME_EXTERN, obj.NAME_STATIC, obj.NAME_GOTREF:
+	default:
+		return
+	}
+	if a.Reg != REG_NONE {
+		ctxt.Diag("base register not allowed with global symbol: %v", p)
+		// Avoid a second error for the same operand from the encoder.
+		a.Reg = REG_NONE
+	}
+	if a.Type == obj.TYPE_ADDR && a.Index != REG_NONE {
+		ctxt.Diag("index register not allowed with address of global symbol: %v", p)
+		a.Index = REG_NONE
+		a.Scale = 0
 	}
 }
 
@@ -611,7 +677,9 @@ func rewriteToPcrel(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
 
 // Prog.mark
 const (
-	markBit = 1 << 0 // used in errorCheck to avoid duplicate work
+	markBit       = 1 << 0 // used in errorCheck to avoid duplicate work
+	unsafeTLS     = 1 << 1 // unsafe part of a rewritten TLS access
+	sehStackSplit = 1 << 2 // start of the out-of-line stack-split code
 )
 
 func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
@@ -1112,6 +1180,7 @@ func stacksplit(ctxt *obj.Link, cursym *obj.LSym, p *obj.Prog, newprog obj.ProgA
 	spfix := obj.Appendp(last, newprog)
 	spfix.As = obj.ANOP
 	spfix.Spadj = -framesize
+	spfix.Mark |= sehStackSplit
 
 	pcdata := ctxt.EmitEntryStackMap(cursym, spfix, newprog)
 	spill := ctxt.StartUnsafePoint(pcdata, newprog)

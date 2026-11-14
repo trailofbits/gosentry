@@ -9,7 +9,6 @@ import (
 	"internal/cpu"
 	"internal/goarch"
 	"internal/goexperiment"
-	"internal/goos"
 	"internal/runtime/atomic"
 	"internal/runtime/exithook"
 	"internal/runtime/maps"
@@ -497,77 +496,85 @@ func goready(gp *g, traceskip int) {
 }
 
 //go:nosplit
-func acquireSudog() *sudog {
+func acquireWaitingG(typ waitingGType) *waitingG {
 	// Delicate dance: the semaphore implementation calls
-	// acquireSudog, acquireSudog calls new(sudog),
+	// acquireWaitingG, acquireWaitingG calls new(waitingG),
 	// new calls malloc, malloc can call the garbage collector,
 	// and the garbage collector calls the semaphore implementation
 	// in stopTheWorld.
-	// Break the cycle by doing acquirem/releasem around new(sudog).
-	// The acquirem/releasem increments m.locks during new(sudog),
+	// Break the cycle by doing acquirem/releasem around new(waitingG).
+	// The acquirem/releasem increments m.locks during new(waitingG),
 	// which keeps the garbage collector from being invoked.
 	mp := acquirem()
 	pp := mp.p.ptr()
-	if len(pp.sudogcache) == 0 {
-		lock(&sched.sudoglock)
+	if len(pp.waitingGCache) == 0 {
+		lock(&sched.waitingGLock)
 		// First, try to grab a batch from central cache.
-		for len(pp.sudogcache) < cap(pp.sudogcache)/2 && sched.sudogcache != nil {
-			s := sched.sudogcache
-			sched.sudogcache = s.next
-			s.next = nil
-			pp.sudogcache = append(pp.sudogcache, s)
+		for len(pp.waitingGCache) < cap(pp.waitingGCache)/2 && sched.waitingGCache != nil {
+			wg := sched.waitingGCache
+			sched.waitingGCache = wg.next
+			wg.next = nil
+			pp.waitingGCache = append(pp.waitingGCache, wg)
 		}
-		unlock(&sched.sudoglock)
+		unlock(&sched.waitingGLock)
 		// If the central cache is empty, allocate a new one.
-		if len(pp.sudogcache) == 0 {
-			pp.sudogcache = append(pp.sudogcache, new(sudog))
+		if len(pp.waitingGCache) == 0 {
+			pp.waitingGCache = append(pp.waitingGCache, new(waitingG))
 		}
 	}
-	n := len(pp.sudogcache)
-	s := pp.sudogcache[n-1]
-	pp.sudogcache[n-1] = nil
-	pp.sudogcache = pp.sudogcache[:n-1]
-	if s.elem.get() != nil {
-		throw("acquireSudog: found s.elem != nil in cache")
+	n := len(pp.waitingGCache)
+	wg := pp.waitingGCache[n-1]
+	pp.waitingGCache[n-1] = nil
+	pp.waitingGCache = pp.waitingGCache[:n-1]
+	if wg.typ != waitingGTypeNone {
+		throw("acquireWaitingG: found wg.typ != waitingGTypeNone in cache")
 	}
+	if wg.elem.get() != nil {
+		throw("acquireWaitingG: found wg.elem != nil in cache")
+	}
+	wg.typ = typ
 	releasem(mp)
-	return s
+	return wg
 }
 
 //go:nosplit
-func releaseSudog(s *sudog) {
-	if s.elem.get() != nil {
-		throw("runtime: sudog with non-nil elem")
+func releaseWaitingG(wg *waitingG) {
+	if wg.typ == waitingGTypeNone {
+		throw("runtime: waitingG without type")
 	}
-	if s.isSelect {
-		throw("runtime: sudog with non-false isSelect")
+	if wg.elem.get() != nil {
+		throw("runtime: waitingG with non-nil elem")
 	}
-	if s.next != nil {
-		throw("runtime: sudog with non-nil next")
+	if wg.isSelect {
+		throw("runtime: waitingG with non-false isSelect")
 	}
-	if s.prev != nil {
-		throw("runtime: sudog with non-nil prev")
+	if wg.next != nil {
+		throw("runtime: waitingG with non-nil next")
 	}
-	if s.waitlink != nil {
-		throw("runtime: sudog with non-nil waitlink")
+	if wg.prev != nil {
+		throw("runtime: waitingG with non-nil prev")
 	}
-	if s.c.get() != nil {
-		throw("runtime: sudog with non-nil c")
+	if wg.waitlink != nil {
+		throw("runtime: waitingG with non-nil waitlink")
 	}
+	if wg.c.get() != nil {
+		throw("runtime: waitingG with non-nil c")
+	}
+	wg.typ = waitingGTypeNone
 	gp := getg()
 	if gp.param != nil {
-		throw("runtime: releaseSudog with non-nil gp.param")
+		throw("runtime: releaseWaitingG with non-nil gp.param")
 	}
 	mp := acquirem() // avoid rescheduling to another P
 	pp := mp.p.ptr()
-	if len(pp.sudogcache) == cap(pp.sudogcache) {
+	if len(pp.waitingGCache) == cap(pp.waitingGCache) {
 		// Transfer half of local cache to the central cache.
-		var first, last *sudog
-		for len(pp.sudogcache) > cap(pp.sudogcache)/2 {
-			n := len(pp.sudogcache)
-			p := pp.sudogcache[n-1]
-			pp.sudogcache[n-1] = nil
-			pp.sudogcache = pp.sudogcache[:n-1]
+		var first, last *waitingG
+		for len(pp.waitingGCache) > cap(pp.waitingGCache)/2 {
+			n := len(pp.waitingGCache)
+			p := pp.waitingGCache[n-1]
+			pp.waitingGCache[n-1] = nil
+			pp.waitingGCache = pp.waitingGCache[:n-1]
 			if first == nil {
 				first = p
 			} else {
@@ -575,12 +582,12 @@ func releaseSudog(s *sudog) {
 			}
 			last = p
 		}
-		lock(&sched.sudoglock)
-		last.next = sched.sudogcache
-		sched.sudogcache = first
-		unlock(&sched.sudoglock)
+		lock(&sched.waitingGLock)
+		last.next = sched.waitingGCache
+		sched.waitingGCache = first
+		unlock(&sched.waitingGLock)
 	}
-	pp.sudogcache = append(pp.sudogcache, s)
+	pp.waitingGCache = append(pp.waitingGCache, wg)
 	releasem(mp)
 }
 
@@ -794,6 +801,7 @@ func cpuinit(env string) {
 		loong64HasLSX = cpu.Loong64.HasLSX
 
 	case "riscv64":
+		riscv64HasV = cpu.RISCV64.HasV
 		riscv64HasZbb = cpu.RISCV64.HasZbb
 	}
 }
@@ -845,7 +853,7 @@ func schedinit() {
 	lockInit(&sched.lock, lockRankSched)
 	lockInit(&sched.sysmonlock, lockRankSysmon)
 	lockInit(&sched.deferlock, lockRankDefer)
-	lockInit(&sched.sudoglock, lockRankSudog)
+	lockInit(&sched.waitingGLock, lockRankWaitingG)
 	lockInit(&deadlock, lockRankDeadlock)
 	lockInit(&paniclk, lockRankPanic)
 	lockInit(&allglock, lockRankAllg)
@@ -1115,19 +1123,9 @@ func (mp *m) hasCgoOnStack() bool {
 	return mp.ncgo > 0 || mp.isextra
 }
 
-const (
-	// osHasLowResTimer indicates that the platform's internal timer system has a low resolution,
-	// typically on the order of 1 ms or more.
-	osHasLowResTimer = GOOS == "windows" || GOOS == "openbsd" || GOOS == "netbsd" || GOOS == "plan9"
-
-	// osHasLowResClockInt is osHasLowResClock but in integer form, so it can be used to create
-	// constants conditionally.
-	osHasLowResClockInt = goos.IsWindows
-
-	// osHasLowResClock indicates that timestamps produced by nanotime on the platform have a
-	// low resolution, typically on the order of 1 ms or more.
-	osHasLowResClock = osHasLowResClockInt > 0
-)
+// osHasLowResTimer indicates that the platform's internal timer system has a low resolution,
+// typically on the order of 1 ms or more.
+const osHasLowResTimer = GOOS == "windows" || GOOS == "openbsd" || GOOS == "netbsd" || GOOS == "plan9"
 
 // Mark gp ready to run.
 func ready(gp *g, traceskip int, next bool) {
@@ -1670,7 +1668,6 @@ func stopTheWorldWithSema(reason stwReason) worldStop {
 	start := nanotime() // exclude time waiting for sched.lock from start and total time metrics.
 	sched.stopwait = gomaxprocs
 	sched.gcwaiting.Store(true)
-	preemptall()
 
 	// Stop current P.
 	gp.m.p.ptr().status = _Pgcstop // Pgcstop is only diagnostic.
@@ -1697,10 +1694,12 @@ func stopTheWorldWithSema(reason stwReason) worldStop {
 		sched.stopwait--
 	}
 	wait := sched.stopwait > 0
-	unlock(&sched.lock)
+	unlock(&sched.lock) // available to preempted threads
 
 	// Wait for remaining Ps to stop voluntarily.
 	if wait {
+		preemptall()
+		stealRunnextWake() // preemptall skips Ms/Ps in the scheduler (without a G)
 		for {
 			// wait for 100us, then try to re-preempt in case of any races
 			if notetsleep(&sched.stopnote, 100*1000) {
@@ -2028,8 +2027,7 @@ func mexit(osStack bool) {
 	if mp.gsignal != nil {
 		stackfree(mp.gsignal.stack)
 		if valgrindenabled {
-			valgrindDeregisterStack(mp.gsignal.valgrindStackID)
-			mp.gsignal.valgrindStackID = 0
+			valgrindDeregisterStack(mp.gsignal)
 		}
 		// On some platforms, when calling into VDSO (e.g. nanotime)
 		// we store our g on the gsignal stack, if there is one.
@@ -2157,6 +2155,11 @@ func forEachP(reason waitReason, fn func(*p)) {
 //
 //go:systemstack
 func forEachPInternal(fn func(*p)) {
+	if atomic.Load(&worldsema) != 0 {
+		// Not held by anyone, so certainly not held by our caller
+		throw("worldsema not held")
+	}
+
 	mp := acquirem()
 	pp := getg().m.p.ptr()
 
@@ -2173,7 +2176,6 @@ func forEachPInternal(fn func(*p)) {
 			atomic.Store(&p2.runSafePointFn, 1)
 		}
 	}
-	preemptall()
 
 	// Any P entering _Pidle or a system call from now on will observe
 	// p.runSafePointFn == 1 and will call runSafePointFn when
@@ -2189,7 +2191,11 @@ func forEachPInternal(fn func(*p)) {
 	}
 
 	wait := sched.safePointWait > 0
-	unlock(&sched.lock)
+	unlock(&sched.lock) // available to preempted threads
+
+	if wait {
+		preemptall()
+	}
 
 	// Run fn for the current P.
 	fn(pp)
@@ -2329,8 +2335,7 @@ func allocm(pp *p, fn func(), id int64) *m {
 				systemstack(func() {
 					stackfree(freem.g0.stack)
 					if valgrindenabled {
-						valgrindDeregisterStack(freem.g0.valgrindStackID)
-						freem.g0.valgrindStackID = 0
+						valgrindDeregisterStack(freem.g0)
 					}
 				})
 			}
@@ -2441,10 +2446,6 @@ func needm(signal bool) {
 
 	// Store the original signal mask for use by minit.
 	mp.sigmask = sigmask
-
-	// Install TLS on some platforms (previously setg
-	// would do this if necessary).
-	osSetupTLS(mp)
 
 	// Install g (= m->g0) and set the stack bounds
 	// to match the current stack.
@@ -3395,6 +3396,16 @@ func execute(gp *g, inheritTime bool) {
 		traceRelease(trace)
 	}
 
+	// A safe-point request may have arrived after findRunnable checked
+	// for it, while this M had no running G for preemptone to preempt.
+	// Handle it before executing gp instead of waiting for a retry.
+	//
+	// Keep this after trace.GoStart: the safe-point function may itself
+	// emit trace events that assume gp has already been traced as running.
+	if mp.p.ptr().runSafePointFn != 0 {
+		runSafePointFn()
+	}
+
 	gogo(&gp.sched)
 }
 
@@ -3851,10 +3862,6 @@ func stealWork(now int64) (gp *g, inheritTime bool, rnow, pollUntil int64, newWo
 		stealTimersOrRunNextG := i == stealTries-1
 
 		for enum := stealOrder.start(cheaprand()); !enum.done(); enum.next() {
-			if sched.gcwaiting.Load() {
-				// GC work may be available.
-				return nil, false, now, pollUntil, true
-			}
 			p2 := allp[enum.position()]
 			if pp == p2 {
 				continue
@@ -3900,6 +3907,12 @@ func stealWork(now int64) (gp *g, inheritTime bool, rnow, pollUntil int64, newWo
 				if gp := runqsteal(pp, p2, stealTimersOrRunNextG); gp != nil {
 					return gp, false, now, pollUntil, ranTimer
 				}
+			}
+
+			if sched.gcwaiting.Load() {
+				// GC work may be available (and may have caused an early return
+				// from runqsteal).
+				return nil, false, now, pollUntil, true
 			}
 		}
 	}
@@ -5312,12 +5325,15 @@ func syscall_runtime_AfterExec() {
 // Allocate a new g, with a stack big enough for stacksize bytes.
 func malg(stacksize int32) *g {
 	newg := new(g)
+	// Give newg its WebAssembly continuation table slot (GOWASM=stackswitch),
+	// which it keeps for its lifetime, including on free lists.
+	wasmContAlloc(newg)
 	if stacksize >= 0 {
 		stacksize = round2(stackSystem + stacksize)
 		systemstack(func() {
 			newg.stack = stackalloc(uint32(stacksize))
 			if valgrindenabled {
-				newg.valgrindStackID = valgrindRegisterStack(unsafe.Pointer(newg.stack.lo), unsafe.Pointer(newg.stack.hi))
+				valgrindRegisterStack(newg)
 			}
 		})
 		newg.stackguard0 = newg.stack.lo + stackGuard
@@ -5528,8 +5544,7 @@ func gfput(pp *p, gp *g) {
 		gp.stack.hi = 0
 		gp.stackguard0 = 0
 		if valgrindenabled {
-			valgrindDeregisterStack(gp.valgrindStackID)
-			gp.valgrindStackID = 0
+			valgrindDeregisterStack(gp)
 		}
 	}
 
@@ -5589,8 +5604,7 @@ retry:
 			gp.stack.hi = 0
 			gp.stackguard0 = 0
 			if valgrindenabled {
-				valgrindDeregisterStack(gp.valgrindStackID)
-				gp.valgrindStackID = 0
+				valgrindDeregisterStack(gp)
 			}
 		})
 	}
@@ -5599,7 +5613,7 @@ retry:
 		systemstack(func() {
 			gp.stack = stackalloc(startingStackSize)
 			if valgrindenabled {
-				gp.valgrindStackID = valgrindRegisterStack(unsafe.Pointer(gp.stack.lo), unsafe.Pointer(gp.stack.hi))
+				valgrindRegisterStack(gp)
 			}
 		})
 		gp.stackguard0 = gp.stack.lo + stackGuard
@@ -5959,7 +5973,7 @@ func (pp *p) init(id int32) {
 	pp.id = id
 	pp.gcw.id = id
 	pp.status = _Pgcstop
-	pp.sudogcache = pp.sudogbuf[:0]
+	pp.waitingGCache = pp.waitingGBuf[:0]
 	pp.deferpool = pp.deferpoolbuf[:0]
 	pp.wbBuf.reset()
 	if pp.mcache == nil {
@@ -6025,8 +6039,8 @@ func (pp *p) destroy() {
 	// We should free the queues though.
 	pp.gcw.spanq.destroy()
 
-	clear(pp.sudogbuf[:])
-	pp.sudogcache = pp.sudogbuf[:0]
+	clear(pp.waitingGBuf[:])
+	pp.waitingGCache = pp.waitingGBuf[:0]
 	pp.pinnerCache = nil
 	if pp.pinCounterCache != nil {
 		lock(&mheap_.speciallock)
@@ -7757,13 +7771,11 @@ func runqgrab(pp *p, batch *[256]guintptr, batchHead uint32, stealRunNextG bool)
 								// goroutine hanging off of a running P, suggesting it
 								// either recently transitioned out of running, or will
 								// transition to running shortly).
-								if !osHasLowResTimer {
-									usleep(3)
-								} else {
-									// On some platforms system timer granularity is
-									// 1-15ms, which is way too much for this
-									// optimization. So just yield.
-									osyield()
+								stealRunnextSleep(3000)
+								if sched.gcwaiting.Load() {
+									// The sleep above might have overlapped with a STW
+									// request. Check before committing to this new work.
+									return 0
 								}
 							}
 						}

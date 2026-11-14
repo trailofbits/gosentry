@@ -20,8 +20,10 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/http/httpguts"
+	"net/http/internal"
 	"net/http/internal/httpcommon"
+
+	"golang.org/x/net/http/httpguts"
 	"golang.org/x/net/quic"
 )
 
@@ -56,13 +58,13 @@ func (netHTTPServer) Addr() net.Addr            { return nil }
 //
 // The ctx parameter is used as the base context for request handlers
 // for requests receieved via this port.
-func (s netHTTPServer) ServeHTTP3(ctx context.Context, conn net.PacketConn, tlsConfig *tls.Config, h http.Handler) error {
+func (s netHTTPServer) ServeHTTP3(ctx context.Context, conn net.PacketConn, tlsConfig *tls.Config) error {
 	s.init()
 	e, err := quic.NewEndpoint(conn, newQUICConfig(s.opts.QUICConfig, tlsConfig))
 	if err != nil {
 		return err
 	}
-	return s.serve(ctx, e, h)
+	return s.serve(ctx, e)
 }
 
 // Shutdown shuts down the server.
@@ -103,7 +105,7 @@ func (s *server) init() {
 
 // serve accepts incoming connections on the QUIC endpoint e,
 // and handles requests from those connections.
-func (s *server) serve(ctx context.Context, e *quic.Endpoint, h http.Handler) error {
+func (s *server) serve(ctx context.Context, e *quic.Endpoint) error {
 	s.init()
 	defer e.Close(canceledCtx)
 	for {
@@ -111,7 +113,7 @@ func (s *server) serve(ctx context.Context, e *quic.Endpoint, h http.Handler) er
 		if err != nil {
 			return err
 		}
-		go s.newServerConn(ctx, qconn, h)
+		go s.newServerConn(ctx, qconn)
 	}
 }
 
@@ -211,10 +213,10 @@ func (s *server) idleTimeout() time.Duration {
 }
 
 type serverConn struct {
-	qconn   *quic.Conn
-	srv     *server
-	baseCtx context.Context
-	handler http.Handler
+	qconn    *quic.Conn
+	srv      *server
+	baseCtx  context.Context
+	tlsState *tls.ConnectionState
 
 	genericConn // for handleUnidirectionalStream
 	enc         qpackEncoder
@@ -232,25 +234,29 @@ type serverConn struct {
 
 // newServerConn handles a new connection.
 // The baseCtx parameter is the base context for request handlers on this connection.
-func (s *server) newServerConn(baseCtx context.Context, qconn *quic.Conn, h http.Handler) {
+func (s *server) newServerConn(baseCtx context.Context, qconn *quic.Conn) {
+	if localAddr := qconn.LocalAddr(); localAddr.IsValid() {
+		baseCtx = context.WithValue(baseCtx, http.LocalAddrContextKey, net.UDPAddrFromAddrPort(localAddr))
+	}
+	baseCtx, cancel := context.WithCancel(baseCtx)
+	defer cancel()
+
 	sc := &serverConn{
-		qconn:          qconn,
-		srv:            s,
-		baseCtx:        baseCtx,
-		handler:        h,
-		maxHeaderBytes: int64(s.srv1.MaxHeaderBytes),
-		// TODO: When we only support go1.27.
-		//maxHeaderValueCount: int64(s.srv1.MaxHeaderValueCount),
+		qconn:               qconn,
+		srv:                 s,
+		baseCtx:             baseCtx,
+		tlsState:            new(qconn.ConnectionState()),
+		maxHeaderBytes:      int64(s.srv1.MaxHeaderBytes),
+		maxHeaderValueCount: int64(s.srv1.MaxHeaderValueCount),
 	}
 
 	// Should we permit disabling these limits? For now, we do not.
 	if sc.maxHeaderBytes <= 0 {
 		sc.maxHeaderBytes = int64(http.DefaultMaxHeaderBytes)
 	}
-	// TODO: When we only support go1.27.
-	// if sc.maxHeaderValueCount <= 0 {
-	// 	sc.maxHeaderValueCount = int64(http.DefaultMaxHeaderValueCount)
-	// }
+	if sc.maxHeaderValueCount <= 0 {
+		sc.maxHeaderValueCount = int64(http.DefaultMaxHeaderValueCount)
+	}
 
 	s.registerConn(sc)
 	defer s.unregisterConn(sc)
@@ -372,6 +378,10 @@ type pseudoHeader struct {
 	authority string
 }
 
+var errHeadersTooLarge = &streamError{errH3MessageError, "headers too large"}
+
+const headerFieldOverhead = 32 // RFC 9114 Section 4.2.2
+
 func (sc *serverConn) parseHeader(st *stream) (http.Header, pseudoHeader, error) {
 	ftype, err := st.readFrameHeader()
 	if err != nil {
@@ -384,24 +394,39 @@ func (sc *serverConn) parseHeader(st *stream) (http.Header, pseudoHeader, error)
 		// If the encoded headers exceed the limit, just reject the request out of hand.
 		// This lets us safely check limits in the dec.decode callback below,
 		// since the maximum Huffman expansion factor is only ~1.6x.
-		return nil, pseudoHeader{}, &streamError{errH3RequestRejected, "headers too large"}
+		return nil, pseudoHeader{}, errHeadersTooLarge
 	}
+
+	type headerBudget struct {
+		size  int64 // Checked against MaxHeaderBytes
+		count int64 // Checked against MaxHeaderValueCount
+	}
+	var headers, trailers headerBudget
+
 	header := make(http.Header)
-	valueCount := int64(0)
-	totalSize := int64(0)
 	var pHeader pseudoHeader
 	var dec qpackDecoder
 	var hasMethod, hasScheme, hasPath, hasAuthority bool
 	if err := dec.decode(st, func(_ indexType, name, value string) error {
-		totalSize += int64(len(name)) + int64(len(value)) + 32 // RFC 9114 Section 4.2.2
-		valueCount++
-		if totalSize > sc.maxHeaderBytes {
-			return &streamError{errH3RequestRejected, "headers too large"}
+		var budget *headerBudget
+		if name == "trailer" {
+			budget = &trailers
+			fieldCount := int64(strings.Count(value, ",") + 1)
+			budget.count += fieldCount
+			// Just do the math instead of parsing the declared trailers.
+			// This does make us count whitespace against MaxHeaderBytes, but that's fine.
+			budget.size += int64(len(value)) - fieldCount + 1 + fieldCount*headerFieldOverhead
+		} else {
+			budget = &headers
+			budget.count++
+			budget.size += int64(len(name)) + int64(len(value)) + headerFieldOverhead
 		}
-		// TODO: When we only support go1.27.
-		//if valueCount > sc.maxHeaderValueCount {
-		//	return &streamError{errH3RequestRejected, "headers too large"}
-		//}
+		if budget.size > sc.maxHeaderBytes {
+			return errHeadersTooLarge
+		}
+		if budget.count > sc.maxHeaderValueCount {
+			return errHeadersTooLarge
+		}
 		if !httpguts.ValidHeaderFieldValue(value) {
 			return &streamError{errH3MessageError, "invalid field value"}
 		}
@@ -505,6 +530,23 @@ func (sc *serverConn) requestShouldGoaway(st *stream) bool {
 	}
 }
 
+func (sc *serverConn) newResponseWriter(st *stream, hasBody bool) *responseWriter {
+	return &responseWriter{
+		st:             st,
+		headers:        make(http.Header),
+		trailer:        make(http.Header),
+		bb:             make(bodyBuffer, 0, defaultBodyBufferCap),
+		cannotHaveBody: !hasBody,
+		bw: &bodyWriter{
+			st:     st,
+			remain: -1,
+			flush:  false,
+			name:   "response",
+			enc:    &sc.enc,
+		},
+	}
+}
+
 func (sc *serverConn) handleRequestStream(st *stream) error {
 	if sc.requestShouldGoaway(st) {
 		return &streamError{
@@ -524,6 +566,16 @@ func (sc *serverConn) handleRequestStream(st *stream) error {
 				code:    errH3RequestRejected,
 				message: "exceeded deadline while parsing header",
 			}
+		}
+		// To be consistent with HTTP/1 and HTTP/2, send status 431 when
+		// headers are too large, rather than just resetting the stream.
+		if err == errHeadersTooLarge {
+			if t := sc.srv.writeTimeout(); t > 0 {
+				st.writeDeadline.set(time.Now().Add(t))
+			}
+			rw := sc.newResponseWriter(st, false)
+			rw.WriteHeader(http.StatusRequestHeaderFieldsTooLarge)
+			return rw.close()
 		}
 		return err
 	}
@@ -552,6 +604,11 @@ func (sc *serverConn) handleRequestStream(st *stream) error {
 		contentLength = int64(n)
 	}
 
+	// TODO: Similar to HTTP/2, we probably should also cancel the ctx when the
+	// peer cancels the request stream (STOP_SENDING). This is not yet possible
+	// with the current API of the quic package.
+	ctx, cancel := context.WithCancel(sc.baseCtx)
+	defer cancel()
 	req := (&http.Request{
 		Proto:         "HTTP/3.0",
 		Method:        pHeader.method,
@@ -563,31 +620,21 @@ func (sc *serverConn) handleRequestStream(st *stream) error {
 		RemoteAddr:    sc.qconn.RemoteAddr().String(),
 		Header:        header,
 		ContentLength: contentLength,
-	}).WithContext(sc.baseCtx)
+		TLS:           sc.tlsState,
+	}).WithContext(ctx)
 
-	rw := &responseWriter{
-		st:             st,
-		headers:        make(http.Header),
-		trailer:        make(http.Header),
-		bb:             make(bodyBuffer, 0, defaultBodyBufferCap),
-		cannotHaveBody: req.Method == "HEAD",
-		bw: &bodyWriter{
-			st:     st,
-			remain: -1,
-			flush:  false,
-			name:   "response",
-			enc:    &sc.enc,
-		},
-	}
+	rw := sc.newResponseWriter(st, req.Method != "HEAD")
 
 	if contentLength != 0 || len(reqInfo.Trailer) != 0 {
 		req.Body = &serverRequestReader{
 			rw: rw,
 			br: bodyReader{
-				st:            st,
-				remain:        contentLength,
-				trailer:       reqInfo.Trailer,
-				filterTrailer: true,
+				st:                  st,
+				remain:              contentLength,
+				trailer:             reqInfo.Trailer,
+				filterTrailer:       true,
+				maxHeaderBytes:      sc.maxHeaderBytes,
+				maxHeaderValueCount: sc.maxHeaderValueCount,
 			},
 			needsContinue: reqInfo.NeedsContinue,
 		}
@@ -596,11 +643,13 @@ func (sc *serverConn) handleRequestStream(st *stream) error {
 		req.Body = http.NoBody
 	}
 
-	// TODO: handle panic coming from the HTTP handler.
 	if t := sc.srv.writeTimeout(); t > 0 {
 		st.writeDeadline.set(time.Now().Add(t))
 	}
-	sc.handler.ServeHTTP(rw, req)
+	if err := sc.srv.srv1.HandleRequest(rw, req); err != nil {
+		return err
+	}
+	cancel()
 	return rw.close()
 }
 
@@ -614,20 +663,6 @@ func (sc *serverConn) abort(err error) {
 	} else {
 		sc.qconn.Abort(err)
 	}
-}
-
-// responseCanHaveBody reports whether a given response status code permits a
-// body. See RFC 7230, section 3.3.
-func responseCanHaveBody(status int) bool {
-	switch {
-	case status >= 100 && status <= 199:
-		return false
-	case status == 204:
-		return false
-	case status == 304:
-		return false
-	}
-	return true
 }
 
 // trailerPrefix is a magic prefix for [responseWriter.Header] map keys that,
@@ -685,7 +720,7 @@ func (rw *responseWriter) writeHeaderLockedOnce() {
 	if rw.wroteHeader {
 		return
 	}
-	if !responseCanHaveBody(rw.statusCode) {
+	if !internal.BodyAllowedForStatus(rw.statusCode) {
 		rw.cannotHaveBody = true
 	}
 	// If there is any Trailer declared, save them so we know which trailers
@@ -891,11 +926,10 @@ func (rw *responseWriter) FlushError() error {
 	defer rw.mu.Unlock()
 	rw.writeHeaderLockedOnce()
 	if !rw.cannotHaveBody {
-		_, err := rw.bw.Write(rw.bb)
-		rw.bb.discard()
-		if err != nil {
+		if _, err := rw.bw.Write(rw.bb); err != nil {
 			return err
 		}
+		rw.bb.discard()
 	}
 	return rw.st.Flush()
 }
@@ -959,7 +993,7 @@ func (bb *bodyBuffer) inferHeader(h http.Header, status int) {
 	// sniff the body. See Issue golang.org/issue/31753.
 	hasCE := len(h.Get("Content-Encoding")) > 0
 	_, hasCT := h["Content-Type"]
-	if !hasCE && !hasCT && responseCanHaveBody(status) && len(*bb) > 0 {
+	if !hasCE && !hasCT && internal.BodyAllowedForStatus(status) && len(*bb) > 0 {
 		h.Set("Content-Type", http.DetectContentType(*bb))
 	}
 	// We can technically infer Content-Length too here, as long as the entire

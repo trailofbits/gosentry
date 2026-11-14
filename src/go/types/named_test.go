@@ -5,8 +5,6 @@
 package types_test
 
 import (
-	"go/ast"
-	"go/token"
 	"testing"
 
 	. "go/types"
@@ -57,7 +55,7 @@ type Inst = G[int]
 				// Access underlying once, to trigger any lazy calculation.
 				_ = test.typ.Underlying()
 				b.ResetTimer()
-				for i := 0; i < b.N; i++ {
+				for b.Loop() {
 					_ = test.typ.Underlying()
 				}
 			})
@@ -70,7 +68,7 @@ type Inst = G[int]
 				// Access underlying once, to trigger any lazy calculation.
 				_ = NewMethodSet(test.typ)
 				b.ResetTimer()
-				for i := 0; i < b.N; i++ {
+				for b.Loop() {
 					_ = NewMethodSet(test.typ)
 				}
 			})
@@ -88,6 +86,7 @@ func mustInstantiate(tb testing.TB, orig Type, targs ...Type) Type {
 
 // Test that types do not expand infinitely, as in go.dev/issue/52715.
 func TestFiniteTypeExpansion(t *testing.T) {
+	t.Parallel()
 	const src = `
 package p
 
@@ -106,12 +105,7 @@ func (Node[Q]) M(Q) {}
 type Inst = *Tree[int]
 `
 
-	fset := token.NewFileSet()
-	f := mustParse(fset, src)
-	pkg := NewPackage("p", f.Name.Name)
-	if err := NewChecker(nil, fset, pkg, nil).Files([]*ast.File{f}); err != nil {
-		t.Fatal(err)
-	}
+	pkg := mustTypecheck(src, nil, nil)
 
 	firstFieldType := func(n *Named) *Named {
 		return n.Underlying().(*Struct).Field(0).Type().(*Pointer).Elem().(*Named)
@@ -132,6 +126,7 @@ type Inst = *Tree[int]
 // a named type remain the same as long as the same source and AddMethod calls
 // are presented to the type checker in the same order (go.dev/issue/61298).
 func TestMethodOrdering(t *testing.T) {
+	t.Parallel()
 	const src = `
 package p
 

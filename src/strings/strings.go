@@ -13,6 +13,7 @@ import (
 	"math/bits"
 	"unicode"
 	"unicode/utf8"
+	"unsafe"
 )
 
 const maxInt = int(^uint(0) >> 1)
@@ -433,8 +434,8 @@ func FieldsFunc(s string, f func(rune) bool) []string {
 	// and collecting the result substrings right away) is significantly
 	// more efficient, possibly due to cache effects.
 	start := -1 // valid span start if >= 0
-	for end, rune := range s {
-		if f(rune) {
+	for end, r := range s {
+		if f(r) {
 			if start >= 0 {
 				spans = append(spans, span{start, end})
 				// Set start to a negative value.
@@ -636,7 +637,7 @@ func Repeat(s string, count int) string {
 	}
 
 	// Past a certain chunk size it is counterproductive to use
-	// larger chunks as the source of the write, as when the source
+	// larger chunks as the source of write, as when the source
 	// is too large we are basically just thrashing the CPU D-cache.
 	// So if the result length is larger than an empirically-found
 	// limit (8KB), we stop growing the source string once the limit
@@ -680,26 +681,15 @@ func ToUpper(s string) string {
 		if !hasLower {
 			return s
 		}
-		var (
-			b   Builder
-			pos int
-		)
-		b.Grow(len(s))
+		b := bytealg.MakeNoZero(len(s))[:len(s):len(s)]
 		for i := 0; i < len(s); i++ {
 			c := s[i]
 			if 'a' <= c && c <= 'z' {
 				c -= 'a' - 'A'
-				if pos < i {
-					b.WriteString(s[pos:i])
-				}
-				b.WriteByte(c)
-				pos = i + 1
 			}
+			b[i] = c
 		}
-		if pos < len(s) {
-			b.WriteString(s[pos:])
-		}
-		return b.String()
+		return unsafe.String(unsafe.SliceData(b), len(b))
 	}
 	return Map(unicode.ToUpper, s)
 }
@@ -720,26 +710,15 @@ func ToLower(s string) string {
 		if !hasUpper {
 			return s
 		}
-		var (
-			b   Builder
-			pos int
-		)
-		b.Grow(len(s))
+		b := bytealg.MakeNoZero(len(s))[:len(s):len(s)]
 		for i := 0; i < len(s); i++ {
 			c := s[i]
 			if 'A' <= c && c <= 'Z' {
 				c += 'a' - 'A'
-				if pos < i {
-					b.WriteString(s[pos:i])
-				}
-				b.WriteByte(c)
-				pos = i + 1
 			}
+			b[i] = c
 		}
-		if pos < len(s) {
-			b.WriteString(s[pos:])
-		}
-		return b.String()
+		return unsafe.String(unsafe.SliceData(b), len(b))
 	}
 	return Map(unicode.ToLower, s)
 }

@@ -9,13 +9,15 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptrace"
+	"net/http/internal"
+	"net/http/internal/ascii"
+	"net/http/internal/httpcommon"
 	"net/textproto"
 	"strconv"
-	"net/http/internal/ascii"
+	"strings"
 	"sync"
 
 	"golang.org/x/net/http/httpguts"
-	"net/http/internal/httpcommon"
 	"golang.org/x/net/quic"
 )
 
@@ -32,35 +34,79 @@ type roundTripState struct {
 	// Response.Body, provided to the caller.
 	respBody io.ReadCloser
 
-	trace *httptrace.ClientTrace
+	trace       *httptrace.ClientTrace
+	headerSize  int64
+	trailerSize int64
 
-	errOnce sync.Once
-	err     error
+	mu               sync.Mutex
+	active           bool
+	done             roundTripDone
+	hasUnsent100Body bool
+	err              error
 }
 
 // abort terminates the RoundTrip.
 // It returns the first fatal error encountered by the RoundTrip call.
 func (rt *roundTripState) abort(err error) error {
-	rt.errOnce.Do(func() {
-		rt.err = err
-
-		rt.cc.mu.Lock()
-		rt.cc.active--
-		rt.cc.mu.Unlock()
-		rt.cc.maybeCallStateHook()
-
-		switch e := err.(type) {
-		case *connectionError:
-			rt.cc.abort(e)
-		case *streamError:
-			rt.st.CloseRead(uint64(e.code))
-			rt.st.Reset(uint64(e.code))
-		default:
-			rt.st.CloseRead(uint64(errH3NoError))
-			rt.st.Reset(uint64(errH3NoError))
+	if err, done := func() (error, bool) {
+		rt.mu.Lock()
+		defer rt.mu.Unlock()
+		if rt.err != nil {
+			return rt.err, true
 		}
-	})
-	return rt.err
+		if !rt.active {
+			// Already cleanly finished.
+			rt.err = err
+			return err, true
+		}
+		rt.err = err
+		rt.active = false
+		return err, false
+	}(); done {
+		return err
+	}
+	switch e := err.(type) {
+	case *connectionError:
+		rt.cc.abort(e)
+	case *streamError:
+		rt.st.CloseRead(uint64(e.code))
+		rt.st.Reset(uint64(e.code))
+	default:
+		rt.st.CloseRead(uint64(errH3NoError))
+		rt.st.Reset(uint64(errH3NoError))
+	}
+	rt.cc.decrActiveAndCallStateHook()
+	return err
+}
+
+type roundTripDone uint8
+
+const (
+	roundTripReadDone roundTripDone = 1 << iota
+	roundTripWriteDone
+)
+
+func (rt *roundTripState) finish(done roundTripDone) {
+	const all = roundTripReadDone | roundTripWriteDone
+	finished := false
+	unsent100 := false
+	func() {
+		rt.mu.Lock()
+		defer rt.mu.Unlock()
+		rt.done |= done
+		if rt.active && rt.done&all == all {
+			finished = true
+			rt.active = false
+			unsent100 = rt.hasUnsent100Body
+		}
+	}()
+	if !finished {
+		return
+	}
+	if unsent100 {
+		rt.st.Reset(uint64(errH3NoError))
+	}
+	rt.cc.decrActiveAndCallStateHook()
 }
 
 // closeReqBody closes the Request.Body, at most once.
@@ -97,8 +143,10 @@ func (rt *roundTripState) maybeCallWait100Continue() {
 // RoundTrip sends a request on the connection.
 func (cc *clientConn) RoundTrip(req *http.Request) (_ *http.Response, err error) {
 	cc.mu.Lock()
+	wasReserved := false
 	if cc.reserved > 0 {
 		cc.reserved--
+		wasReserved = true
 	}
 	cc.active++
 	cc.mu.Unlock()
@@ -108,8 +156,11 @@ func (cc *clientConn) RoundTrip(req *http.Request) (_ *http.Response, err error)
 	if err != nil {
 		cc.mu.Lock()
 		cc.active--
+		closed := cc.closed
 		cc.mu.Unlock()
-		cc.maybeCallStateHook()
+		if wasReserved && !closed {
+			cc.maybeCallStateHook()
+		}
 		return nil, err
 	}
 	rt := &roundTripState{
@@ -117,6 +168,7 @@ func (cc *clientConn) RoundTrip(req *http.Request) (_ *http.Response, err error)
 		st:      st,
 		trace:   httptrace.ContextClientTrace(req.Context()),
 		reqBody: req.Body,
+		active:  true,
 	}
 	if rt.reqBody == nil {
 		rt.reqBody = http.NoBody
@@ -175,16 +227,23 @@ func (cc *clientConn) RoundTrip(req *http.Request) (_ *http.Response, err error)
 	st.writeVarint(int64(frameTypeHeaders))
 	st.writeVarint(int64(len(headers)))
 	st.Write(headers)
-	if err := st.Flush(); err != nil {
-		return nil, err
-	}
 
-	var bodyAndTrailerWritten bool
 	is100ContinueReq := httpguts.HeaderValuesContainsToken(req.Header["Expect"], "100-continue")
-	if is100ContinueReq {
+	switch {
+	case rt.reqBody == http.NoBody && len(req.Trailer) == 0:
+		st.CloseWrite()
+		// rt.done is normally synchronized via rt.mu, but nothing else can touch it yet.
+		rt.done |= roundTripWriteDone
+	case is100ContinueReq:
+		if err := st.Flush(); err != nil {
+			return nil, err
+		}
+		rt.hasUnsent100Body = true
 		rt.maybeCallWait100Continue()
-	} else {
-		bodyAndTrailerWritten = true
+	default:
+		if err := st.Flush(); err != nil {
+			return nil, err
+		}
 		wg.Go(func() { cc.writeBodyAndTrailer(rt, req) })
 	}
 
@@ -196,23 +255,32 @@ func (cc *clientConn) RoundTrip(req *http.Request) (_ *http.Response, err error)
 		}
 		switch ftype {
 		case frameTypeHeaders:
-			statusCode, h, err := cc.handleHeaders(st)
+			statusCode, h, err := rt.handleHeaders()
 			if err != nil {
 				return nil, err
 			}
 
 			if isInfoStatus(statusCode) {
+				if statusCode == 101 {
+					return nil, &streamError{errH3MessageError, "unsupported 101 response"}
+				}
 				if err := rt.maybeCallGot1xxResponse(statusCode, h); err != nil {
 					return nil, err
 				}
 				if statusCode == 100 {
 					rt.maybeCallGot100Continue()
-					if is100ContinueReq && !bodyAndTrailerWritten {
-						bodyAndTrailerWritten = true
+					if rt.hasUnsent100Body {
+						rt.hasUnsent100Body = false
 						wg.Go(func() { cc.writeBodyAndTrailer(rt, req) })
 					}
 				}
 				continue
+			}
+
+			if rt.hasUnsent100Body {
+				// We're never going to send the body.
+				rt.closeReqBody()
+				rt.finish(roundTripWriteDone)
 			}
 
 			// We have the response headers.
@@ -226,14 +294,19 @@ func (cc *clientConn) RoundTrip(req *http.Request) (_ *http.Response, err error)
 			extractTrailerFromHeader(h, trailer)
 			delete(h, "Trailer")
 
-			if (contentLength != 0 && req.Method != http.MethodHead) || len(trailer) > 0 {
+			hasBody := true
+			if internal.BodyAllowedForStatus(statusCode) && req.Method != http.MethodHead && (contentLength != 0 || len(trailer) > 0) {
 				rt.respBody = &bodyReader{
-					st:      st,
-					remain:  contentLength,
-					trailer: trailer,
+					st:             st,
+					remain:         contentLength,
+					trailer:        trailer,
+					maxHeaderBytes: cc.tr.maxResponseHeaderBytes(),
 				}
 			} else {
+				hasBody = false
 				rt.respBody = http.NoBody
+				st.CloseRead(uint64(errH3NoError))
+				rt.finish(roundTripReadDone)
 			}
 			resp := &http.Response{
 				Proto:         "HTTP/3.0",
@@ -243,9 +316,12 @@ func (cc *clientConn) RoundTrip(req *http.Request) (_ *http.Response, err error)
 				Status:        strconv.Itoa(statusCode) + " " + http.StatusText(statusCode),
 				ContentLength: contentLength,
 				Trailer:       trailer,
-				Body:          (*transportResponseBody)(rt),
+				Body:          rt.respBody,
 			}
-			if addedGzip && ascii.EqualFold(h.Get("Content-Encoding"), "gzip") {
+			if hasBody {
+				resp.Body = (*transportResponseBody)(rt)
+			}
+			if addedGzip && hasBody && ascii.EqualFold(h.Get("Content-Encoding"), "gzip") {
 				resp.Body = &httpcommon.GzipReader{Body: resp.Body}
 				h.Del("Content-Encoding")
 				h.Del("Content-Length")
@@ -293,6 +369,7 @@ func reqBodyIgnored(err error) bool {
 // writeBodyAndTrailer handles writing the body and trailer for a given
 // request, if any. This function will close the write direction of the stream.
 func (cc *clientConn) writeBodyAndTrailer(rt *roundTripState, req *http.Request) {
+	defer rt.finish(roundTripWriteDone)
 	defer rt.closeReqBody()
 
 	declaredTrailer := req.Trailer.Clone()
@@ -329,7 +406,15 @@ type transportResponseBody roundTripState
 
 // Read is Response.Body.Read.
 func (b *transportResponseBody) Read(p []byte) (n int, err error) {
-	return b.respBody.Read(p)
+	rt := (*roundTripState)(b)
+	n, err = b.respBody.Read(p)
+	if err == io.EOF {
+		rt.finish(roundTripReadDone)
+	} else if err != nil {
+		err = rt.abort(err)
+		rt.closeReqBody()
+	}
+	return n, err
 }
 
 var errRespBodyClosed = errors.New("response body closed")
@@ -339,11 +424,9 @@ var errRespBodyClosed = errors.New("response body closed")
 func (b *transportResponseBody) Close() error {
 	rt := (*roundTripState)(b)
 	// respBody.Close is responsible for closing the receiving half.
-	err := rt.respBody.Close()
-	if err == nil {
-		err = errRespBodyClosed
-	}
-	err = rt.abort(err)
+	err := rt.abort(errRespBodyClosed)
+	// respBody is only *bodyReader or NoBody, neither of which return errors on close.
+	rt.respBody.Close()
 	// Close the request body, which should wake up writeBodyAndTrailer if it's
 	// currently blocked reading the body.
 	rt.closeReqBody()
@@ -389,12 +472,27 @@ func parseResponseContentLength(method string, statusCode int, h http.Header) (i
 	return int64(contentLen), nil
 }
 
-func (cc *clientConn) handleHeaders(st *stream) (statusCode int, h http.Header, err error) {
+func (rt *roundTripState) handleHeaders() (statusCode int, h http.Header, err error) {
+	maxHeaderBytes := rt.cc.tr.maxResponseHeaderBytes()
 	haveStatus := false
 	cookie := ""
+	// The QPACK decoder will happily allocate an unbounded buffer, so check
+	// the stream read limit prior to decoding.
+	if rt.st.lim > maxHeaderBytes-rt.headerSize {
+		return 0, nil, errHeadersTooLarge
+	}
 	// Issue #71374: Consider tracking the never-indexed status of headers
 	// with the N bit set in their QPACK encoding.
-	err = cc.dec.decode(st, func(_ indexType, name, value string) error {
+	err = rt.cc.dec.decode(rt.st, func(_ indexType, name, value string) error {
+		if name == "trailer" {
+			fieldCount := int64(strings.Count(value, ",") + 1)
+			rt.trailerSize += int64(len(value)) - fieldCount + 1 + fieldCount*headerFieldOverhead
+		} else {
+			rt.headerSize += int64(len(name)) + int64(len(value)) + headerFieldOverhead
+		}
+		if rt.headerSize > maxHeaderBytes || rt.trailerSize > maxHeaderBytes {
+			return errHeadersTooLarge
+		}
 		if !httpguts.ValidHeaderFieldValue(value) {
 			return &streamError{errH3MessageError, "invalid field value"}
 		}
@@ -445,10 +543,13 @@ func (cc *clientConn) handleHeaders(st *stream) (statusCode int, h http.Header, 
 		}
 		return nil
 	})
+	if err != nil {
+		return 0, nil, err
+	}
 	if !haveStatus {
 		// "[The :status] pseudo-header field MUST be included in all responses [...]"
 		// https://www.rfc-editor.org/rfc/rfc9114.html#section-4.3.2-1
-		err = errH3MessageError
+		return 0, nil, errH3MessageError
 	}
 	if cookie != "" {
 		if h == nil {
@@ -456,10 +557,15 @@ func (cc *clientConn) handleHeaders(st *stream) (statusCode int, h http.Header, 
 		}
 		h["Cookie"] = []string{cookie}
 	}
-	if err := st.endFrame(); err != nil {
+	if err := rt.st.endFrame(); err != nil {
 		return 0, nil, err
 	}
-	return statusCode, h, err
+	// go.dev/issue/65035.
+	if isInfoStatus(statusCode) && rt.trace != nil && rt.trace.Got1xxResponse != nil {
+		rt.headerSize = 0
+		rt.trailerSize = 0
+	}
+	return statusCode, h, nil
 }
 
 func (cc *clientConn) handlePushPromise(st *stream) error {

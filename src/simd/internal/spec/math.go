@@ -2,11 +2,50 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//simdgen:category Math
+//specgen:category Math
 
 package spec
 
-// Add adds corresponding elements of two vectors.
+import "math"
+
+// AbsFloat returns the elementwise absolute value of x.
+//
+//specgen:name Abs
+func AbsFloat[E Floats, W Width](x Vec[E, W]) (z Vec[E, W]) {
+	return map1[E, W, E, W](x, func(x E) E {
+		// Use math.Abs to handle float corner cases.
+		switch x := any(x).(type) {
+		case float64:
+			return E(math.Abs(x))
+		case float32:
+			return E(math.Abs(float64(x)))
+		}
+		panic("unexpected type")
+	})
+}
+
+// AbsInt returns the elementwise absolute value of x.
+//
+//specgen:name Abs
+//specgen:require z=Uint{xN}x{xL}
+func AbsInt[E Ints, W Width, zE Uints](x Vec[E, W]) (z Vec[zE, W]) {
+	// We return an unsigned result because it can represent the whole range of
+	// the absolute value (the signed type can't represent abs(minVal[E])).
+	// Conveniently, this aligns with hardware operations as long as they either
+	// produce an unsigned result or "wrap". In the latter case, wrapping in the
+	// signed domain followed by reinterpreting the result as unsigned is the
+	// same as just doing an unsigned absolute value.
+	return map1[E, W, zE, W](x, func(x E) zE {
+		if x < 0 {
+			// If x is MinIntN, -x == x (this can be viewed as wrapping in the
+			// signed domain), and uintN(-x) == uintN(x) == abs(x).
+			return zE(-x)
+		}
+		return zE(x)
+	})
+}
+
+// Add adds x and y elementwise.
 //
 //	z[i] = x[i] + y[i]
 //
@@ -15,28 +54,89 @@ func Add[E Nums, W Width](x, y Vec[E, W]) (z Vec[E, W]) {
 	return map2[E, W, E, W](x, y, func(x, y E) E { return x + y })
 }
 
+// Sub subtracts y from x elementwise.
+//
+//	z[i] = x[i] - y[i]
+func Sub[E Nums, W Width](x, y Vec[E, W]) (z Vec[E, W]) {
+	return map2[E, W, E, W](x, y, func(x, y E) E { return x - y })
+}
+
+// AddSaturated adds x and y elementwise with saturation.
+//
+//	z[i] = sat(x[i] + y[i])
+//
+//specgen:commutative
+func AddSaturated[E Ints | Uints, W Width](x, y Vec[E, W]) (z Vec[E, W]) {
+	return map2[E, W, E, W](x, y, func(x, y E) E { return addSaturated(x, y) })
+}
+
+// SubSaturated subtracts y from x elementwise with saturation.
+//
+//	z[i] = sat(x[i] - y[i])
+func SubSaturated[E Ints | Uints, W Width](x, y Vec[E, W]) (z Vec[E, W]) {
+	return map2[E, W, E, W](x, y, func(x, y E) E { return subSaturated(x, y) })
+}
+
+// Average returns the elementwise average of x and y, rounded toward +∞.
+//
+//	z[i] = (x[i] + y[i] + 1) / 2
+func Average[E Ints | Uints, W Width](x, y Vec[E, W]) (z Vec[E, W]) {
+	return map2[E, W, E, W](x, y, func(x, y E) E {
+		// This formula works on both signed and unsigned, and never overflows.
+		return (x >> 1) + (y >> 1) + ((x | y) & 1)
+	})
+}
+
+// DivInts divides x by y elementwise.
+//
+//	z[i] = x[i] / y[i]
+//
+// The result is rounded toward zero (truncated division), just like Go's /
+// operator.{{if eq .xB "int"}} Also like Go's / operator, dividing Min{{title .xE}}
+// by -1 results in Min{{title .xE}}, since the true result is unrepresentable.{{end}}
+// Unlike Go's / operator, division by zero does not panic and instead produces
+// a zero result for that element.
+//
+//specgen:name Div
+func DivInts[E Ints | Uints, W Width](x, y Vec[E, W]) (z Vec[E, W]) {
+	return map2[E, W, E, W](x, y, func(x, y E) E {
+		if y == 0 {
+			return 0
+		}
+		return x / y
+	})
+}
+
+// DivFloats divides x by y elementwise.
+//
+//	z[i] = x[i] / y[i]
+//
+// Division by zero does not panic, and the result follows IEEE 754. That is,
+// dividing a non-zero value by zero results in +/- infinity, and dividing zero
+// by zero results in NaN.
+//
+//specgen:name Div
+func DivFloats[E Floats, W Width](x, y Vec[E, W]) (z Vec[E, W]) {
+	return map2[E, W, E, W](x, y, func(x, y E) E {
+		return x / y
+	})
+}
+
 // DotProductPairs multiplies corresponding elements of x and y, and sums
-// adjacent pairs, yielding a vector of half as many elements with twice the
-// input element size.
+// adjacent pairs, returning a vector of half as many elements, each with twice
+// the input element size.
 //
 //	w[i] = x[i] * y[i]        // Double width
-//	z[i] = w[2*i] + w[2*i+1]
+//	z[j] = w[2*j] + w[2*j+1]
+//
+// While the products can never overflow, the sum wraps on overflow.
+// {{if eq .xB "int"}}
+// This happens in exactly one situation: if all four input elements are Min{{title .xE}}.
+// {{end}}
 //
 //specgen:commutative
 //specgen:require z={xB}{xN*2}x{xL/2}
-func DotProductPairs[E Nums, W Width, zE Nums](x, y Vec[E, W]) (z Vec[zE, W]) {
-	// TODO: How do we handle/specify overflow? x86 only supports this on signed
-	// types, and the only case that can overflow is if all four elements are
-	// MinInt16 (in which case the true result is MaxInt32+1, which wraps around
-	// to MinInt32). Unsigned types can overflow much more readily.
-	//
-	// Maybe we just leave overflow unspecified (or "architecture dependent").
-	// In which case, we probably need a way to communicate that in the spec
-	// (designated panic?).
-	//
-	// We might also need a way to constraint this to same-signed E and zE,
-	// which the constraint language doesn't currently have a way to say, but we
-	// could add as a built-in projection function in the syntax.
+func DotProductPairs[E Ints | Uints, W Width, zE Nums](x, y Vec[E, W]) (z Vec[zE, W]) {
 	z = makeVec[zE, W]()
 	for i := range z {
 		z[i] = zE(x[2*i])*zE(y[2*i]) + zE(x[2*i+1])*zE(y[2*i+1])
@@ -45,11 +145,11 @@ func DotProductPairs[E Nums, W Width, zE Nums](x, y Vec[E, W]) (z Vec[zE, W]) {
 }
 
 // DotProductPairsSaturated multiplies corresponding elements of x and y, and
-// sums adjacent pairs, all with saturation. It yields a vector of half as many
-// elements with twice the input element size.
+// sums adjacent pairs, all with saturation. It returns a vector of half as many
+// elements, each with twice the input element size.
 //
-//	w[i] = x[i] * y[i]        // Double width, saturated
-//	z[i] = w[2*i] + w[2*i+1]  // Saturated
+//	w[i] = sat(x[i] * y[i])        // Double width
+//	z[j] = sat(w[2*j] + w[2*j+1])
 //
 //specgen:commutative
 //specgen:require y=Int{xN}x{xL} z=Int{xN*2}x{xL/2}
@@ -61,4 +161,323 @@ func DotProductPairsSaturated[xE Uints, xW Width, yE Ints, zE Ints](x Vec[xE, xW
 		z[i] = saturateS[zE](addSaturatedSSS64(a, b))
 	}
 	return z
+}
+
+// MaxInts returns the elementwise maximum of x and y.
+//
+//	z[i] = max(x[i], y[i])
+//
+//specgen:name Max
+//specgen:commutative
+func MaxInts[E Ints | Uints, W Width](x, y Vec[E, W]) (z Vec[E, W]) {
+	return map2[E, W, E, W](x, y, func(x, y E) E {
+		return max(x, y)
+	})
+}
+
+// MaxFloats returns the elementwise maximum of x and y.
+//
+//	z[i] = max(x[i], y[i])
+//
+// The handling of NaN and signed zeroes is architecture-dependent. ARM64 and
+// WASM follow the IEEE 754-2019 maximum algorithm, which also agrees with Go's
+// max built-in. AMD64 handles these differently. Notably, AMD64 is
+// non-commutative.
+//
+//	x     y     IEEE  AMD64
+//	----- ----- ----- -----
+//	NaN   y     NaN   y
+//	x     NaN   NaN   NaN
+//	-Inf  y     y     y
+//	x     -Inf  x     x
+//	+Inf  y     +Inf  +Inf
+//	x     +Inf  +Inf  +Inf
+//	+0    -0    +0    -0
+//	-0    +0    +0    +0
+//
+//specgen:name Max
+func MaxFloats[E Floats, W Width](x, y Vec[E, W]) (z Vec[Variation[E], W]) {
+	// Note that this is NOT marked as commutative because its handling of NaN
+	// and signed zeroes on AMD64 is non-commutative.
+	//
+	// AMD64 AVX (VMAXPS/VMINPS): Computes `if x > y { x } else { y }`. If
+	// either input is NaN or if inputs are +0.0 and −0.0, the instruction
+	// selects the second operand y (making it non-commutative).
+	//
+	// ARM64 NEON/SVE (VFMAX/VFMIN, ZFMAX/ZFMIN) and WASM (F32x4Max/F32x4Min):
+	// Follow IEEE 754-2019 maximum/minimum (like Go's built-in max/min,
+	// propagating NaN and ordering −0.0 < +0.0).
+	return map2[E, W, Variation[E], W](x, y, func(x, y E) Variation[E] {
+		amd64 := y
+		if x > y {
+			amd64 = x
+		}
+		ieee := max(x, y)
+		if equalExact(amd64, ieee) {
+			return exact(ieee)
+		}
+		return perPlatform(map[Platform]E{
+			PlatformAMD64: amd64,
+			PlatformARM64: ieee,
+			PlatformWASM:  ieee,
+		})
+	})
+}
+
+// MinInts returns the elementwise minimum of x and y.
+//
+//	z[i] = min(x[i], y[i])
+//
+//specgen:name Min
+//specgen:commutative
+func MinInts[E Ints | Uints, W Width](x, y Vec[E, W]) (z Vec[E, W]) {
+	return map2[E, W, E, W](x, y, func(x, y E) E {
+		return min(x, y)
+	})
+}
+
+// MinFloats returns the elementwise minimum of x and y.
+//
+//	z[i] = min(x[i], y[i])
+//
+// The handling of NaN and signed zeroes is architecture-dependent. ARM64 and
+// WASM follow the IEEE 754-2019 minimum algorithm, which also agrees with Go's
+// min built-in. AMD64 handles these differently. Notably, AMD64 is
+// non-commutative.
+//
+//	x     y     IEEE  AMD64
+//	----- ----- ----- -----
+//	NaN   y     NaN   y
+//	x     NaN   NaN   NaN
+//	-Inf  y     -Inf  -Inf
+//	x     -Inf  -Inf  -Inf
+//	+Inf  y     y     y
+//	x     +Inf  x     x
+//	+0    -0    -0    -0
+//	-0    +0    -0    +0
+//
+//specgen:name Min
+func MinFloats[E Floats, W Width](x, y Vec[E, W]) (z Vec[Variation[E], W]) {
+	// See MaxFloats for platform details.
+	return map2[E, W, Variation[E], W](x, y, func(x, y E) Variation[E] {
+		amd64 := y
+		if x < y {
+			amd64 = x
+		}
+		ieee := min(x, y)
+		if equalExact(amd64, ieee) {
+			return exact(ieee)
+		}
+		return perPlatform(map[Platform]E{
+			PlatformAMD64: amd64,
+			PlatformARM64: ieee,
+			PlatformWASM:  ieee,
+		})
+	})
+}
+
+// Mul returns the elementwise product of x and y.
+//
+//	z[i] = x[i] * y[i]
+//
+//specgen:commutative
+func Mul[E Elt, W Width](x, y Vec[E, W]) (z Vec[E, W]) {
+	return map2[E, W, E, W](x, y, func(x, y E) E {
+		return x * y
+	})
+}
+
+// MulWidenLo multiplies corresponding elements in the lower half of x and y,
+// returning a vector of half as many elements, each with twice the input
+// element size.
+//
+//	z[i] = {{.zE}}(x[i]) * {{.zE}}(y[i])
+//
+// The doubled element width is sufficient to hold every product without
+// overflow.
+//
+//specgen:commutative
+//specgen:require z={xB}{xN*2}x{xL/2}
+func MulWidenLo[E Ints | Uints, W Width, zE Ints | Uints](x, y Vec[E, W]) (z Vec[zE, W]) {
+	z = makeVec[zE, W]()
+	for i := range z {
+		z[i] = zE(x[i]) * zE(y[i])
+	}
+	return z
+}
+
+// TODO: Should this just be a peephole with some fixed permute? E.g.,
+// x.EvenToLo().MulWidenLo(y.EvenToLo())?
+
+// MulWidenEven multiplies corresponding even-indexed elements of x and y,
+// returning a vector of half as many elements, each with twice the input
+// element size.
+//
+//	z[i] = {{.zE}}(x[2*i]) * {{.zE}}(y[2*i])
+//
+// The doubled element width is sufficient to hold every product without
+// overflow.
+//
+//specgen:commutative
+//specgen:require z={xB}{xN*2}x{xL/2}
+//specgen:experiment
+func MulWidenEven[E Ints | Uints, W Width, zE Ints | Uints](x, y Vec[E, W]) (z Vec[zE, W]) {
+	z = makeVec[zE, W]()
+	for i := range z {
+		z[i] = zE(x[2*i]) * zE(y[2*i])
+	}
+	return z
+}
+
+// MulWidenHi multiplies corresponding elements in the upper half of x and y,
+// returning a vector of half as many elements, each with twice the input
+// element size.
+//
+//	z[i] = {{.zE}}(x[{{lanes .z "z"}}+i]) * {{.zE}}(y[{{lanes .z "z"}}+i])
+//
+// The doubled element width is sufficient to hold every product without
+// overflow.
+//
+//specgen:experiment
+//specgen:commutative
+//specgen:require z={xB}{xN*2}x{xL/2}
+func MulWidenHi[E Ints | Uints, W Width, zE Ints | Uints](x, y Vec[E, W]) (z Vec[zE, W]) {
+	z = makeVec[zE, W]()
+	half := z.len()
+	for i := range z {
+		z[i] = zE(x[half+i]) * zE(y[half+i])
+	}
+	return z
+}
+
+// MulHigh multiplies corresponding elements of x and y and returns the high
+// half of each double-width product.
+//
+//	z[i] = (x[i] * y[i]) >> {{.xN}}
+//
+// The product is computed exactly, so no bits are lost before the shift.
+//
+//specgen:commutative
+//specgen:experiment
+func MulHigh[E Ints | Uints, W Width](x, y Vec[E, W]) (z Vec[E, W]) {
+	return map2[E, W, E, W](x, y, mulHigh[E])
+}
+
+// MulAddInts returns x * y + z elementwise.
+//
+//	w[i] = x[i] * y[i] + z[i]
+//
+//specgen:name MulAdd
+func MulAddInts[E Ints | Uints, W Width](x, y, z Vec[E, W]) (w Vec[E, W]) {
+	w = makeVec[E, W]()
+	for i := range x {
+		w[i] = x[i]*y[i] + z[i]
+	}
+	return w
+}
+
+// MulAddFloats returns x * y + z elementwise.
+//
+//	w[i] = x[i] * y[i] + z[i]
+//
+// This performs a fused multiply-add, computing x[i]*y[i] + z[i] with a single
+// rounding rather than two and no intermediate overflow, except on wasm, where
+// it rounds x[i]*y[i] before adding z[i].
+//
+//specgen:name MulAdd
+func MulAddFloats[E Floats, W Width](x, y, z Vec[E, W]) (w Vec[Variation[E], W]) {
+	// Every platform that can reasonably implement SIMD has fused vector
+	// multiply-add instructions, except WASM: SIMD128 has none, so WASM
+	// implements MulAdd as a multiply followed by an add. (Relaxed SIMD's
+	// relaxed_madd may or may not fuse, depending on the host, and not all
+	// runtimes support it.)
+	//
+	// Go has the option of compiling x*y + z using FMA, but only does so if FMA
+	// support is guaranteed by the hardware version (e.g., GOAMD64>=3). To
+	// guarantee the right result, we have to do it ourself.
+	w = makeVec[Variation[E], W]()
+	for i := range x {
+		fused := fma(x[i], y[i], z[i])
+		// The explicit conversion prevents the Go compiler from fusing the
+		// multiply and add.
+		unfused := E(x[i]*y[i]) + z[i]
+		if equalExact(fused, unfused) {
+			w[i] = exact(fused)
+			continue
+		}
+		w[i] = perPlatformDefault(fused, map[Platform]E{
+			PlatformWASM: unfused,
+		})
+	}
+	return w
+}
+
+// MulAddEvenSubOdd returns x * y + z for the even-indexed elements and
+// x * y - z for the odd-indexed elements.
+//
+//	w[2*i] = x[2*i] * y[2*i] + z[2*i]         // Add even
+//	w[2*i+1] = x[2*i+1] * y[2*i+1] - z[2*i+1] // Subtract odd
+//
+// This performs a fused multiply-add, computing each result with a single
+// rounding rather than two and no intermediate overflow.
+//
+//specgen:experiment
+func MulAddEvenSubOdd[E Floats, W Width](x, y, z Vec[E, W]) (w Vec[E, W]) {
+	w = makeVec[E, W]()
+	for i := range w {
+		if i%2 == 0 {
+			w[i] = fma(x[i], y[i], z[i])
+		} else {
+			w[i] = fma(x[i], y[i], -z[i])
+		}
+	}
+	return w
+}
+
+// MulAddOddSubEven returns x * y + z for the odd-indexed elements and
+// x * y - z for the even-indexed elements.
+//
+//	w[2*i+1] = x[2*i+1] * y[2*i+1] + z[2*i+1] // Add odd
+//	w[2*i] = x[2*i] * y[2*i] - z[2*i]         // Subtract even
+//
+// This performs a fused multiply-add, computing each result with a single
+// rounding rather than two and no intermediate overflow.
+//
+//specgen:experiment
+func MulAddOddSubEven[E Floats, W Width](x, y, z Vec[E, W]) (w Vec[E, W]) {
+	w = makeVec[E, W]()
+	for i := range w {
+		if i%2 == 0 {
+			w[i] = fma(x[i], y[i], -z[i])
+		} else {
+			w[i] = fma(x[i], y[i], z[i])
+		}
+	}
+	return w
+}
+
+// Neg returns the elementwise negation of x.
+//
+//	z[i] = -x[i]
+func Neg[E Ints | Floats, W Width](x Vec[E, W]) (z Vec[E, W]) {
+	return map1[E, W, E, W](x, func(x E) E {
+		return -x
+	})
+}
+
+// Sqrt returns the elementwise square root of x.
+//
+//	z[i] = sqrt(x[i])
+//
+// The result is correctly rounded. Sqrt(+Inf) = +Inf, Sqrt(±0) = ±0, and
+// Sqrt(x) is NaN if x < 0 or x is NaN. The sign and payload of a NaN result
+// are unspecified.
+func Sqrt[E Floats, W Width](x Vec[E, W]) (z Vec[E, W]) {
+	// For float32, computing the square root in float64 and rounding to
+	// float32 is still correctly rounded: double rounding is harmless for
+	// square root when the wider format has at least 2p+2 bits of precision,
+	// and 53 >= 2*24+2.
+	return map1[E, W, E, W](x, func(x E) E {
+		return E(math.Sqrt(float64(x)))
+	})
 }

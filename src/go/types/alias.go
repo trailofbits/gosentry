@@ -31,14 +31,17 @@ type Alias struct {
 	targs   *TypeList      // type arguments, or nil
 	fromRHS Type           // RHS of type alias declaration; may be an alias
 	actual  Type           // actual (aliased) type; never an alias
+	check   *Checker       // for cycle detection and cleanup; nil after cleanup
 }
 
 // NewAlias creates a new Alias type with the given type name and rhs.
 // If rhs is nil, the alias is incomplete.
 func NewAlias(obj *TypeName, rhs Type) *Alias {
 	alias := (*Checker)(nil).newAlias(obj, rhs)
-	// Ensure that alias.actual is set (#65455).
-	alias.cleanup()
+	// Ensure that alias.actual is set (go.dev/issue/65455).
+	if rhs != nil {
+		alias.cleanup()
+	}
 	return alias
 }
 
@@ -53,7 +56,18 @@ func (a *Alias) String() string { return TypeString(a, nil) }
 // TypeParam, or Alias types.
 //
 // [underlying type]: https://go.dev/ref/spec#Underlying_types.
-func (a *Alias) Underlying() Type { return unalias(a).Underlying() }
+func (a *Alias) Underlying() Type {
+	u := unalias(a)
+	if u == nil {
+		// Before CL 825744, Underlying() returned unalias(a).Underlying(). If the alias
+		// was incomplete (its RHS had not yet been set or resolved), unalias(a) returned
+		// nil, causing an immediate unhandled nil-pointer dereference panic.
+		//
+		// Callers must ensure an alias has been completed before querying its underlying type.
+		panic("Underlying() called on incomplete Alias")
+	}
+	return u.Underlying()
+}
 
 // Origin returns the generic Alias type of which a is an instance.
 // If a is not an instance of a generic alias, Origin returns a.
@@ -76,7 +90,17 @@ func (a *Alias) TypeArgs() *TypeList { return a.targs }
 
 // Rhs returns the type R on the right-hand side of an alias
 // declaration "type A = R", which may be another alias.
-func (a *Alias) Rhs() Type { return a.fromRHS }
+func (a *Alias) Rhs() Type {
+	if a.fromRHS == nil {
+		// Before CL 825744, Rhs() returned a.fromRHS directly without checking for nil.
+		// If the alias was incomplete, callers expecting a non-nil Type could panic.
+		//
+		// An incomplete alias has no defined RHS. Rhs panics if called on an incomplete
+		// alias. Users must complete the alias first.
+		panic("Rhs() called on incomplete Alias")
+	}
+	return a.fromRHS
+}
 
 // Unalias returns t if it is not an alias type;
 // otherwise it follows t's alias chain until it
@@ -98,9 +122,12 @@ func unalias(a0 *Alias) Type {
 	for a := a0; a != nil; a, _ = t.(*Alias) {
 		t = a.fromRHS
 	}
-	// It's fine to memoize nil types since it's the zero value for actual.
-	// It accomplishes nothing.
-	a0.actual = t
+	// Memoize during type checking (single-threaded) avoids future
+	// quadratic chain traversal. Once a0.check becomes nil, unalias
+	// is a pure getter to prevent concurrent write races (go.dev/issue/81138).
+	if a0.check != nil && t != nil {
+		a0.actual = t
+	}
 	return t
 }
 
@@ -118,6 +145,7 @@ func (check *Checker) newAlias(obj *TypeName, rhs Type) *Alias {
 	a.obj = obj
 	a.orig = a
 	a.fromRHS = rhs
+	a.check = check
 	if obj.typ == nil {
 		obj.typ = a
 	}
@@ -140,12 +168,38 @@ func (check *Checker) newAliasInstance(pos token.Pos, orig *Alias, targs []Type,
 	res := check.newAlias(obj, rhs)
 	res.orig = orig
 	res.tparams = orig.tparams
-	res.targs = newTypeList(targs)
+	res.targs = NewTypeList(targs)
+	// Ensure that res.actual is set before returning an instance constructed
+	// outside of package type checking (e.g. via types.Instantiate). When check != nil,
+	// res was added to check.cleanups by newAlias and will be cleaned up at the end
+	// of checking. But when check == nil, no cleanup pass will run, so we must clean
+	// up eagerly to prevent concurrent calls to Unalias from racing on res.actual (go.dev/issue/81138).
+	if check == nil {
+		res.cleanup()
+	}
 	return res
 }
 
 func (a *Alias) cleanup() {
+	// Before CL 825744, an incomplete alias produced during type checking (e.g.
+	// due to a cycle or syntax error) could be left with fromRHS == nil and
+	// actual == nil. Callers traversing the published types would then panic
+	// when inspecting the alias.
+	//
+	// Here, we normalize incomplete aliases to Typ[Invalid] so the published
+	// package graph never contains buried nils.
+	//
+	// Invariant: The type checker must never return Typ[Invalid] unless an error was
+	// reported. If an alias created during package checking has a nil RHS at
+	// cleanup time, ensure an error is reported.
+	if a.fromRHS == nil {
+		if a.check != nil && a.check.firstErr == nil {
+			a.check.internalErrorf(a.obj, "alias %v has nil RHS", a.obj.name)
+		}
+		a.fromRHS = Typ[Invalid]
+	}
 	// Ensure a.actual is set before types are published,
 	// so unalias is a pure "getter", not a "setter".
-	unalias(a)
+	a.actual = unalias(a)
+	a.check = nil
 }

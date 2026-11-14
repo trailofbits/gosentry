@@ -5,12 +5,94 @@
 package ssacompile
 
 import (
+	"fmt"
 	"math"
 	"math/bits"
 	"testing"
 
 	"cmd/compile/internal/ssa"
+	"cmd/compile/internal/ssa/block"
 )
+
+func TestGetBranchJumpTable(t *testing.T) {
+	c := testConfig(t)
+	f := c.Fun("entry",
+		Bloc("entry", ctrl{kind: block.BlockJumpTable, succs: []string{"first", "shared", "shared", "last", "loop"}}),
+		Bloc("first", Goto("join")),
+		Bloc("shared", Goto("exit")),
+		Bloc("last", Goto("join")),
+		Bloc("join", Goto("exit")),
+		Bloc("loop", ctrl{kind: block.BlockIf, succs: []string{"loop", "exit"}}),
+		Bloc("exit", Exit("")),
+	)
+	sdom := f.f.Sdom()
+	for _, tt := range []struct {
+		name string
+		want branch
+	}{
+		{"first", jumpTable0},
+		{"shared", unknown},
+		{"last", jumpTable0 + 3},
+		{"loop", unknown},
+		{"join", unknown},
+		{"exit", unknown},
+	} {
+		if got := getBranch(sdom, f.blocks["entry"], f.blocks[tt.name]); got != tt.want {
+			t.Errorf("getBranch(entry, %s) = %v; want %v", tt.name, got, tt.want)
+		}
+	}
+}
+
+func BenchmarkGetBranchJumpTable(b *testing.B) {
+	for _, n := range []int{8, 1000, 2000, 4000} {
+		b.Run(fmt.Sprint(n), func(b *testing.B) {
+			c := testConfig(b)
+			f := c.config.NewFunc(c.Frontend(), new(ssa.Cache))
+			p := f.NewBlock(block.BlockJumpTable)
+			f.Entry = p
+			exit := f.NewBlock(block.BlockExit)
+			for range n {
+				child := f.NewBlock(block.BlockPlain)
+				p.AddEdgeTo(child)
+				child.AddEdgeTo(exit)
+			}
+			sdom := f.Sdom()
+			for b.Loop() {
+				for _, e := range p.Succs {
+					getBranch(sdom, p, e.B)
+				}
+			}
+		})
+	}
+}
+
+// Each destination is reached by two table entries, so no single branch
+// restriction applies. Looking up all destinations should take linear time.
+func BenchmarkGetBranchSharedJumpTable(b *testing.B) {
+	for _, n := range []int{8, 1000, 4000} {
+		b.Run(fmt.Sprint(n), func(b *testing.B) {
+			c := testConfig(b)
+			f := c.config.NewFunc(c.Frontend(), new(ssa.Cache))
+			p := f.NewBlock(block.BlockJumpTable)
+			f.Entry = p
+			exit := f.NewBlock(block.BlockExit)
+			for range n {
+				child := f.NewBlock(block.BlockPlain)
+				p.AddEdgeTo(child)
+				p.AddEdgeTo(child)
+				child.AddEdgeTo(exit)
+			}
+			sdom := f.Sdom()
+			for b.Loop() {
+				for i := 0; i < len(p.Succs); i += 2 {
+					if got := getBranch(sdom, p, p.Succs[i].B); got != unknown {
+						b.Fatalf("getBranch = %v, want unknown", got)
+					}
+				}
+			}
+		})
+	}
+}
 
 func testLimitUnaryOpSigned8(t *testing.T, opName string, initLimit ssa.Limit, op func(l ssa.Limit, bitsize uint) ssa.Limit, opImpl func(int8) int8) {
 	for min := math.MinInt8; min <= math.MaxInt8; min++ {

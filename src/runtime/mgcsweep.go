@@ -231,11 +231,24 @@ func (a *activeSweep) reset() {
 func finishsweep_m() {
 	assertWorldStopped()
 
-	// Sweeping must be complete before marking commences, so
-	// sweep any unswept spans. If this is a concurrent GC, there
-	// shouldn't be any spans left to sweep, so this should finish
-	// instantly. If GC was forced before the concurrent sweep
-	// finished, there may be spans to sweep.
+	// Sweeping must be complete before marking commences.
+	//
+	// gcStart picks up any unswept spans prior to commencing, which
+	// ensures there are no unswept spans in the presence of a single GC.
+	// However, in the case of gcStart racing with another GC, there are
+	// edge cases that allow finishsweep_m to observe unswept spans. For
+	// example,
+	//
+	// - gcStart sweeps remaining spans prior to taking work.startSema.
+	//   While blocked waiting, another goroutine could take the lock and
+	//   complete an entire GC cycle. When the original goroutine finally
+	//   unblocks there are now unswept spans from the subsequent GC cycle.
+	//
+	// - Mark termination makes most sweep work prior to startTheWorld, but
+	//   it calls prepareForSweep after restarting the world, which adds more
+	//   work. A concurrent gcStart call could finish all of the initial work
+	//   before prepareForSweep adds more, and thus gcStart doesn't see it
+	//   until after taking work.startSema.
 	for sweepone() != ^uintptr(0) {
 	}
 
@@ -866,7 +879,10 @@ func (sl *sweepLocked) sweep(preserve bool) bool {
 func (s *mspan) reportZombies() {
 	printlock()
 	print("runtime: marked free object in span ", s, ", elemsize=", s.elemsize, " freeindex=", s.freeindex, " (bad use of unsafe.Pointer or having race conditions? try -d=checkptr or -race)\n")
-	mbits := s.markBitsForBase()
+	// Inline mark bits have already been moved to gcmarkBits by sweep, so
+	// read gcmarkBits directly rather than through markBitsForBase, which
+	// would read the now-cleared inline mark bits.
+	mbits := markBits{&s.gcmarkBits.x, uint8(1), 0}
 	abits := s.allocBitsForIndex(0)
 	for i := uintptr(0); i < uintptr(s.nelems); i++ {
 		addr := s.base() + i*s.elemsize

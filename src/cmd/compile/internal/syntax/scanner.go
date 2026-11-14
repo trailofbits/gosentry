@@ -36,7 +36,7 @@ type scanner struct {
 	line, col uint
 	blank     bool // line is blank up to col
 	tok       token
-	lit       string   // valid if tok is _Name, _Literal, or _Semi ("semicolon", "newline", or "EOF"); may be malformed if bad is true
+	lit       string   // valid if tok is _Name, _Literal, _Semi ("semicolon", "newline", or "EOF"), or a keyword; may be malformed if bad is true
 	bad       bool     // valid if tok is _Literal, true if a syntax error occurred, lit may be malformed
 	kind      LitKind  // valid if tok is _Literal
 	op        Operator // valid if tok is _Operator, _Star, _AssignOp, or _IncOp
@@ -63,7 +63,7 @@ func (s *scanner) errorAtf(offset int, format string, args ...any) {
 func (s *scanner) setLit(kind LitKind, ok bool) {
 	s.nlsemi = true
 	s.tok = _Literal
-	s.lit = string(s.segment())
+	s.lit = s.segment()
 	s.bad = !ok
 	s.kind = kind
 }
@@ -101,13 +101,19 @@ redo:
 	s.line, s.col = s.pos()
 	s.blank = s.line > startLine || startCol == colbase
 	s.start()
-	if isLetter(s.ch) || s.ch >= utf8.RuneSelf && s.atIdentChar(true) {
-		s.nextch()
+	if isLetter(s.ch) {
+		s.nextch() // no need to test the same character twice
 		s.ident()
 		return
 	}
+	if isDecimal(s.ch) {
+		s.number(false)
+		return
+	}
 
-	switch s.ch {
+	ch := s.ch
+	s.nextch() // no-op if at EOF (s.ch == -1)
+	switch ch {
 	case -1:
 		if nlsemi {
 			s.lit = "EOF"
@@ -117,12 +123,8 @@ redo:
 		s.tok = _EOF
 
 	case '\n':
-		s.nextch()
 		s.lit = "newline"
 		s.tok = _Semi
-
-	case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
-		s.number(false)
 
 	case '"':
 		s.stdString()
@@ -134,43 +136,34 @@ redo:
 		s.rune()
 
 	case '(':
-		s.nextch()
 		s.tok = _Lparen
 
 	case '[':
-		s.nextch()
 		s.tok = _Lbrack
 
 	case '{':
-		s.nextch()
 		s.tok = _Lbrace
 
 	case ',':
-		s.nextch()
 		s.tok = _Comma
 
 	case ';':
-		s.nextch()
 		s.lit = "semicolon"
 		s.tok = _Semi
 
 	case ')':
-		s.nextch()
 		s.nlsemi = true
 		s.tok = _Rparen
 
 	case ']':
-		s.nextch()
 		s.nlsemi = true
 		s.tok = _Rbrack
 
 	case '}':
-		s.nextch()
 		s.nlsemi = true
 		s.tok = _Rbrace
 
 	case ':':
-		s.nextch()
 		if s.ch == '=' {
 			s.nextch()
 			s.tok = _Define
@@ -179,7 +172,6 @@ redo:
 		s.tok = _Colon
 
 	case '.':
-		s.nextch()
 		if isDecimal(s.ch) {
 			s.number(true)
 			break
@@ -197,7 +189,6 @@ redo:
 		s.tok = _Dot
 
 	case '+':
-		s.nextch()
 		s.op, s.prec = Add, precAdd
 		if s.ch != '+' {
 			goto assignop
@@ -207,7 +198,6 @@ redo:
 		s.tok = _IncOp
 
 	case '-':
-		s.nextch()
 		s.op, s.prec = Sub, precAdd
 		if s.ch != '-' {
 			goto assignop
@@ -217,7 +207,6 @@ redo:
 		s.tok = _IncOp
 
 	case '*':
-		s.nextch()
 		s.op, s.prec = Mul, precMul
 		// don't goto assignop - want _Star token
 		if s.ch == '=' {
@@ -228,7 +217,6 @@ redo:
 		s.tok = _Star
 
 	case '/':
-		s.nextch()
 		if s.ch == '/' {
 			s.nextch()
 			s.lineComment()
@@ -250,12 +238,10 @@ redo:
 		goto assignop
 
 	case '%':
-		s.nextch()
 		s.op, s.prec = Rem, precMul
 		goto assignop
 
 	case '&':
-		s.nextch()
 		if s.ch == '&' {
 			s.nextch()
 			s.op, s.prec = AndAnd, precAndAnd
@@ -270,7 +256,6 @@ redo:
 		goto assignop
 
 	case '|':
-		s.nextch()
 		if s.ch == '|' {
 			s.nextch()
 			s.op, s.prec = OrOr, precOrOr
@@ -281,18 +266,10 @@ redo:
 		goto assignop
 
 	case '^':
-		s.nextch()
 		s.op, s.prec = Xor, precAdd
 		goto assignop
 
 	case '<':
-		s.nextch()
-		if s.ch == '=' {
-			s.nextch()
-			s.op, s.prec = Leq, precCmp
-			s.tok = _Operator
-			break
-		}
 		if s.ch == '<' {
 			s.nextch()
 			s.op, s.prec = Shl, precMul
@@ -304,26 +281,26 @@ redo:
 			break
 		}
 		s.op, s.prec = Lss, precCmp
+		if s.ch == '=' {
+			s.nextch()
+			s.op = Leq
+		}
 		s.tok = _Operator
 
 	case '>':
-		s.nextch()
-		if s.ch == '=' {
-			s.nextch()
-			s.op, s.prec = Geq, precCmp
-			s.tok = _Operator
-			break
-		}
 		if s.ch == '>' {
 			s.nextch()
 			s.op, s.prec = Shr, precMul
 			goto assignop
 		}
 		s.op, s.prec = Gtr, precCmp
+		if s.ch == '=' {
+			s.nextch()
+			s.op = Geq
+		}
 		s.tok = _Operator
 
 	case '=':
-		s.nextch()
 		if s.ch == '=' {
 			s.nextch()
 			s.op, s.prec = Eql, precCmp
@@ -333,24 +310,31 @@ redo:
 		s.tok = _Assign
 
 	case '!':
-		s.nextch()
+		s.op, s.prec = Not, 0
 		if s.ch == '=' {
 			s.nextch()
 			s.op, s.prec = Neq, precCmp
-			s.tok = _Operator
-			break
 		}
-		s.op, s.prec = Not, 0
 		s.tok = _Operator
 
 	case '~':
-		s.nextch()
 		s.op, s.prec = Tilde, 0
 		s.tok = _Operator
 
 	default:
-		s.errorf("invalid character %#U", s.ch)
-		s.nextch()
+		if ch >= utf8.RuneSelf {
+			switch {
+			case unicode.IsLetter(ch):
+				// ok
+			case unicode.IsDigit(ch):
+				s.errorAtf(0, "identifier cannot begin with digit %#U", ch)
+			default:
+				s.errorAtf(0, "invalid character %#U in identifier", ch)
+			}
+			s.ident()
+			return
+		}
+		s.errorAtf(0, "invalid character %#U", ch)
 		goto redo
 	}
 
@@ -373,24 +357,22 @@ func (s *scanner) ident() {
 
 	// general case
 	if s.ch >= utf8.RuneSelf {
-		for s.atIdentChar(false) {
+		for s.atIdentChar() {
 			s.nextch()
 		}
 	}
 
+	s.nlsemi = true
+	s.tok = _Name
+	s.lit = s.segment()
+
 	// possibly a keyword
-	lit := s.segment()
-	if len(lit) >= 2 {
-		if tok := keywordMap[hash(lit)]; tok != 0 && tokStrFast(tok) == string(lit) {
+	if len(s.lit) >= 2 {
+		if tok := keywordMap[hash(s.lit)]; tok != 0 && tokStrFast(tok) == s.lit {
 			s.nlsemi = contains(1<<_Break|1<<_Continue|1<<_Fallthrough|1<<_Return, tok)
 			s.tok = tok
-			return
 		}
 	}
-
-	s.nlsemi = true
-	s.lit = string(lit)
-	s.tok = _Name
 }
 
 // tokStrFast is a faster version of token.String, which assumes that tok
@@ -399,14 +381,12 @@ func tokStrFast(tok token) string {
 	return _token_name[_token_index[tok-1]:_token_index[tok]]
 }
 
-func (s *scanner) atIdentChar(first bool) bool {
+func (s *scanner) atIdentChar() bool {
 	switch {
 	case unicode.IsLetter(s.ch) || s.ch == '_':
 		// ok
 	case unicode.IsDigit(s.ch):
-		if first {
-			s.errorf("identifier cannot begin with digit %#U", s.ch)
-		}
+		// ok
 	case s.ch >= utf8.RuneSelf:
 		s.errorf("invalid character %#U in identifier", s.ch)
 	default:
@@ -417,7 +397,7 @@ func (s *scanner) atIdentChar(first bool) bool {
 
 // hash is a perfect hash function for keywords.
 // It assumes that s has at least length 2.
-func hash(s []byte) uint {
+func hash(s string) uint {
 	return (uint(s[0])<<4 ^ uint(s[1]) + uint(len(s))) & uint(len(keywordMap)-1)
 }
 
@@ -426,7 +406,7 @@ var keywordMap [1 << 6]token // size must be power of two
 func init() {
 	// populate keywordMap
 	for tok := _Break; tok <= _Var; tok++ {
-		h := hash([]byte(tok.String()))
+		h := hash(tok.String())
 		if keywordMap[h] != 0 {
 			panic("imperfect hash")
 		}
@@ -626,8 +606,8 @@ func invalidSep(x string) int {
 }
 
 func (s *scanner) rune() {
+	// opening ' has already been consumed
 	ok := true
-	s.nextch()
 
 	n := 0
 	for ; ; n++ {
@@ -672,8 +652,8 @@ func (s *scanner) rune() {
 }
 
 func (s *scanner) stdString() {
+	// opening " has already been consumed
 	ok := true
-	s.nextch()
 
 	for {
 		if s.ch == '"' {
@@ -704,8 +684,8 @@ func (s *scanner) stdString() {
 }
 
 func (s *scanner) rawString() {
+	// opening ` has already been consumed
 	ok := true
-	s.nextch()
 
 	for {
 		if s.ch == '`' {
@@ -742,7 +722,7 @@ func (s *scanner) lineComment() {
 
 	if s.mode&comments != 0 {
 		s.skipLine()
-		s.comment(string(s.segment()))
+		s.comment(s.segment())
 		return
 	}
 
@@ -769,7 +749,7 @@ func (s *scanner) lineComment() {
 
 	// directive text
 	s.skipLine()
-	s.comment(string(s.segment()))
+	s.comment(s.segment())
 }
 
 func (s *scanner) skipComment() bool {
@@ -792,7 +772,7 @@ func (s *scanner) fullComment() {
 
 	if s.mode&comments != 0 {
 		if s.skipComment() {
-			s.comment(string(s.segment()))
+			s.comment(s.segment())
 		}
 		return
 	}
@@ -816,7 +796,7 @@ func (s *scanner) fullComment() {
 
 	// directive text
 	if s.skipComment() {
-		s.comment(string(s.segment()))
+		s.comment(s.segment())
 	}
 }
 

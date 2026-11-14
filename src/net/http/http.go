@@ -103,11 +103,6 @@ const maxInt64 = 1<<63 - 1
 // immediate cancellation of network operations.
 var aLongTimeAgo = time.Unix(1, 0)
 
-// omitBundledHTTP2 is set by omithttp2.go when the nethttpomithttp2
-// build tag is set. That means h2_bundle.go isn't compiled in and we
-// shouldn't try to use it.
-var omitBundledHTTP2 bool
-
 // TODO(bradfitz): move common stuff here. The other files have accumulated
 // generic http stuff in random places.
 
@@ -297,6 +292,15 @@ type HTTP2Config struct {
 	// PermitProhibitedCipherSuites, if true, permits the use of
 	// cipher suites prohibited by the HTTP/2 spec.
 	PermitProhibitedCipherSuites bool
+
+	// EnableConnectProtocol, if true, enables support for
+	// the Extended CONNECT protocol defined in RFC 8441.
+	// When enabled, HTTP/2 servers will advertise support for Extended CONNECT.
+	// Extended CONNECT requests will include a ":protocol" pseudo header
+	// in the request headers.
+	//
+	// This parameter only applies to Servers.
+	EnableConnectProtocol bool
 
 	// CountError, if non-nil, is called on HTTP/2 errors.
 	// It is intended to increment a metric for monitoring.

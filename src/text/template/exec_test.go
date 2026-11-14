@@ -1009,6 +1009,19 @@ func TestExecError(t *testing.T) {
 	}
 }
 
+// Issue 80718: format verbs in template name should not consume errorf format args.
+func TestIssue80718(t *testing.T) {
+	tmpl := Must(New("%s.tmpl").Option("missingkey=error").Parse("{{ .MissingKey }}"))
+	err := tmpl.Execute(io.Discard, map[string]string{})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	const want = `template: %s.tmpl:1:3: executing "%s.tmpl" at <.MissingKey>: map has no entry for key "MissingKey"`
+	if got := err.Error(); got != want {
+		t.Errorf("expected\n%q\ngot\n%q", want, got)
+	}
+}
+
 type CustomError struct{}
 
 func (*CustomError) Error() string { return "heyo !" }
@@ -1447,6 +1460,37 @@ func (e ErrorWriter) Write(p []byte) (int, error) {
 	return 0, alwaysError
 }
 
+// writeOnlyWriter hides the WriteString method of the embedded writer.
+type writeOnlyWriter struct {
+	io.Writer
+}
+
+type errorStringWriter struct {
+	ErrorWriter
+}
+
+func (e errorStringWriter) WriteString(s string) (int, error) {
+	return 0, alwaysError
+}
+
+func TestPrintString(t *testing.T) {
+	tmpl := Must(New("X").Parse("<{{.}}>"))
+
+	var b strings.Builder
+	if err := tmpl.Execute(writeOnlyWriter{&b}, "hello"); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := b.String(), "<hello>"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+
+	tmpl = Must(New("X").Parse("{{.}}"))
+	err := tmpl.Execute(errorStringWriter{}, "hello")
+	if err == nil || err.Error() != alwaysErrorText {
+		t.Errorf("expected %q error; got %v", alwaysErrorText, err)
+	}
+}
+
 func TestExecuteGivesExecError(t *testing.T) {
 	// First, a non-execution error shouldn't be an ExecError.
 	tmpl, err := New("X").Parse("hello")
@@ -1779,6 +1823,15 @@ func TestExecutePanicDuringCall(t *testing.T) {
 		"doPanic": func() string {
 			panic("custom panic string")
 		},
+		"doPanicVariadic": func(...any) string {
+			panic("custom panic string")
+		},
+		"doPanicCompare": func(reflect.Value, reflect.Value) (bool, error) {
+			panic("custom panic string")
+		},
+		"doPanicFormat": func(string, ...any) string {
+			panic("custom panic string")
+		},
 	}
 	tests := []struct {
 		name    string
@@ -1795,6 +1848,26 @@ func TestExecutePanicDuringCall(t *testing.T) {
 			"indirect func call panics",
 			"{{call doPanic}}", (*T)(nil),
 			`template: t:1:7: executing "t" at <doPanic>: error calling doPanic: custom panic string`,
+		},
+		{
+			"variadic func call panics",
+			"{{doPanicVariadic 1}}", (*T)(nil),
+			`template: t:1:2: executing "t" at <doPanicVariadic 1>: error calling doPanicVariadic: custom panic string`,
+		},
+		{
+			"piped variadic func call panics",
+			"{{1 | doPanicVariadic}}", (*T)(nil),
+			`template: t:1:6: executing "t" at <doPanicVariadic>: error calling doPanicVariadic: custom panic string`,
+		},
+		{
+			"compare-like func call panics",
+			"{{doPanicCompare 1 2}}", (*T)(nil),
+			`template: t:1:2: executing "t" at <doPanicCompare 1 2>: error calling doPanicCompare: custom panic string`,
+		},
+		{
+			"printf-like func call panics",
+			`{{2 | doPanicFormat "%d"}}`, (*T)(nil),
+			`template: t:1:6: executing "t" at <doPanicFormat "%d">: error calling doPanicFormat: custom panic string`,
 		},
 		{
 			"direct method call panics",
@@ -1937,6 +2010,9 @@ func TestIssue31810(t *testing.T) {
 	// Works if the function is explicitly called.
 	const textCall = "{{ (call .)  }}"
 	tmpl, err = New("").Parse(textCall)
+	if err != nil {
+		t.Fatal(err)
+	}
 	b.Reset()
 	err = tmpl.Execute(&b, f)
 	if err != nil {
@@ -2017,5 +2093,123 @@ func TestIssue48215(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "reflect: indirection through nil pointer to embedded struct field A") {
 		t.Fatal(err)
+	}
+}
+
+func BenchmarkExecuteVariadicFunc(b *testing.B) {
+	funcs := FuncMap{"join": func(args ...any) string { return fmt.Sprint(args...) }}
+	tmpl := Must(New("t").Funcs(funcs).Parse(`{{join "a" 1}}{{. | join}}{{join .}}`))
+	b.ReportAllocs()
+	for b.Loop() {
+		if err := tmpl.Execute(io.Discard, "b"); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkExecuteBuiltins(b *testing.B) {
+	data := map[string]any{
+		"S": "active",
+		"N": 3,
+		"L": []int{1, 2, 3},
+		"M": map[string]string{"k": "v"},
+	}
+	tmpls := []struct{ name, text string }{
+		{"eq", `{{if eq .S "active"}}y{{end}}`},
+		{"eqMulti", `{{if eq .S "a" "b" "active"}}y{{end}}`},
+		{"lt", `{{if lt .N 5}}y{{end}}`},
+		{"not", `{{if not .S}}y{{end}}`},
+		{"printf", `{{printf "%s-%d" .S .N}}`},
+		{"userFunc", `{{double .N}}`},
+	}
+	for _, tt := range tmpls {
+		tmpl := Must(New("t").Funcs(FuncMap{"double": func(n int) int { return 2 * n }}).Parse(tt.text))
+		b.Run(tt.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				if err := tmpl.Execute(io.Discard, data); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+func TestExecuteBuiltinSignatureFuncs(t *testing.T) {
+	funcs := FuncMap{
+		"same": func(a, b reflect.Value) (bool, error) {
+			if a.Kind() != b.Kind() {
+				return false, fmt.Errorf("kinds differ: %s, %s", a.Kind(), b.Kind())
+			}
+			return a.Interface() == b.Interface(), nil
+		},
+		"anyOf": func(x reflect.Value, ys ...reflect.Value) (bool, error) {
+			for _, y := range ys {
+				if x.Interface() == y.Interface() {
+					return true, nil
+				}
+			}
+			return false, nil
+		},
+		"isStr": func(x reflect.Value) bool { return x.Kind() == reflect.String },
+		"fmt":   func(format string, args ...any) string { return fmt.Sprintf(format, args...) },
+	}
+	tests := []struct {
+		input, want, wantErr string
+	}{
+		{`{{same 1 1}} {{same "a" "b"}} {{1 | same 1}}`, "true false true", ""},
+		{`{{same 1 "a"}}`, "", "error calling same: kinds differ: int, string"},
+		{`{{anyOf 3 1 2 3}} {{anyOf 3}} {{3 | anyOf 1 2}}`, "true false false", ""},
+		{`{{isStr "a"}} {{isStr 1}} {{"a" | isStr}}`, "true false true", ""},
+		{`{{same .RV "s"}} {{isStr .RV}}`, "true true", ""},
+		{`{{eq nil nil}} {{not nil}}`, "true true", ""},
+		{`{{fmt "%s=%d" "a" 1}} {{1 | fmt "%d"}} {{"%%" | fmt}}`, "a=1 1 %", ""},
+	}
+	for _, tt := range tests {
+		tmpl := Must(New("t").Funcs(funcs).Parse(tt.input))
+		var b strings.Builder
+		err := tmpl.Execute(&b, struct{ RV reflect.Value }{reflect.ValueOf("s")})
+		if tt.wantErr != "" {
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("%s: got error %v, want %q", tt.input, err, tt.wantErr)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("%s: unexpected error: %v", tt.input, err)
+		} else if b.String() != tt.want {
+			t.Errorf("%s: got %q, want %q", tt.input, b.String(), tt.want)
+		}
+	}
+}
+
+func BenchmarkExecutePrintString(b *testing.B) {
+	type item struct{ Name, Value string }
+	data := []item{{"a", "1"}, {"b", "2"}, {"c", "3"}}
+	tmpl := Must(New("t").Parse(`{{range .}}{{.Name}}={{.Value}} {{end}}`))
+	b.ReportAllocs()
+	for b.Loop() {
+		if err := tmpl.Execute(io.Discard, data); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+type benchLocale interface {
+	Tr(key string, args ...any) string
+}
+
+type benchLocaleImpl struct{}
+
+func (*benchLocaleImpl) Tr(key string, args ...any) string { return key }
+
+func BenchmarkExecuteMethodCall(b *testing.B) {
+	tmpl := Must(New("t").Parse(strings.Repeat(`<span>{{.Locale.Tr "key"}}</span>`, 20)))
+	data := &struct{ Locale benchLocale }{&benchLocaleImpl{}}
+	b.ReportAllocs()
+	for b.Loop() {
+		if err := tmpl.Execute(io.Discard, data); err != nil {
+			b.Fatal(err)
+		}
 	}
 }

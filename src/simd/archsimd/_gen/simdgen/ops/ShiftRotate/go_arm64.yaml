@@ -1,46 +1,57 @@
 !sum
 
-# Shift by vector
-- go: Shift
+# Scale (shift by vector)
+- go: Scale
   signed: true
   asm: "VSSHL"
   in:
   - &int
     go: $t
     base: int
-  - *int
+  - go: $t
+    name: y
   out:
   - *int
 
-- go: Shift
+- go: Scale
   signed: false
   asm: "VUSHL"
   in:
   - &uint
     go: $t
     base: uint
-  - &uintAsInt
-    go: $t
+  - go: $t
     base: uint
     overwriteBase: int
+    name: y
   out:
   - *uint
 
-- go: ShiftSaturated
+# The scale operand is always an Int8 vector. SQSHL/UQSHL use only the low
+# byte of each element of the scale register, so x[i] is scaled by the int8
+# element that lines up with x[i]'s lowest byte.
+- go: ScaleSaturated
   signed: true
   asm: "VSQSHL"
   in:
   - *int
-  - *int
+  - go: $t
+    base: int
+    overwriteElementBits: 8
+    name: scale
   out:
   - *int
 
-- go: ShiftSaturated
+- go: ScaleSaturated
   signed: false
   asm: "VUQSHL"
   in:
   - *uint
-  - *uintAsInt
+  - go: $t
+    base: uint
+    overwriteBase: int
+    overwriteElementBits: 8
+    name: scale
   out:
   - *uint
 
@@ -48,7 +59,8 @@
 - go: shiftAllRightConst
   signed: true
   asm: "VSSHR"
-  specialLower: "if a==0 => x"
+  asmRules:
+  - !string "a==0 => x"
   in:
   - &imm
     class: immediate
@@ -60,7 +72,8 @@
 - go: shiftAllRightConst
   signed: false
   asm: "VUSHR"
-  specialLower: "if a==0 => x"
+  asmRules:
+  - !string "a==0 => x"
   in:
   - *imm
   - *uint
@@ -71,7 +84,8 @@
 - go: shiftAllLeftConst
   signed: true
   asm: "VSHL"
-  specialLower: "if a==0 => x"
+  asmRules:
+  - !string "a==0 => x"
   in:
   - *imm
   - *int
@@ -81,7 +95,8 @@
 - go: shiftAllLeftConst
   signed: false
   asm: "VSHL"
-  specialLower: "if a==0 => x"
+  asmRules:
+  - !string "a==0 => x"
   in:
   - *imm
   - *uint
@@ -93,7 +108,8 @@
   signed: true
   asm: "VSQSHL"
   ssaVariant: "const"
-  specialLower: "if a==0 => x"
+  asmRules:
+  - !string "a==0 => x"
   in:
   - *imm
   - *int
@@ -104,7 +120,8 @@
   signed: false
   asm: "VUQSHL"
   ssaVariant: "const"
-  specialLower: "if a==0 => x"
+  asmRules:
+  - !string "a==0 => x"
   in:
   - *imm
   - *uint
@@ -112,29 +129,35 @@
   - *uint
 
 # Shift all lanes in vector x by the same unsigned scalar amount y.
-# ShiftAll* are lowered to corresponding ShiftConst* if the amount is constant and fits into immediate,
-# otherwise fallback to the Shift intrinsic using sign to specify shift direction, e.g.:
+# ShiftAll* with a constant amount are lowered to the immediate shifts (or to
+# zero for a left shift by at least the element width). Otherwise they fall
+# back to the Shift intrinsic using sign to specify shift direction, e.g.:
 #   x.Shift(Zero.SetElem(0, -y).Broadcast1ToN()) for shift right
 #   x.Shift(Zero.SetElem(0,  y).Broadcast1ToN()) for shift left
 - go: ShiftAllLeft
   signed: true
   asm: "VSSHL"
-  specialLower: !string |-
-    earlymatch (%g x y) => (VSSHL%a x (VDUP%sbcast [0] (VMOV%sins [0] x (CSEL <typ.UInt64> [ssaop.OpARM64LessThanU] y (MOVDconst [127]) (CMPconst [127] y)))))
-
+  lowerRules:
+  - !string "(%g x (MOVDconst [c])) && uint64(c) < %b => (VSHL%a [uint8(c)] x)"
+  - !string "(%g x (MOVDconst [c])) => (VMOVI16B [0])"
+  - !string "(%g x y) => (VSSHL%a x (VDUP%sbcast [0] (VMOV%sins [0] x (CSEL <typ.UInt64> [ssaop.OpARM64LessThanU] y (MOVDconst [127]) (CMPconst [127] y)))))"
   in:
   - *int
   - &scalarShiftSigned
     go: $t
     base: int
     treatLikeAScalarOfSize: 64
+    name: shift
   out:
   - *int
 
 - go: ShiftAllLeft
   signed: false
   asm: "VUSHL"
-  specialLower: !string "earlymatch (%g x y) => (VUSHL%a x (VDUP%sbcast [0] (VMOV%sins [0] x (CSEL <typ.UInt64> [ssaop.OpARM64LessThanU] y (MOVDconst [127]) (CMPconst [127] y)))))"
+  lowerRules:
+  - !string "(%g x (MOVDconst [c])) && uint64(c) < %b => (VSHL%a [uint8(c)] x)"
+  - !string "(%g x (MOVDconst [c])) => (VMOVI16B [0])"
+  - !string "(%g x y) => (VUSHL%a x (VDUP%sbcast [0] (VMOV%sins [0] x (CSEL <typ.UInt64> [ssaop.OpARM64LessThanU] y (MOVDconst [127]) (CMPconst [127] y)))))"
   in:
   - *uint
   - &scalarShiftUnsigned
@@ -142,13 +165,16 @@
     base: uint
     treatLikeAScalarOfSize: 64
     overwriteBase: int
+    name: shift
   out:
   - *uint
 
 - go: ShiftAllRight
   signed: true
   asm: "VSSHL"
-  specialLower: !string "earlymatch (%g x y) => (VSSHL%a x (VDUP%sbcast [0] (VMOV%sins [0] x (NEG <typ.Int64> (CSEL <typ.UInt64> [ssaop.OpARM64LessThanU] y (MOVDconst [127]) (CMPconst [127] y))))))"
+  lowerRules:
+  - !string "(%g x (MOVDconst [c])) => (VSSHR%a [uint8(min(uint64(c), %b))] x)"
+  - !string "(%g x y) => (VSSHL%a x (VDUP%sbcast [0] (VMOV%sins [0] x (NEG <typ.Int64> (CSEL <typ.UInt64> [ssaop.OpARM64LessThanU] y (MOVDconst [127]) (CMPconst [127] y))))))"
   in:
   - *int
   - *scalarShiftSigned
@@ -158,7 +184,9 @@
 - go: ShiftAllRight
   signed: false
   asm: "VUSHL"
-  specialLower: !string "earlymatch (%g x y) => (VUSHL%a x (VDUP%sbcast [0] (VMOV%sins [0] x (NEG <typ.Int64> (CSEL <typ.UInt64> [ssaop.OpARM64LessThanU] y (MOVDconst [127]) (CMPconst [127] y))))))"
+  lowerRules:
+  - !string "(%g x (MOVDconst [c])) => (VUSHR%a [uint8(min(uint64(c), %b))] x)"
+  - !string "(%g x y) => (VUSHL%a x (VDUP%sbcast [0] (VMOV%sins [0] x (NEG <typ.Int64> (CSEL <typ.UInt64> [ssaop.OpARM64LessThanU] y (MOVDconst [127]) (CMPconst [127] y))))))"
   in:
   - *uint
   - *scalarShiftUnsigned
@@ -168,7 +196,8 @@
 - go: shiftRightNarrowConst
   asm: "VSHRN"
   hiHalfAsm: "VSHRN2"
-  specialLower: !string "match (%h [0] x) => (VXTN%a x)"
+  peepholeRules:
+  - !string "(%h [0] x) => (VXTN%a x)"
   in:
   - *imm
   - go: $t

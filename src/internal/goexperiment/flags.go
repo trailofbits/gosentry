@@ -130,4 +130,12 @@ type Flags struct {
 
 	// GoListExportNewFormat enables the new format for go list -export.
 	GoListExportNewFormat bool
+
+	// CgoBindings enables specifying cgo bindings using the go types they bind to.
+	CgoBindings bool
+
+	// VetFiles causes go test to execute, in addition to the
+	// usual cmd/vet suite, analyzers defined by go.vet files in
+	// the workspace; see https://go.dev/issue/82464.
+	VetFiles bool
 }

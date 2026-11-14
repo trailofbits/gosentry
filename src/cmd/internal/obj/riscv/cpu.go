@@ -293,6 +293,40 @@ var RISCV64DWARFRegisters = map[int16]int16{
 	REG_F29: 61,
 	REG_F30: 62,
 	REG_F31: 63,
+
+	// Vector Registers.
+	REG_V0:  96,
+	REG_V1:  97,
+	REG_V2:  98,
+	REG_V3:  99,
+	REG_V4:  100,
+	REG_V5:  101,
+	REG_V6:  102,
+	REG_V7:  103,
+	REG_V8:  104,
+	REG_V9:  105,
+	REG_V10: 106,
+	REG_V11: 107,
+	REG_V12: 108,
+	REG_V13: 109,
+	REG_V14: 110,
+	REG_V15: 111,
+	REG_V16: 112,
+	REG_V17: 113,
+	REG_V18: 114,
+	REG_V19: 115,
+	REG_V20: 116,
+	REG_V21: 117,
+	REG_V22: 118,
+	REG_V23: 119,
+	REG_V24: 120,
+	REG_V25: 121,
+	REG_V26: 122,
+	REG_V27: 123,
+	REG_V28: 124,
+	REG_V29: 125,
+	REG_V30: 126,
+	REG_V31: 127,
 }
 
 // Prog.Mark flags.
@@ -584,6 +618,32 @@ const (
 
 	// 23.5: Quad-Precision Floating-Point Classify Instruction
 	AFCLASSQ
+
+	// 26: "Zfa" Extension for Additional Floating-Point Instructions
+	// 26.1: Load-Immediate Instructions
+	AFLIS
+	AFLID
+
+	// 26.2: Minimum and Maximum Instructions
+	AFMAXMS
+	AFMINMS
+	AFMAXMD
+	AFMINMD
+
+	// 26.3: Round-to-Integer Instructions
+	AFROUNDS
+	AFROUNDNXS
+	AFROUNDD
+	AFROUNDNXD
+
+	// 26.4: Modular Convert-to-Integer Instruction
+	AFCVTMODWD
+
+	// 26.6: Comparison Instructions
+	AFLEQS
+	AFLTQS
+	AFLEQD
+	AFLTQD
 
 	//
 	// "C" Extension for Compressed Instructions
@@ -1641,6 +1701,12 @@ func rmSuffixString(u uint8) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("unknown suffix:%x", u)
+}
+
+// RoundingModeSuffix returns the Scond value for an explicitly encoded
+// floating-point rounding mode.
+func RoundingModeSuffix(rm uint8) uint8 {
+	return rm | rmSuffixBit
 }
 
 const (

@@ -62,8 +62,8 @@ func (s *Schedule) append(n ir.Node) {
 }
 
 // StaticInit adds an initialization statement n to the schedule.
-func (s *Schedule) StaticInit(n ir.Node) {
-	if !s.tryStaticInit(n) {
+func (s *Schedule) StaticInit(curfunc *ir.Func, n ir.Node) {
+	if !s.tryStaticInit(curfunc, n) {
 		if base.Flag.Percent != 0 {
 			ir.Dump("StaticInit failed", n)
 		}
@@ -105,7 +105,7 @@ func allBlank(exprs []ir.Node) bool {
 
 // tryStaticInit attempts to statically execute an initialization
 // statement and reports whether it succeeded.
-func (s *Schedule) tryStaticInit(n ir.Node) bool {
+func (s *Schedule) tryStaticInit(curfunc *ir.Func, n ir.Node) bool {
 	var lhs []ir.Node
 	var rhs ir.Node
 
@@ -143,7 +143,7 @@ func (s *Schedule) tryStaticInit(n ir.Node) bool {
 		s.seenMutation = mayModifyPkgVar(rhs)
 	}
 
-	if allBlank(lhs) && !AnySideEffects(rhs) {
+	if allBlank(lhs) && !ir.AnySideEffects(rhs) {
 		return true // discard
 	}
 
@@ -157,12 +157,12 @@ func (s *Schedule) tryStaticInit(n ir.Node) bool {
 	defer func() { base.Pos = lno }()
 
 	nam := lhs[0].(*ir.Name)
-	return s.StaticAssign(nam, 0, rhs, nam.Type())
+	return s.StaticAssign(curfunc, nam, 0, rhs, nam.Type())
 }
 
 // like staticassign but we are copying an already
 // initialized value r.
-func (s *Schedule) staticcopy(l *ir.Name, loff int64, rn *ir.Name, typ *types.Type) bool {
+func (s *Schedule) staticcopy(curfunc *ir.Func, l *ir.Name, loff int64, rn *ir.Name, typ *types.Type) bool {
 	if !canWriteStatic(loff, typ) {
 		return false
 	}
@@ -214,7 +214,7 @@ func (s *Schedule) staticcopy(l *ir.Name, loff int64, rn *ir.Name, typ *types.Ty
 		fallthrough
 	case ir.ONAME:
 		r := r.(*ir.Name)
-		if s.staticcopy(l, loff, r, typ) {
+		if s.staticcopy(curfunc, l, loff, r, typ) {
 			return true
 		}
 		// We may have skipped past one or more OCONVNOPs, so
@@ -223,7 +223,7 @@ func (s *Schedule) staticcopy(l *ir.Name, loff int64, rn *ir.Name, typ *types.Ty
 		if loff != 0 || !types.Identical(typ, l.Type()) {
 			dst = ir.NewNameOffsetExpr(base.Pos, l, loff, typ)
 		}
-		s.append(ir.NewAssignStmt(base.Pos, dst, typecheck.Conv(r, typ)))
+		s.append(ir.NewAssignStmt(base.Pos, dst, typecheck.Conv(curfunc, r, typ)))
 		return true
 
 	case ir.ONIL:
@@ -263,6 +263,8 @@ func (s *Schedule) staticcopy(l *ir.Name, loff int64, rn *ir.Name, typ *types.Ty
 
 	case ir.OARRAYLIT, ir.OSTRUCTLIT:
 		r := r.(*ir.CompLitExpr)
+		lno := base.Pos
+		defer func() { base.Pos = lno }()
 		p := s.Plans[r]
 		for i := range p.E {
 			e := &p.E[i]
@@ -276,7 +278,7 @@ func (s *Schedule) staticcopy(l *ir.Name, loff int64, rn *ir.Name, typ *types.Ty
 			if x.Op() == ir.OMETHEXPR {
 				x = x.(*ir.SelectorExpr).FuncName()
 			}
-			if x.Op() == ir.ONAME && s.staticcopy(l, off, x.(*ir.Name), typ) {
+			if x.Op() == ir.ONAME && s.staticcopy(curfunc, l, off, x.(*ir.Name), typ) {
 				continue
 			}
 			// Requires computation, but we're
@@ -293,7 +295,7 @@ func (s *Schedule) staticcopy(l *ir.Name, loff int64, rn *ir.Name, typ *types.Ty
 	return false
 }
 
-func (s *Schedule) StaticAssign(l *ir.Name, loff int64, r ir.Node, typ *types.Type) bool {
+func (s *Schedule) StaticAssign(curfunc *ir.Func, l *ir.Name, loff int64, r ir.Node, typ *types.Type) bool {
 	// If we're building for FIPS, avoid global data relocations
 	// by treating all address-of operations as non-static.
 	// See ../../../internal/obj/fips.go for more context.
@@ -315,7 +317,7 @@ func (s *Schedule) StaticAssign(l *ir.Name, loff int64, r ir.Node, typ *types.Ty
 	}
 
 	assign := func(pos src.XPos, a *ir.Name, aoff int64, v ir.Node) {
-		if s.StaticAssign(a, aoff, v, v.Type()) {
+		if s.StaticAssign(curfunc, a, aoff, v, v.Type()) {
 			return
 		}
 		var lhs ir.Node
@@ -334,14 +336,14 @@ func (s *Schedule) StaticAssign(l *ir.Name, loff int64, r ir.Node, typ *types.Ty
 			return false
 		}
 		r := r.(*ir.Name)
-		return s.staticcopy(l, loff, r, typ)
+		return s.staticcopy(curfunc, l, loff, r, typ)
 
 	case ir.OMETHEXPR:
 		if disableGlobalAddrs {
 			return false
 		}
 		r := r.(*ir.SelectorExpr)
-		return s.staticcopy(l, loff, r.FuncName(), typ)
+		return s.staticcopy(curfunc, l, loff, r.FuncName(), typ)
 
 	case ir.ONIL:
 		return true
@@ -418,6 +420,8 @@ func (s *Schedule) StaticAssign(l *ir.Name, loff int64, r ir.Node, typ *types.Ty
 		r := r.(*ir.CompLitExpr)
 		s.initplan(r)
 
+		lno := base.Pos
+		defer func() { base.Pos = lno }()
 		p := s.Plans[r]
 		for i := range p.E {
 			e := &p.E[i]
@@ -485,9 +489,9 @@ func (s *Schedule) StaticAssign(l *ir.Name, loff int64, r ir.Node, typ *types.Ty
 
 		var itab *ir.AddrExpr
 		if typ.IsEmptyInterface() {
-			itab = reflectdata.TypePtrAt(base.Pos, val.Type())
+			itab = reflectdata.TypePtrAt(curfunc, base.Pos, val.Type())
 		} else {
-			itab = reflectdata.ITabAddrAt(base.Pos, val.Type(), typ)
+			itab = reflectdata.ITabAddrAt(curfunc, base.Pos, val.Type(), typ)
 		}
 
 		// Create a copy of l to modify while we emit data.
@@ -502,6 +506,8 @@ func (s *Schedule) StaticAssign(l *ir.Name, loff int64, r ir.Node, typ *types.Ty
 				return true
 			}
 			// Copy val directly into n.
+			lno := base.Pos
+			defer func() { base.Pos = lno }()
 			ir.SetPos(val)
 			assign(base.Pos, l, loff+int64(types.PtrSize), val)
 		} else {
@@ -519,7 +525,7 @@ func (s *Schedule) StaticAssign(l *ir.Name, loff int64, r ir.Node, typ *types.Ty
 			return false
 		}
 		r := r.(*ir.InlinedCallExpr)
-		return s.staticAssignInlinedCall(l, loff, r, typ)
+		return s.staticAssignInlinedCall(curfunc, l, loff, r, typ)
 	}
 
 	if base.Flag.Percent != 0 {
@@ -598,7 +604,7 @@ func (s *Schedule) addvalue(p *Plan, xoffset int64, n ir.Node) {
 	p.E = append(p.E, Entry{Xoffset: xoffset, Expr: n})
 }
 
-func (s *Schedule) staticAssignInlinedCall(l *ir.Name, loff int64, call *ir.InlinedCallExpr, typ *types.Type) bool {
+func (s *Schedule) staticAssignInlinedCall(curfunc *ir.Func, l *ir.Name, loff int64, call *ir.InlinedCallExpr, typ *types.Type) bool {
 	if base.Debug.InlStaticInit == 0 {
 		return false
 	}
@@ -692,7 +698,7 @@ func (s *Schedule) staticAssignInlinedCall(l *ir.Name, loff int64, call *ir.Inli
 	}
 	// Can't move the computation of the args if they have side effects.
 	for _, r := range as2init.Rhs {
-		if AnySideEffects(r) {
+		if ir.AnySideEffects(r) {
 			return false
 		}
 	}
@@ -748,7 +754,7 @@ func (s *Schedule) staticAssignInlinedCall(l *ir.Name, loff int64, call *ir.Inli
 	if !ok {
 		return false
 	}
-	ok = s.StaticAssign(l, loff, r, typ)
+	ok = s.StaticAssign(curfunc, l, loff, r, typ)
 
 	if ok && base.Flag.Percent != 0 {
 		ir.Dump("static inlined-LEFT", l)
@@ -831,95 +837,6 @@ func StaticLoc(n ir.Node) (name *ir.Name, offset int64, ok bool) {
 	return nil, 0, false
 }
 
-func isSideEffect(n ir.Node) bool {
-	switch n.Op() {
-	// Assume side effects unless we know otherwise.
-	default:
-		return true
-
-	// No side effects here (arguments are checked separately).
-	case ir.ONAME,
-		ir.ONONAME,
-		ir.OTYPE,
-		ir.OLITERAL,
-		ir.ONIL,
-		ir.OADD,
-		ir.OSUB,
-		ir.OOR,
-		ir.OXOR,
-		ir.OADDSTR,
-		ir.OADDR,
-		ir.OANDAND,
-		ir.OBYTES2STR,
-		ir.ORUNES2STR,
-		ir.OSTR2BYTES,
-		ir.OSTR2RUNES,
-		ir.OCAP,
-		ir.OCOMPLIT,
-		ir.OMAPLIT,
-		ir.OSTRUCTLIT,
-		ir.OARRAYLIT,
-		ir.OSLICELIT,
-		ir.OPTRLIT,
-		ir.OCONV,
-		ir.OCONVIFACE,
-		ir.OCONVNOP,
-		ir.ODOT,
-		ir.OEQ,
-		ir.ONE,
-		ir.OLT,
-		ir.OLE,
-		ir.OGT,
-		ir.OGE,
-		ir.OKEY,
-		ir.OSTRUCTKEY,
-		ir.OLEN,
-		ir.OMUL,
-		ir.OLSH,
-		ir.ORSH,
-		ir.OAND,
-		ir.OANDNOT,
-		ir.ONEW,
-		ir.ONOT,
-		ir.OBITNOT,
-		ir.OPLUS,
-		ir.ONEG,
-		ir.OOROR,
-		ir.OPAREN,
-		ir.ORUNESTR,
-		ir.OREAL,
-		ir.OIMAG,
-		ir.OCOMPLEX:
-		return false
-
-	// Only possible side effect is division by zero.
-	case ir.ODIV, ir.OMOD:
-		n := n.(*ir.BinaryExpr)
-		if n.Y.Op() != ir.OLITERAL || constant.Sign(n.Y.Val()) == 0 {
-			return true
-		}
-
-	// Only possible side effect is panic on invalid size,
-	// but many makechan and makemap use size zero, which is definitely OK.
-	case ir.OMAKECHAN, ir.OMAKEMAP:
-		n := n.(*ir.MakeExpr)
-		if !ir.IsConst(n.Len, constant.Int) || constant.Sign(n.Len.Val()) != 0 {
-			return true
-		}
-
-	// Only possible side effect is panic on invalid size.
-	// TODO(rsc): Merge with previous case (probably breaks toolstash -cmp).
-	case ir.OMAKESLICE, ir.OMAKESLICECOPY:
-		return true
-	}
-	return false
-}
-
-// AnySideEffects reports whether n contains any operations that could have observable side effects.
-func AnySideEffects(n ir.Node) bool {
-	return ir.Any(n, isSideEffect)
-}
-
 // mayModifyPkgVar reports whether expression n may modify any
 // package-scope variables declared within the current package.
 func mayModifyPkgVar(n ir.Node) bool {
@@ -973,7 +890,7 @@ func mayModifyPkgVar(n ir.Node) bool {
 // assigning n to a single variable and using that variable multiple times.
 func canRepeat(n ir.Node) bool {
 	bad := func(n ir.Node) bool {
-		if isSideEffect(n) {
+		if ir.IsSideEffect(n) {
 			return true
 		}
 		switch n.Op() {
@@ -1160,7 +1077,7 @@ func tryWrapGlobalInit(n ir.Node) *ir.Func {
 	}
 
 	// Reject right hand sides with side effects.
-	if AnySideEffects(as.Y) {
+	if ir.AnySideEffects(as.Y) {
 		if base.Debug.WrapGlobalMapDbg > 0 {
 			fmt.Fprintf(os.Stderr, "=-= rejected %v due to side effects\n", nm)
 		}
@@ -1194,7 +1111,6 @@ func tryWrapGlobalInit(n ir.Node) *ir.Func {
 
 	// Insert assignment into function body; mark body finished.
 	fn.Body = []ir.Node{as}
-	typecheck.FinishFuncBody()
 
 	if base.Debug.WrapGlobalMapDbg > 1 {
 		fmt.Fprintf(os.Stderr, "=-= mapvar is %v\n", nm)
@@ -1252,8 +1168,8 @@ func OutlineMapInits(fn *ir.Func) {
 		// Attempt to outline stmt. If successful, replace it with a call
 		// to the returned wrapper function.
 		if wrapperFn := tryWrapGlobalInit(stmt); wrapperFn != nil {
-			ir.WithFunc(fn, func() {
-				fn.Body[i] = typecheck.Call(stmt.Pos(), wrapperFn.Nname, nil, false)
+			ir.WithPos(fn, func() {
+				fn.Body[i] = typecheck.Call(fn, stmt.Pos(), wrapperFn.Nname, nil, false)
 			})
 			outlined++
 		}
@@ -1276,6 +1192,8 @@ const varInitFuncPrefix = "init.part."
 //	}
 func GenerateVarInitFunc() *ir.Func {
 	pos := base.AutogeneratedPos
+	lno := base.Pos
+	defer func() { base.Pos = lno }()
 	base.Pos = pos
 
 	sym := typecheck.LookupNum(varInitFuncPrefix, varInitGen)

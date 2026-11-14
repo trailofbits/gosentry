@@ -135,7 +135,12 @@ func ssaGenSIMDValue(s *ssagen.State, v *ssa.Value) bool {
 		ssaop.OpARM64VBIC16B,
 		ssaop.OpARM64VSRHADD16B,
 		ssaop.OpARM64VURHADD16B,
+		ssaop.OpARM64VADDP16B,
 		ssaop.OpARM64VUZP116B,
+		ssaop.OpARM64VSMAXP16B,
+		ssaop.OpARM64VUMAXP16B,
+		ssaop.OpARM64VSMINP16B,
+		ssaop.OpARM64VUMINP16B,
 		ssaop.OpARM64VUZP216B,
 		ssaop.OpARM64VCMEQ16B,
 		ssaop.OpARM64VCMGT16B,
@@ -152,7 +157,6 @@ func ssaGenSIMDValue(s *ssagen.State, v *ssa.Value) bool {
 		ssaop.OpARM64VUMIN16B,
 		ssaop.OpARM64VMUL16B,
 		ssaop.OpARM64VORR16B,
-		ssaop.OpARM64VORN16B,
 		ssaop.OpARM64VSSHL16B,
 		ssaop.OpARM64VUSHL16B,
 		ssaop.OpARM64VSQSHL16B,
@@ -161,7 +165,8 @@ func ssaGenSIMDValue(s *ssagen.State, v *ssa.Value) bool {
 		ssaop.OpARM64VSQSUB16B,
 		ssaop.OpARM64VUQSUB16B,
 		ssaop.OpARM64VCMTST16B,
-		ssaop.OpARM64VEOR16B:
+		ssaop.OpARM64VEOR16B,
+		ssaop.OpARM64VORN16B:
 		p = simdV21(s, v, arm64.ARNG_16B)
 
 	case ssaop.OpARM64VFADD2D,
@@ -171,6 +176,8 @@ func ssaGenSIMDValue(s *ssagen.State, v *ssa.Value) bool {
 		ssaop.OpARM64VFADDP2D,
 		ssaop.OpARM64VADDP2D,
 		ssaop.OpARM64VUZP12D,
+		ssaop.OpARM64VFMAXP2D,
+		ssaop.OpARM64VFMINP2D,
 		ssaop.OpARM64VUZP22D,
 		ssaop.OpARM64VFDIV2D,
 		ssaop.OpARM64VFCMEQ2D,
@@ -208,6 +215,12 @@ func ssaGenSIMDValue(s *ssagen.State, v *ssa.Value) bool {
 		ssaop.OpARM64VFADDP4S,
 		ssaop.OpARM64VADDP4S,
 		ssaop.OpARM64VUZP14S,
+		ssaop.OpARM64VFMAXP4S,
+		ssaop.OpARM64VSMAXP4S,
+		ssaop.OpARM64VUMAXP4S,
+		ssaop.OpARM64VFMINP4S,
+		ssaop.OpARM64VSMINP4S,
+		ssaop.OpARM64VUMINP4S,
 		ssaop.OpARM64VUZP24S,
 		ssaop.OpARM64VFDIV4S,
 		ssaop.OpARM64VFCMEQ4S,
@@ -248,6 +261,10 @@ func ssaGenSIMDValue(s *ssagen.State, v *ssa.Value) bool {
 		ssaop.OpARM64VURHADD8H,
 		ssaop.OpARM64VADDP8H,
 		ssaop.OpARM64VUZP18H,
+		ssaop.OpARM64VSMAXP8H,
+		ssaop.OpARM64VUMAXP8H,
+		ssaop.OpARM64VSMINP8H,
+		ssaop.OpARM64VUMINP8H,
 		ssaop.OpARM64VUZP28H,
 		ssaop.OpARM64VCMEQ8H,
 		ssaop.OpARM64VCMGT8H,
@@ -291,16 +308,19 @@ func ssaGenSIMDValue(s *ssagen.State, v *ssa.Value) bool {
 	case ssaop.OpARM64VMLA8H:
 		p = simdV31ResultInArg0(s, v, arm64.ARNG_8H)
 
-	case ssaop.OpARM64VMOVBextr:
+	case ssaop.OpARM64VSMOVBextr,
+		ssaop.OpARM64VMOVBextr:
 		p = simdVgpImmIn1(s, v, arm64.ARNG_B)
 
 	case ssaop.OpARM64VMOVDextr:
 		p = simdVgpImmIn1(s, v, arm64.ARNG_D)
 
-	case ssaop.OpARM64VMOVHextr:
+	case ssaop.OpARM64VSMOVHextr,
+		ssaop.OpARM64VMOVHextr:
 		p = simdVgpImmIn1(s, v, arm64.ARNG_H)
 
-	case ssaop.OpARM64VMOVSextr:
+	case ssaop.OpARM64VSMOVSextr,
+		ssaop.OpARM64VMOVSextr:
 		p = simdVgpImmIn1(s, v, arm64.ARNG_S)
 
 	case ssaop.OpARM64VMOVBins:

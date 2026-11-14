@@ -54,14 +54,12 @@ func em1(a, b, c, d uint64) string {
 	return fmt.Sprintf("0x%08x%08x", hi, lo)
 }
 
-// em1 returns the string representation of
-//
-//	clmul(xlo,ylo)^clmul(xhi,yhi)
-//
+// vpsumd2 returns the 128-bit result of
+// clmul(xlo,ylo)^clmul(xhi,yhi)
 // using a clever constant-time implementation of clmul
-// using simpler simd instructions, for an emulated simd
-// type.
-func em2(xlo, xhi, ylo, yhi uint64) string {
+// using simpler (emulated) simd instructions.
+// These are not real simd instructions.
+func vpsumd2(xlo, xhi, ylo, yhi uint64) (lo, hi uint64) {
 	lx := newT(xlo, 0)
 	ly := newT(ylo, 0)
 	hx := newT(xhi, 0)
@@ -69,7 +67,19 @@ func em2(xlo, xhi, ylo, yhi uint64) string {
 
 	z := (lx.ClMul(ly)).Xor(hx.ClMul(hy))
 
-	return fmt.Sprintf("0x%08x%08x", z.b, z.a)
+	return z.a, z.b
+}
+
+// em2 returns the string representation of
+//
+//	clmul(xlo,ylo)^clmul(xhi,yhi)
+//
+// using a clever constant-time implementation of clmul
+// using simpler simd instructions, for an emulated simd
+// type.
+func em2(xlo, xhi, ylo, yhi uint64) string {
+	lo, hi := vpsumd2(xlo, xhi, ylo, yhi)
+	return fmt.Sprintf("0x%08x%08x", hi, lo)
 }
 
 // set0 returns a vector of uint64s that is zero
@@ -98,13 +108,11 @@ func get(v simd.Uint64s) (lo, hi uint64) {
 	return a[0], a[1]
 }
 
-// em3 returns the string representation of
-//
-//	clmul(xlo,ylo)^clmul(xhi,yhi)
-//
+// vpsumd3 returns the 128-bit result of
+// clmul(xlo,ylo)^clmul(xhi,yhi)
 // using the supplied simd operation
-// CarrylessMultiplyEven
-func em3(xlo, xhi, ylo, yhi uint64) string {
+// CarrylessMultiplyEven.
+func vpsumd3(xlo, xhi, ylo, yhi uint64) (lo, hi uint64) {
 	lx := set0(xlo)
 	ly := set0(ylo)
 	hx := set0(xhi)
@@ -112,11 +120,21 @@ func em3(xlo, xhi, ylo, yhi uint64) string {
 
 	z := (lx.CarrylessMultiplyEven(ly)).Xor(hx.CarrylessMultiplyEven(hy))
 
-	lo, hi := get(z)
-	return fmt.Sprintf("0x%08x%08x", hi, lo)
+	return get(z)
 }
 
 // em3 returns the string representation of
+//
+//	clmul(xlo,ylo)^clmul(xhi,yhi)
+//
+// using the supplied simd operation
+// CarrylessMultiplyEven
+func em3(xlo, xhi, ylo, yhi uint64) string {
+	lo, hi := vpsumd3(xlo, xhi, ylo, yhi)
+	return fmt.Sprintf("0x%08x%08x", hi, lo)
+}
+
+// em4 returns the string representation of
 //
 //	clmul(xlo,ylo)^clmul(xhi,yhi)
 //
@@ -134,10 +152,64 @@ func em4(xlo, xhi, ylo, yhi uint64) string {
 	return fmt.Sprintf("0x%08x%08x", hi, lo)
 }
 
+// em5 returns the string representation of
+//
+//	clmul(xlo,ylo)^clmul(xhi,yhi)
+//
+// using the supplied simd operation
+// CarrylessMultiplyEvenOdd
+func em5(xlo, xhi, ylo, yhi uint64) string {
+	z := set0(xlo).CarrylessMultiplyEvenOdd(set1(ylo)).Xor(set0(xhi).CarrylessMultiplyEvenOdd(set1(yhi)))
+	lo, hi := get(z)
+	return fmt.Sprintf("0x%08x%08x", hi, lo)
+}
+
+// em6 returns the string representation of
+//
+//	clmul(xlo,ylo)^clmul(xhi,yhi)
+//
+// using the supplied simd operation
+// CarrylessMultiplyOddEven
+func em6(xlo, xhi, ylo, yhi uint64) string {
+	z := set1(xlo).CarrylessMultiplyOddEven(set0(ylo)).Xor(set1(xhi).CarrylessMultiplyOddEven(set0(yhi)))
+	lo, hi := get(z)
+	return fmt.Sprintf("0x%08x%08x", hi, lo)
+}
+
+var sinkLo, sinkHi uint64
+
+func BenchmarkVpsumdIteration(b *testing.B) {
+	var a, bb, c, d uint64 = 0x66b32838754f59a3, 0xaeba319ab2418c50, 0x45678b3c7f11fc73, 0xd62ef8ae5f7b693
+	var lo, hi uint64
+	for b.Loop() {
+		lo, hi = vpsumd(a, bb, c, d)
+	}
+	sinkLo, sinkHi = lo, hi
+}
+
+func BenchmarkVpsumdClever(b *testing.B) {
+	var a, bb, c, d uint64 = 0x66b32838754f59a3, 0xaeba319ab2418c50, 0x45678b3c7f11fc73, 0xd62ef8ae5f7b693
+	var lo, hi uint64
+	for b.Loop() {
+		lo, hi = vpsumd2(a, bb, c, d)
+	}
+	sinkLo, sinkHi = lo, hi
+}
+
+func BenchmarkVpsumdSIMD(b *testing.B) {
+	var _ simd.Uint64s // ensure benchmark is SIMD-specialized so the loop calls specialized vpsumd3 directly
+	var a, bb, c, d uint64 = 0x66b32838754f59a3, 0xaeba319ab2418c50, 0x45678b3c7f11fc73, 0xd62ef8ae5f7b693
+	var lo, hi uint64
+	for b.Loop() {
+		lo, hi = vpsumd3(a, bb, c, d)
+	}
+	sinkLo, sinkHi = lo, hi
+}
+
 func TestClMul(t *testing.T) {
-	fmt.Println("Vector length:", simd.VectorBitSize())
-	fmt.Println("Emulated:", simd.Emulated())
-	fmt.Println("HasHWCLMUL:", simd.HasHardwareCarrylessMultiply())
+	t.Log("Vector length:", simd.VectorBitSize())
+	t.Log("Emulated:", simd.Emulated())
+	t.Log("HasHWCLMUL:", simd.HasHardwareCarrylessMultiply())
 
 	x := uint64(0x0807060504030201)
 	y := uint64(0x0101010101010101)
@@ -146,18 +218,20 @@ func TestClMul(t *testing.T) {
 	a, b, c, d = 0x66b32838754f59a3, 0xaeba319ab2418c50, 0x45678b3c7f11fc73, 0xd62ef8ae5f7b693
 
 	f := func(what string, f func(a, b, c, d uint64) string) {
-		fmt.Println(what)
-		fmt.Printf("vpsumd(0x%08x, 0x%08x, 0x%08x, 0x%08x) = %s\n", x, x, 1, 16, f(x, x, 1, 16))
-		fmt.Printf("vpsumd(0x%08x, 0x%08x, 0x%08x, 0x%08x) = %s\n", x, y, 1, 16, f(x, y, 1, 16))
-		fmt.Printf("vpsumd(0x%08x, 0x%08x, 0x%08x, 0x%08x) = %s\n", x, y, x, y, f(x, y, x, y))
-		fmt.Printf("vpsumd(0x%08x, 0x%08x, 0x%08x, 0x%08x) = %s\n", 1, 2, y*4, y, f(1, 2, y*4, y))
-		fmt.Printf("vpsumd(0x%08x, 0x%08x, 0x%08x, 0x%08x) = %s\n", a, b, c, d, f(a, b, c, d))
+		t.Log(what)
+		t.Logf("vpsumd(0x%08x, 0x%08x, 0x%08x, 0x%08x) = %s", x, x, 1, 16, f(x, x, 1, 16))
+		t.Logf("vpsumd(0x%08x, 0x%08x, 0x%08x, 0x%08x) = %s", x, y, 1, 16, f(x, y, 1, 16))
+		t.Logf("vpsumd(0x%08x, 0x%08x, 0x%08x, 0x%08x) = %s", x, y, x, y, f(x, y, x, y))
+		t.Logf("vpsumd(0x%08x, 0x%08x, 0x%08x, 0x%08x) = %s", 1, 2, y*4, y, f(1, 2, y*4, y))
+		t.Logf("vpsumd(0x%08x, 0x%08x, 0x%08x, 0x%08x) = %s", a, b, c, d, f(a, b, c, d))
 	}
 
 	f("Simple scalar clmul emulation", em1)
 	f("Clever emulated vector clmul emulation", em2)
 	f("CarrylessMultiplyEven", em3)
 	f("CarrylessMultiplyOdd", em4)
+	f("CarrylessMultiplyEvenOdd", em5)
+	f("CarrylessMultiplyOddEven", em6)
 
 	for i := range 10000 {
 		a, b, c, d := rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
@@ -166,9 +240,11 @@ func TestClMul(t *testing.T) {
 		e2 := em2(a, b, c, d)
 		e3 := em3(a, b, c, d)
 		e4 := em4(a, b, c, d)
+		e5 := em5(a, b, c, d)
+		e6 := em6(a, b, c, d)
 
-		if e1 != e2 || e1 != e3 || e1 != e4 {
-			t.Errorf("Mismatch at %d, a,b,c,d = 0x%08x, 0x%08x, 0x%08x, 0x%08x; e1=%s, e2=%s, e3=%s, e4=%s", i, a, b, c, d, e1, e2, e3, e4)
+		if e1 != e2 || e1 != e3 || e1 != e4 || e1 != e5 || e1 != e6 {
+			t.Errorf("Mismatch at %d, a,b,c,d = 0x%08x, 0x%08x, 0x%08x, 0x%08x; e1=%s, e2=%s, e3=%s, e4=%s, e5=%s, e6=%s", i, a, b, c, d, e1, e2, e3, e4, e5, e6)
 			if i > 5 {
 				return
 			}

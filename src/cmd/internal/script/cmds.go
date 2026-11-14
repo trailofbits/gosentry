@@ -7,6 +7,7 @@ package script
 import (
 	"cmd/internal/pathcache"
 	"cmd/internal/robustio"
+	"context"
 	"errors"
 	"fmt"
 	"internal/diff"
@@ -483,6 +484,16 @@ func startCommand(s *State, name, path string, args []string, cancel func(*exec.
 		err = cmd.Wait()
 		if errors.Is(err, exec.ErrWaitDelay) {
 			err = fmt.Errorf("%w: output pipes not closed after waiting %v", err, cmd.WaitDelay)
+		}
+		ctx := s.Context()
+		if err != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) && context.Cause(ctx) != ctx.Err() {
+			// When the context has hit DeadlineExceeded, a common case here is that the
+			// cmd.Wait error reflects the command failing (with "exit status 2" or similar)
+			// after it was sent SIGQUIT or otherwise terminated for cleanup.
+			//
+			// That error alone is not very helpful for understanding what happened, so also report
+			// an overall timeout occurred via the explanatory context timeout cause we set up.
+			err = fmt.Errorf("%v (command error: %w)", context.Cause(ctx), err)
 		}
 		return stdoutBuf.String(), stderrBuf.String(), err
 	}

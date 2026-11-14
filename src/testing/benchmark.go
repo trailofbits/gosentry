@@ -140,7 +140,7 @@ func (b *B) StartTimer() {
 		runtime.ReadMemStats(&memStats)
 		b.startAllocs = memStats.Mallocs
 		b.startBytes = memStats.TotalAlloc
-		b.start = highPrecisionTimeNow()
+		b.start = time.Now()
 		b.timerOn = true
 		b.loop.i &^= loopPoisonTimer
 	}
@@ -150,7 +150,7 @@ func (b *B) StartTimer() {
 // while performing steps that you don't want to measure.
 func (b *B) StopTimer() {
 	if b.timerOn {
-		b.duration += highPrecisionTimeSince(b.start)
+		b.duration += time.Since(b.start)
 		runtime.ReadMemStats(&memStats)
 		b.netAllocs += memStats.Mallocs - b.startAllocs
 		b.netBytes += memStats.TotalAlloc - b.startBytes
@@ -175,7 +175,7 @@ func (b *B) ResetTimer() {
 		runtime.ReadMemStats(&memStats)
 		b.startAllocs = memStats.Mallocs
 		b.startBytes = memStats.TotalAlloc
-		b.start = highPrecisionTimeNow()
+		b.start = time.Now()
 	}
 	b.duration = 0
 	b.netAllocs = 0
@@ -367,7 +367,7 @@ func (b *B) launch() {
 func (b *B) Elapsed() time.Duration {
 	d := b.duration
 	if b.timerOn {
-		d += highPrecisionTimeSince(b.start)
+		d += time.Since(b.start)
 	}
 	return d
 }
@@ -738,6 +738,8 @@ func runBenchmarks(importPath string, matchString func(pat, str string) (bool, e
 
 // processBench runs bench b for the configured CPU counts and prints the results.
 func (s *benchState) processBench(b *B) {
+	// Repeated runs report failures to the original B so B.Run returns false.
+	original := b
 	for i, procs := range cpuList {
 		for j := uint(0); j < *count; j++ {
 			runtime.GOMAXPROCS(procs)
@@ -753,6 +755,7 @@ func (s *benchState) processBench(b *B) {
 					common: common{
 						signal: make(chan bool),
 						name:   b.name,
+						parent: &original.common,
 						w:      b.w,
 						chatty: b.chatty,
 						bench:  true,
@@ -938,7 +941,6 @@ func (pb *PB) Next() bool {
 // It creates multiple goroutines and distributes b.N iterations among them.
 // The number of goroutines defaults to GOMAXPROCS. To increase parallelism for
 // non-CPU-bound benchmarks, call [B.SetParallelism] before RunParallel.
-// RunParallel is usually used with the go test -cpu flag.
 //
 // The body function will be run in each goroutine. It should set up any
 // goroutine-local state and then iterate until pb.Next returns false.

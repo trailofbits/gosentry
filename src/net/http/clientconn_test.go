@@ -17,7 +17,7 @@ import (
 )
 
 func TestTransportNewClientConnRoundTrip(t *testing.T) {
-	run(t, testTransportNewClientConnRoundTrip, http3SkippedMode)
+	runSynctest(t, testTransportNewClientConnRoundTrip)
 }
 func testTransportNewClientConnRoundTrip(t *testing.T, mode testMode) {
 	cst := newClientServerTest(t, mode, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -71,7 +71,7 @@ func testTransportNewClientConnRoundTrip(t *testing.T, mode testMode) {
 // send an HTTP/2 PING frame, and verifies that a successful ping
 // returns a non-nil Response with a NoBody body (see go.dev/issue/81206).
 func TestClientConnPing(t *testing.T) {
-	runSynctest(t, testClientConnPing, http3SkippedMode)
+	runSynctest(t, testClientConnPing)
 }
 func testClientConnPing(t *testing.T, mode testMode) {
 	_, cc := newClientConnTest(t, mode, nil)
@@ -93,7 +93,7 @@ func testClientConnPing(t *testing.T, mode testMode) {
 		}
 		resp.Body.Close()
 	default:
-		// HTTP/1 connections do not support PING.
+		// HTTP/1 and HTTP/3 connections do not support PING.
 		if err == nil {
 			t.Fatal("RoundTrip(:ping) = nil error, want error on HTTP/1")
 		}
@@ -118,7 +118,9 @@ func newClientConnTest(t testing.TB, mode testMode, h http.HandlerFunc, opts ...
 
 // TestClientConnReserveAll reserves every concurrency slot on a connection.
 func TestClientConnReserveAll(t *testing.T) {
-	runSynctest(t, testClientConnReserveAll, http3SkippedMode)
+	// HTTP/3 ClientConn.Available is intentionally unbounded, unlike HTTP/1
+	// and HTTP/2.
+	runSynctest(t, testClientConnReserveAll, testSkipMode{http3Mode})
 }
 func testClientConnReserveAll(t *testing.T, mode testMode) {
 	cst, cc := newClientConnTest(t, mode, nil, func(s *http.Server) {
@@ -159,7 +161,7 @@ func testClientConnReserveAll(t *testing.T, mode testMode) {
 // TestClientConnReserveParallel starts concurrent goroutines which reserve every
 // concurrency slot on a connection.
 func TestClientConnReserveParallel(t *testing.T) {
-	runSynctest(t, testClientConnReserveParallel, http3SkippedMode)
+	runSynctest(t, testClientConnReserveParallel, testSkipMode{http3Mode})
 }
 func testClientConnReserveParallel(t *testing.T, mode testMode) {
 	_, cc := newClientConnTest(t, mode, nil, func(s *http.Server) {
@@ -199,7 +201,7 @@ func testClientConnReserveParallel(t *testing.T, mode testMode) {
 
 // TestClientConnReserveRelease repeatedly reserves and releases concurrency slots.
 func TestClientConnReserveRelease(t *testing.T) {
-	runSynctest(t, testClientConnReserveRelease, http3SkippedMode)
+	runSynctest(t, testClientConnReserveRelease, testSkipMode{http3Mode})
 }
 func testClientConnReserveRelease(t *testing.T, mode testMode) {
 	_, cc := newClientConnTest(t, mode, nil, func(s *http.Server) {
@@ -364,7 +366,7 @@ func TestClientConnReserveAndConsume(t *testing.T) {
 						t.Errorf("cc.Reserve() = %v, want success", err)
 					}
 				}
-			}, http3SkippedMode)
+			})
 		})
 	}
 
@@ -373,7 +375,7 @@ func TestClientConnReserveAndConsume(t *testing.T) {
 // TestClientConnRoundTripBlocks verifies that RoundTrip blocks until a concurrency
 // slot is available on a connection.
 func TestClientConnRoundTripBlocks(t *testing.T) {
-	runSynctest(t, testClientConnRoundTripBlocks, http3SkippedMode)
+	runSynctest(t, testClientConnRoundTripBlocks, testSkipMode{http3Mode})
 }
 func testClientConnRoundTripBlocks(t *testing.T, mode testMode) {
 	var handlerCalls atomic.Int64
@@ -419,4 +421,26 @@ func testClientConnRoundTripBlocks(t *testing.T, mode testMode) {
 			t.Errorf("got %v responses, want %v", got, want)
 		}
 	}
+}
+
+func TestClientConnCloseInStateHook(t *testing.T) {
+	runSynctest(t, testClientConnCloseInStateHook)
+}
+func testClientConnCloseInStateHook(t *testing.T, mode testMode) {
+	_, cc := newClientConnTest(t, mode, nil)
+	cc.SetStateHook(func(cc *http.ClientConn) {})
+	synctest.Wait()
+	if err := cc.Reserve(); err != nil {
+		t.Fatalf("cc.Reserve() = %v, want nil", err)
+	}
+	cc.SetStateHook(func(cc *http.ClientConn) {
+		cc.Close()
+		synctest.Wait()
+	})
+	req, _ := http.NewRequest("GET", mode.Scheme()+"://example.tld/", nil)
+	resp, err := cc.RoundTrip(req)
+	if err != nil {
+		t.Fatalf("cc.RoundTrip() = %v, want nil", err)
+	}
+	resp.Body.Close()
 }
