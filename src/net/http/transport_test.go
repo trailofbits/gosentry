@@ -552,24 +552,24 @@ func testTransportNotReadToEndConnectionReuse(t *testing.T, mode testMode) {
 }
 
 func TestTransportMaxConnsPerHostIncludeDialInProgress(t *testing.T) {
-	runNoSynctest(t, testTransportMaxConnsPerHostIncludeDialInProgress, http3SkippedMode)
+	runNoSynctest(t, testTransportMaxConnsPerHostIncludeDialInProgress)
 }
 func testTransportMaxConnsPerHostIncludeDialInProgress(t *testing.T, mode testMode) {
-	ts := newClientServerTest(t, mode, HandlerFunc(func(w ResponseWriter, r *Request) {
+	cst := newClientServerTest(t, mode, HandlerFunc(func(w ResponseWriter, r *Request) {
 		_, err := w.Write([]byte("foo"))
 		if err != nil {
 			t.Fatalf("Write: %v", err)
 		}
-	}), optRealNet).ts
-	c := ts.Client()
-	tr := c.Transport.(*Transport)
+	}), optRealNet)
+	ts := cst.ts
+	tr := cst.tr
 	dialStarted := make(chan struct{})
 	stallDial := make(chan struct{})
-	tr.Dial = func(network, addr string) (net.Conn, error) {
+	cst.setDialHook(func() error {
 		dialStarted <- struct{}{}
 		<-stallDial
-		return net.Dial(network, addr)
-	}
+		return nil
+	})
 
 	tr.DisableKeepAlives = true
 	tr.MaxConnsPerHost = 1
@@ -1763,7 +1763,7 @@ func TestTransportDialPreservesNetOpProxyError(t *testing.T) {
 // (A bug caused dialConn to instead write the per-request Proxy-Authorization
 // header through to the shared Header instance, introducing a data race.)
 func TestTransportProxyDialDoesNotMutateProxyConnectHeader(t *testing.T) {
-	runSynctest(t, testTransportProxyDialDoesNotMutateProxyConnectHeader, http3SkippedMode)
+	runSynctest(t, testTransportProxyDialDoesNotMutateProxyConnectHeader)
 }
 func testTransportProxyDialDoesNotMutateProxyConnectHeader(t *testing.T, mode testMode) {
 	proxy := newClientServerTest(t, mode, NotFoundHandler()).ts
@@ -2148,7 +2148,7 @@ func testTransportPersistConnContextLeakMaxConnsPerHost(t *testing.T, mode testM
 
 // This used to crash; https://golang.org/issue/3266
 func TestTransportIdleConnCrash(t *testing.T) {
-	runSynctest(t, testTransportIdleConnCrash, http3SkippedMode)
+	runSynctest(t, testTransportIdleConnCrash)
 }
 func testTransportIdleConnCrash(t *testing.T, mode testMode) {
 	var tr *Transport
@@ -2312,7 +2312,7 @@ func testTransportConcurrency(t *testing.T, mode testMode) {
 }
 
 func TestIssue4191_InfiniteGetTimeout(t *testing.T) {
-	runSynctest(t, testIssue4191_InfiniteGetTimeout, http3SkippedMode)
+	runSynctest(t, testIssue4191_InfiniteGetTimeout, testSkipMode{http3Mode})
 }
 func testIssue4191_InfiniteGetTimeout(t *testing.T, mode testMode) {
 	mux := NewServeMux()
@@ -2884,7 +2884,7 @@ func TestTransportEmptyMethod(t *testing.T) {
 }
 
 func TestTransportSocketLateBinding(t *testing.T) {
-	runNoSynctest(t, testTransportSocketLateBinding, http3SkippedMode)
+	runNoSynctest(t, testTransportSocketLateBinding)
 }
 func testTransportSocketLateBinding(t *testing.T, mode testMode) {
 	mux := NewServeMux()
@@ -2897,23 +2897,24 @@ func testTransportSocketLateBinding(t *testing.T, mode testMode) {
 	mux.HandleFunc("/bar", func(w ResponseWriter, r *Request) {
 		w.Header().Set("bar-ipport", r.RemoteAddr)
 	})
-	ts := newClientServerTest(t, mode, mux, optRealNet).ts
+	cst := newClientServerTest(t, mode, mux, optRealNet)
+	ts := cst.ts
 
 	dialGate := make(chan bool, 1)
 	dialing := make(chan bool)
-	c := ts.Client()
-	c.Transport.(*Transport).Dial = func(n, addr string) (net.Conn, error) {
+	c := cst.c
+	cst.setDialHook(func() error {
 		for {
 			select {
 			case ok := <-dialGate:
 				if !ok {
-					return nil, errors.New("manually closed")
+					return errors.New("manually closed")
 				}
-				return net.Dial(n, addr)
+				return nil
 			case dialing <- true:
 			}
 		}
-	}
+	})
 	defer close(dialGate)
 
 	dialGate <- true // only allow one dial
@@ -2932,14 +2933,14 @@ func testTransportSocketLateBinding(t *testing.T, mode testMode) {
 		// read its header. Wait for the bar request to block in Dial, then
 		// let the foo response finish so we can use its connection for /bar.
 
-		if mode == http2Mode {
-			// In HTTP/2 mode, the second Dial won't happen because the protocol
-			// multiplexes the streams by default. Just sleep for an arbitrary time;
+		if mode == http2Mode || mode == http3Mode {
+			// In HTTP/2 and HTTP/3 modes, the second Dial won't happen because the
+			// protocol multiplexes the streams by default. Just sleep for an arbitrary time;
 			// the test should pass regardless of how far the bar request gets by this
 			// point.
 			select {
 			case <-dialing:
-				t.Errorf("unexpected second Dial in HTTP/2 mode")
+				t.Errorf("unexpected second Dial in %s mode", mode)
 			case <-time.After(10 * time.Millisecond):
 			}
 		} else {
@@ -3101,7 +3102,7 @@ func testTransportIgnore1xxResponses(t *testing.T, mode testMode) {
 }
 
 func TestTransportLimits1xxResponses(t *testing.T) {
-	runSynctest(t, testTransportLimits1xxResponses, http3SkippedMode)
+	runSynctest(t, testTransportLimits1xxResponses)
 }
 func testTransportLimits1xxResponses(t *testing.T, mode testMode) {
 	cst := newClientServerTest(t, mode, HandlerFunc(func(w ResponseWriter, r *Request) {
@@ -3119,20 +3120,22 @@ func testTransportLimits1xxResponses(t *testing.T, mode testMode) {
 		res.Body.Close()
 		t.Fatalf("RoundTrip succeeded; want error")
 	}
-	for _, want := range []string{
+	wants := []string{
 		"response headers exceeded",
 		"too many 1xx",
 		"header list too large",
-	} {
+		"headers too large",
+	}
+	for _, want := range wants {
 		if strings.Contains(err.Error(), want) {
 			return
 		}
 	}
-	t.Errorf(`got error %q; want "response headers exceeded" or "too many 1xx"`, err)
+	t.Errorf("got error %q; want one of %q", err, wants)
 }
 
 func TestTransportDoesNotLimitDelivered1xxResponses(t *testing.T) {
-	runSynctest(t, testTransportDoesNotLimitDelivered1xxResponses, http3SkippedMode)
+	runSynctest(t, testTransportDoesNotLimitDelivered1xxResponses)
 }
 func testTransportDoesNotLimitDelivered1xxResponses(t *testing.T, mode testMode) {
 	if mode == http2Mode {
@@ -3910,7 +3913,7 @@ func testTransportDialTLS(t *testing.T, mode testMode) {
 }
 
 func TestTransportDialContext(t *testing.T) {
-	runNoSynctest(t, testTransportDialContext, http3SkippedMode)
+	runNoSynctest(t, testTransportDialContext, testSkipMode{http3Mode})
 }
 func testTransportDialContext(t *testing.T, mode testMode) {
 	ctxKey := "some-key"
@@ -4106,7 +4109,7 @@ func (c *blockCloseConn) Close() error {
 }
 
 func TestTransportRemovesConnsAfterIdle(t *testing.T) {
-	runSynctest(t, testTransportRemovesConnsAfterIdle, http3SkippedMode)
+	runSynctest(t, testTransportRemovesConnsAfterIdle)
 }
 func testTransportRemovesConnsAfterIdle(t *testing.T, mode testMode) {
 	timeout := 1 * time.Second
@@ -4116,34 +4119,38 @@ func testTransportRemovesConnsAfterIdle(t *testing.T, mode testMode) {
 		tr.IdleConnTimeout = timeout
 	}
 	cst := newClientServerTest(t, mode, HandlerFunc(func(w ResponseWriter, r *Request) {
-		w.Header().Set("X-Addr", r.RemoteAddr)
+		w.WriteHeader(200)
 	}), trFunc)
 
-	// makeRequest returns the local address a request was made from
-	// (unique for each connection).
-	makeRequest := func() string {
+	var dialed atomic.Bool
+	cst.setDialHook(func() error {
+		dialed.Store(true)
+		return nil
+	})
+	requestUsesNewConn := func() bool {
+		dialed.Store(false)
 		resp, err := cst.c.Get(cst.ts.URL)
 		if err != nil {
 			t.Fatalf("got error: %s", err)
 		}
 		resp.Body.Close()
-		return resp.Header.Get("X-Addr")
+		return dialed.Load()
 	}
 
-	addr1 := makeRequest()
+	if !requestUsesNewConn() {
+		t.Fatalf("first request did not use a new conn")
+	}
 
 	time.Sleep(timeout / 2)
 	synctest.Wait()
-	addr2 := makeRequest()
-	if addr1 != addr2 {
-		t.Fatalf("two requests made within IdleConnTimeout should have used the same conn, but used %v, %v", addr1, addr2)
+	if requestUsesNewConn() {
+		t.Fatalf("two requests made within IdleConnTimeout should have used the same conn")
 	}
 
 	time.Sleep(timeout)
 	synctest.Wait()
-	addr3 := makeRequest()
-	if addr1 == addr3 {
-		t.Fatalf("two requests made more than IdleConnTimeout apart should have used different conns, but used %v, %v", addr1, addr3)
+	if !requestUsesNewConn() {
+		t.Fatalf("two requests made more than IdleConnTimeout apart should have used different conns")
 	}
 }
 

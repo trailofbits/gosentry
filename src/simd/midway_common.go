@@ -60,6 +60,15 @@ func init() {
 	maxVectorSize, emulated, hwClmul = configure(actualMax, allFeatureSize, arch, simd.Value())
 }
 
+type fromArchError string
+
+func (e fromArchError) Error() string {
+	if emulated {
+		return string(e) + " when simd.Emulated() is true"
+	}
+	return string(e) + " when simd.VectorBits() is " + strconv.Itoa(maxVectorSize)
+}
+
 func configure(actualMax, allFeatureSize int, arch, gosimd string) (maxVectorSize int, emulated, hwClmul bool) {
 	explicitRequest := false
 	hwClmul = true
@@ -160,27 +169,4 @@ func configure(actualMax, allFeatureSize int, arch, gosimd string) (maxVectorSiz
 	maxVectorSize = val
 	emulated = false
 	return maxVectorSize, emulated, hwClmul
-}
-
-// VectorBitSize returns the bit length of the longest vector available
-// on the current hardware.  It can be artificially reduced by setting
-// GODEBUG=simd=<smaller size> environment variable before running a program.
-func VectorBitSize() int {
-	return maxVectorSize
-}
-
-// Emulated returns whether simd operations are emulated or
-// running on actual vector hardware.
-func Emulated() bool {
-	return emulated
-}
-
-// HasHardwareCarrylessMultiply returns whether this platform
-// has a hardware-implemented version of carryless multiply.
-// With default GODEBUG=simd settings, if this is false,
-// it is emulated and merely slow, but with non-default settings
-// this can indicate the possibility of a missing instruction
-// that will fail ("SIGILL") if it is executed.
-func HasHardwareCarrylessMultiply() bool {
-	return hwClmul && archHasHwClmul
 }

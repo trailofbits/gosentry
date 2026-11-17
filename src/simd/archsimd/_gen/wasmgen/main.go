@@ -799,7 +799,7 @@ var (
 		"extmul_low_u":      "MulWidenLo",
 		"extmul_high_s":     "MulWidenHi",
 		"extmul_high_u":     "MulWidenHi",
-		"dot_s":             "?",
+		"dot_s":             "DotProductPairs",
 		"relaxed_dot_s":     "?",
 
 		// widen integer types
@@ -1054,6 +1054,9 @@ func initWasmOps() {
 
 	addWasmOpsDetail(sle32, s_q2, 2, mulHalf)
 	addWasmOpsDetail(ule32, u_q2, 2, mulHalf)
+	// i32x4.dot_i16x8_s has the same shape as extmul: two i16x8 inputs and a
+	// commutative i32x4 result.
+	addWasmOpsDetail([]*simdType{vi16}, s16_q2, 2, mulHalf)
 
 	addWasmOpsDetail(unsigned, rotates, 2, rotate)
 
@@ -1212,7 +1215,11 @@ func genTypes(f *bytes.Buffer) {
 	fmt.Fprintln(f)
 	fmt.Fprintln(f, "// v128 is a tag type that tells the compiler that this is really 128-bit SIMD")
 	fmt.Fprintln(f, "type v128 struct {")
-	fmt.Fprintln(f, "\t_128 [0]func() // uncomparable")
+	fmt.Fprintln(f, "\t// _align gives the tag, and so the vector types that start with it,")
+	fmt.Fprintln(f, "\t// the 8-byte alignment that the compiler gives SIMD types. Unlike")
+	fmt.Fprintln(f, "\t// the compiler, go/types and types2 compute the alignment from the")
+	fmt.Fprintln(f, "\t// fields.")
+	fmt.Fprintln(f, "\t_align [0]uint64")
 	fmt.Fprintln(f, "}")
 
 	for _, t := range allTypes {

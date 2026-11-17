@@ -1369,7 +1369,7 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 				// since it zeroes the upper 32 bits anyway.
 				width = 4
 			}
-			opregreg(s, moveByRegsWidth(y, x, width, hasAVX(v)), y, x)
+			opregreg(s, moveByRegsWidth(y, x, width, avxMove(v)), y, x)
 		}
 	case ssaop.OpLoadReg:
 		if v.Type.IsFlags() {
@@ -1377,7 +1377,7 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 			return
 		}
 		r := v.Reg()
-		p := s.Prog(loadByRegWidth(r, v.Type.Size(), hasAVX(v)))
+		p := s.Prog(loadByRegWidth(r, v.Type.Size(), avxMove(v)))
 		ssagen.AddrAuto(&p.From, v.Args[0])
 		p.To.Type = obj.TYPE_REG
 		if v.Type.IsSIMD() {
@@ -1394,7 +1394,7 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		if v.Type.IsSIMD() {
 			r = simdOrMaskReg(v.Args[0])
 		}
-		p := s.Prog(storeByRegWidth(r, v.Type.Size(), hasAVX(v)))
+		p := s.Prog(storeByRegWidth(r, v.Type.Size(), avxMove(v)))
 		p.From.Type = obj.TYPE_REG
 		p.From.Reg = r
 		ssagen.AddrAuto(&p.To, v)
@@ -1631,6 +1631,12 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		p.To.Reg = v.Reg()
 	case ssaop.OpAMD64LoweredRound32F, ssaop.OpAMD64LoweredRound64F:
 		// input is already rounded
+	case ssaop.OpAMD64LoweredEnlarge256, ssaop.OpAMD64LoweredEnlarge512:
+		// The input's register is already zero above the input's
+		// width.
+		if v.Reg() != v.Args[0].Reg() {
+			v.Fatalf("input[0] and output not in same register %s", v.LongString())
+		}
 	case ssaop.OpAMD64ROUNDSD, ssaop.OpAMD64ROUNDSS:
 		p := s.Prog(v.Op.Asm())
 		val := v.AuxInt
@@ -2171,6 +2177,18 @@ func simdV2kvResultInArg0(s *ssagen.State, v *ssa.Value) *obj.Prog {
 	// or "predicate" for "predicated AVX512 instructions"
 	// sits right at the end of the operand list.
 	// TODO: verify this assumption.
+	p.AddRestSourceReg(maskReg(v.Args[2]))
+	p.To.Type = obj.TYPE_REG
+	p.To.Reg = simdReg(v)
+	return p
+}
+
+// Example instruction: VPSLLQ $2, Z1, K1, Z0 (masking merging)
+func simdV2kvResultInArg0Imm8(s *ssagen.State, v *ssa.Value) *obj.Prog {
+	p := s.Prog(v.Op.Asm())
+	p.From.Offset = int64(v.AuxUInt8())
+	p.From.Type = obj.TYPE_CONST
+	p.AddRestSourceReg(simdReg(v.Args[1]))
 	p.AddRestSourceReg(maskReg(v.Args[2]))
 	p.To.Type = obj.TYPE_REG
 	p.To.Reg = simdReg(v)
@@ -2718,6 +2736,16 @@ func spillArgReg(pp *objw.Progs, p *obj.Prog, f *ssa.Func, t *types.Type, reg in
 // penalties. See issue #80835.
 func hasAVX(v *ssa.Value) bool {
 	return v.Block.CPUfeatures.HasFeature(ssa.CPUavx)
+}
+
+// avxMove reports whether to use VEX encodings to move, spill, or restore v.
+//
+// SIMD values always use VEX encodings. AVX is necessarily available, and
+// ssa.ZeroUpperVec relies on a register holding a SIMD value staying zero
+// above the value's width, which a legacy SSE move or restore wouldn't do:
+// it would leave the destination's upper bits unchanged.
+func avxMove(v *ssa.Value) bool {
+	return hasAVX(v) || v.Type.IsSIMD()
 }
 
 // zero 16 bytes at reg+off.

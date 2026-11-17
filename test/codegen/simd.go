@@ -265,6 +265,11 @@ func sftImmZeroMerge(x, dst archsimd.Int16x32, bits uint32) archsimd.Int16x32 {
 	return x.ShiftAllLeft(0).IfElse(mask, dst)
 }
 
+func sftImmMerge(x, y archsimd.Uint64x8, m archsimd.Mask64x8) archsimd.Uint64x8 {
+	// amd64:`VPSLLQ \$2, Z[0-9]+, K[1-7], Z[0-9]+` -`VPBLENDMQ`
+	return x.ShiftAllLeft(2).IfElse(m, y)
+}
+
 func aLtbLtc8_avx512(a, b, c archsimd.Int8x64) archsimd.Mask8x64 {
 	// the vector length implies AVX512 implies the mask operations.
 	// amd64:`KANDQ`
@@ -441,4 +446,31 @@ func broadcast128AVX2Checked(x int32) archsimd.Int32x4 {
 func broadcast128MulToShift(x archsimd.Int32x4) archsimd.Int32x4 {
 	// amd64:`VPSLLD \$3,` -`VPMULLD`
 	return x.Mul(archsimd.BroadcastInt32x4(8))
+}
+
+// == and != on 256- and 512-bit vectors and masks.
+
+func eqInt16x16(x, y archsimd.Int16x16) bool {
+	// amd64:`VPXOR` `VPTEST` `SETEQ` -`CALL`
+	return x == y
+}
+
+func eqFloat32x8(x, y archsimd.Float32x8) bool {
+	// amd64:`VCMPPS` `VPTEST` `SETEQ` -`CALL`
+	return x == y
+}
+
+func eqInt64x8(x, y archsimd.Int64x8) bool {
+	// amd64:`VPCMPQ` `KMOVB` `TESTB` `SETEQ` -`CALL`
+	return x == y
+}
+
+func neFloat64x8(x, y archsimd.Float64x8) bool {
+	// amd64:`VCMPPD` `KMOVB` `TESTB` `SETNE` -`CALL`
+	return x != y
+}
+
+func eqMask8x64(x, y archsimd.Mask8x64) bool {
+	// amd64:`VPCMPQ` `KMOVB` `TESTB` `SETEQ` -`CALL`
+	return x == y
 }

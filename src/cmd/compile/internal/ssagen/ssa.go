@@ -3109,11 +3109,20 @@ func (s *state) exprCheckPtr(n ir.Node, checkPtrOK bool) *ssa.Value {
 		return s.newValue3(ssaop.OpSliceMake, n.Type(), ptr, len, len)
 	case ir.OCFUNC:
 		n := n.(*ir.UnaryExpr)
-		aux := n.X.(*ir.Name).Linksym()
+		name := n.X.(*ir.Name)
+		aux := name.Linksym()
 		// OCFUNC is used to build function values, which must
 		// always reference ABIInternal entry points.
 		if aux.ABI() != obj.ABIInternal {
 			s.Fatalf("expected ABIInternal: %v", aux.ABI())
+		}
+		if buildcfg.GOARCH == "wasm32" {
+			// wasm32 function values store a call_indirect table index.
+			// Read it from the same function-value symbol used by static
+			// data and closures.
+			funcval := staticdata.FuncLinksym(name)
+			addr := s.entryNewValue1A(ssaop.OpAddr, types.NewPtr(n.Type()), funcval, s.sb)
+			return s.load(n.Type(), addr)
 		}
 		return s.entryNewValue1A(ssaop.OpAddr, n.Type(), aux, s.sb)
 	case ir.ONAME:
@@ -3291,6 +3300,17 @@ func (s *state) exprCheckPtr(n ir.Node, checkPtrOK bool) *ssa.Value {
 		n := n.(*ir.BinaryExpr)
 		a := s.expr(n.X)
 		b := s.expr(n.Y)
+		if t := n.X.Type(); t.IsSIMD() {
+			c := s.newValue2(simdEqualOp(t), types.Types[types.TBOOL], a, b)
+			switch n.Op() {
+			case ir.OEQ:
+				return c
+			case ir.ONE:
+				return s.newValue1(ssaop.OpNot, types.Types[types.TBOOL], c)
+			default:
+				s.Fatalf("ordered SIMD compare %v", n.Op())
+			}
+		}
 		if n.X.Type().IsComplex() {
 			pt := types.FloatForComplex(n.X.Type())
 			op := s.ssaOp(ir.OEQ, pt)

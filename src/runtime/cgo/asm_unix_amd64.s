@@ -8,34 +8,51 @@
 #include "textflag.h"
 #include "abi_amd64.h"
 
-// callC calls a C function with up to 6 integer/pointer arguments
-// in the System V AMD64 ABI and returns its integer/pointer result.
-// The function may be variadic: AX is cleared to tell it that no
+// cgoCallTrampoline is called by runtime.asmcgocall (or runtime.cgocall)
+// using the System V AMD64 C ABI with DI pointing to a cgoCallFrame.
+// The target function may be variadic: AX is cleared to tell it that no
 // arguments are passed in vector registers.
-TEXT ·callC<ABIInternal>(SB),NOSPLIT,$0
-	// Convert from Go ABIInternal (AX, BX, CX, DI, SI, R8, R9)
-	// to System V AMD64 ABI (fn in R11; args in DI, SI, DX, CX, R8, R9).
-	MOVQ	AX, R11
-	MOVQ	DI, DX
-	MOVQ	BX, DI
-	MOVQ	CX, AX
-	MOVQ	SI, CX
-	MOVQ	AX, SI
-	// a4 and a5 are already in R8 and R9.
-	MOVQ	SP, BX
-	ANDQ	$~15, SP
-	XORL	AX, AX	// vararg: say "no float args"
+TEXT ·cgoCallTrampoline(SB),NOSPLIT|NOFRAME,$0-0
+	PUSHQ	BP
+	MOVQ	SP, BP
+	PUSHQ	BX
+	SUBQ	$8, SP		// keep SP 16-byte aligned before CALL
+	MOVQ	DI, BX
+	MOVQ	cgoCallFrame_fn(DI), R11
+	MOVQ	cgoCallFrame_a1(DI), SI
+	MOVQ	cgoCallFrame_a2(DI), DX
+	MOVQ	cgoCallFrame_a3(DI), CX
+	MOVQ	cgoCallFrame_a4(DI), R8
+	MOVQ	cgoCallFrame_a5(DI), R9
+	MOVQ	cgoCallFrame_a0(DI), DI
+	XORL	AX, AX		// vararg: say "no float args"
 	CALL	R11
-	MOVQ	BX, SP
-	// Restore X15 (the ABIInternal zero register), which is caller-saved
-	// in the System V AMD64 ABI. The return value is already in AX.
-#ifndef GOAMD64_v3
-#ifndef GOAMD64_v4
-	XORPS	X15, X15
-	CMPB	internal∕cpu·X86+const_offsetX86HasAVX(SB), $1
-	JNE	noavx
-#endif
-#endif
-	VXORPS	X15, X15, X15
-noavx:
+	MOVQ	AX, cgoCallFrame_r1(BX)
+	XORL	AX, AX
+	ADDQ	$8, SP
+	POPQ	BX
+	POPQ	BP
 	RET
+
+TEXT ·x_cgo_threadentry(SB),NOSPLIT|NOFRAME,$0-0
+	PUSH_REGS_HOST_TO_ABI0()
+	ADJSP	$8
+	MOVQ	DI, 0(SP)
+	CALL	·threadentry(SB)
+	ADJSP	$-8
+	POP_REGS_HOST_TO_ABI0()
+	XORL	AX, AX
+	RET
+
+TEXT x_cgo_init<>(SB),NOSPLIT|NOFRAME,$0-0
+	PUSH_REGS_HOST_TO_ABI0()
+	ADJSP	$16
+	MOVQ	DI, 0(SP)
+	MOVQ	SI, 8(SP)
+	CALL	·cgoInit(SB)
+	ADJSP	$-16
+	POP_REGS_HOST_TO_ABI0()
+	RET
+
+GLOBL _cgo_init(SB), NOPTR, $8
+DATA _cgo_init+0(SB)/8, $x_cgo_init<>(SB)

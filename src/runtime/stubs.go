@@ -221,6 +221,8 @@ func cgocallback(fn, frame, ctxt uintptr)
 func gogo(buf *gobuf)
 
 func asminit()
+
+//go:linknamestd setg
 func setg(gg *g)
 func breakpoint()
 
@@ -324,6 +326,7 @@ func goexit(neverCallThisFunction)
 // data dependency ordering.
 func publicationBarrier()
 
+//go:linknamestd asmcgocall
 //go:noescape
 func asmcgocall(fn, arg unsafe.Pointer) int32
 

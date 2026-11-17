@@ -385,6 +385,9 @@ func RewriteValue(v *ssa.Value) bool {
 	case ssaop.OpDivFloat64x2:
 		v.Op = ssaop.OpWasmF64x2Div
 		return true
+	case ssaop.OpDotProductPairsInt16x8:
+		v.Op = ssaop.OpWasmI32x4DotI16x8S
+		return true
 	case ssaop.OpEq16:
 		return rewriteValue_OpEq16(v)
 	case ssaop.OpEq32:
@@ -404,8 +407,7 @@ func RewriteValue(v *ssa.Value) bool {
 		v.Op = ssaop.OpWasmI64Eq
 		return true
 	case ssaop.OpEqPtr:
-		v.Op = ssaop.OpWasmI64Eq
-		return true
+		return rewriteValue_OpEqPtr(v)
 	case ssaop.OpEqualFloat32x4:
 		v.Op = ssaop.OpWasmF32x4Eq
 		return true
@@ -436,6 +438,12 @@ func RewriteValue(v *ssa.Value) bool {
 	case ssaop.OpEqualUint8x16:
 		v.Op = ssaop.OpWasmI8x16Eq
 		return true
+	case ssaop.OpEqualVec128:
+		return rewriteValue_OpEqualVec128(v)
+	case ssaop.OpEqualVecFloat32x4:
+		return rewriteValue_OpEqualVecFloat32x4(v)
+	case ssaop.OpEqualVecFloat64x2:
+		return rewriteValue_OpEqualVecFloat64x2(v)
 	case ssaop.OpExtendToInt16Int8x16:
 		v.Op = ssaop.OpWasmI16x8ExtendLowI8x16S
 		return true
@@ -560,17 +568,20 @@ func RewriteValue(v *ssa.Value) bool {
 		return rewriteValue_OpHmul64(v)
 	case ssaop.OpHmul64u:
 		return rewriteValue_OpHmul64u(v)
+	case ssaop.OpInt64Hi:
+		return rewriteValue_OpInt64Hi(v)
+	case ssaop.OpInt64Lo:
+		v.Op = ssaop.OpCopy
+		return true
 	case ssaop.OpInterCall:
 		v.Op = ssaop.OpWasmLoweredInterCall
 		return true
 	case ssaop.OpIsInBounds:
-		v.Op = ssaop.OpWasmI64LtU
-		return true
+		return rewriteValue_OpIsInBounds(v)
 	case ssaop.OpIsNonNil:
 		return rewriteValue_OpIsNonNil(v)
 	case ssaop.OpIsSliceInBounds:
-		v.Op = ssaop.OpWasmI64LeU
-		return true
+		return rewriteValue_OpIsSliceInBounds(v)
 	case ssaop.OpLast:
 		return rewriteValue_OpLast(v)
 	case ssaop.OpLeq16:
@@ -925,8 +936,7 @@ func RewriteValue(v *ssa.Value) bool {
 		v.Op = ssaop.OpWasmI64Ne
 		return true
 	case ssaop.OpNeqPtr:
-		v.Op = ssaop.OpWasmI64Ne
-		return true
+		return rewriteValue_OpNeqPtr(v)
 	case ssaop.OpNilCheck:
 		v.Op = ssaop.OpWasmLoweredNilCheck
 		return true
@@ -1031,6 +1041,9 @@ func RewriteValue(v *ssa.Value) bool {
 		return true
 	case ssaop.OpOrUint8x16:
 		v.Op = ssaop.OpWasmV128Or
+		return true
+	case ssaop.OpPanicExtend:
+		v.Op = ssaop.OpWasmLoweredPanicExtend
 		return true
 	case ssaop.OpPopCount16:
 		return rewriteValue_OpPopCount16(v)
@@ -1987,6 +2000,95 @@ func rewriteValue_OpEq8(v *ssa.Value) bool {
 		return true
 	}
 }
+func rewriteValue_OpEqPtr(v *ssa.Value) bool {
+	v_1 := v.Args[1]
+	v_0 := v.Args[0]
+	b := v.Block
+	config := b.Func.Config
+	// match: (EqPtr x y)
+	// cond: config.PtrSize == 4
+	// result: (I64Eq (ZeroExt32to64 <x.Type> x) (ZeroExt32to64 <y.Type> y))
+	for {
+		x := v_0
+		y := v_1
+		if !(config.PtrSize == 4) {
+			break
+		}
+		v.Reset(ssaop.OpWasmI64Eq)
+		v0 := b.NewValue0(v.Pos, ssaop.OpZeroExt32to64, x.Type)
+		v0.AddArg(x)
+		v1 := b.NewValue0(v.Pos, ssaop.OpZeroExt32to64, y.Type)
+		v1.AddArg(y)
+		v.AddArg2(v0, v1)
+		return true
+	}
+	// match: (EqPtr x y)
+	// result: (I64Eq x y)
+	for {
+		x := v_0
+		y := v_1
+		v.Reset(ssaop.OpWasmI64Eq)
+		v.AddArg2(x, y)
+		return true
+	}
+}
+func rewriteValue_OpEqualVec128(v *ssa.Value) bool {
+	v_1 := v.Args[1]
+	v_0 := v.Args[0]
+	b := v.Block
+	typ := &b.Func.Config.Types
+	// match: (EqualVec128 x y)
+	// result: (I64Eqz (V128AnyTrue (V128Xor x y)))
+	for {
+		x := v_0
+		y := v_1
+		v.Reset(ssaop.OpWasmI64Eqz)
+		v0 := b.NewValue0(v.Pos, ssaop.OpWasmV128AnyTrue, typ.Bool)
+		v1 := b.NewValue0(v.Pos, ssaop.OpWasmV128Xor, typ.Vec128)
+		v1.AddArg2(x, y)
+		v0.AddArg(v1)
+		v.AddArg(v0)
+		return true
+	}
+}
+func rewriteValue_OpEqualVecFloat32x4(v *ssa.Value) bool {
+	v_1 := v.Args[1]
+	v_0 := v.Args[0]
+	b := v.Block
+	typ := &b.Func.Config.Types
+	// match: (EqualVecFloat32x4 x y)
+	// result: (I64Eqz (V128AnyTrue (F32x4Ne x y)))
+	for {
+		x := v_0
+		y := v_1
+		v.Reset(ssaop.OpWasmI64Eqz)
+		v0 := b.NewValue0(v.Pos, ssaop.OpWasmV128AnyTrue, typ.Bool)
+		v1 := b.NewValue0(v.Pos, ssaop.OpWasmF32x4Ne, typ.Vec128)
+		v1.AddArg2(x, y)
+		v0.AddArg(v1)
+		v.AddArg(v0)
+		return true
+	}
+}
+func rewriteValue_OpEqualVecFloat64x2(v *ssa.Value) bool {
+	v_1 := v.Args[1]
+	v_0 := v.Args[0]
+	b := v.Block
+	typ := &b.Func.Config.Types
+	// match: (EqualVecFloat64x2 x y)
+	// result: (I64Eqz (V128AnyTrue (F64x2Ne x y)))
+	for {
+		x := v_0
+		y := v_1
+		v.Reset(ssaop.OpWasmI64Eqz)
+		v0 := b.NewValue0(v.Pos, ssaop.OpWasmV128AnyTrue, typ.Bool)
+		v1 := b.NewValue0(v.Pos, ssaop.OpWasmF64x2Ne, typ.Vec128)
+		v1.AddArg2(x, y)
+		v0.AddArg(v1)
+		v.AddArg(v0)
+		return true
+	}
+}
 func rewriteValue_OpHmul64(v *ssa.Value) bool {
 	v_1 := v.Args[1]
 	v_0 := v.Args[0]
@@ -2089,10 +2191,75 @@ func rewriteValue_OpHmul64u(v *ssa.Value) bool {
 		return true
 	}
 }
-func rewriteValue_OpIsNonNil(v *ssa.Value) bool {
+func rewriteValue_OpInt64Hi(v *ssa.Value) bool {
 	v_0 := v.Args[0]
 	b := v.Block
 	typ := &b.Func.Config.Types
+	// match: (Int64Hi x)
+	// result: (I64ShrU x (I64Const [32]))
+	for {
+		x := v_0
+		v.Reset(ssaop.OpWasmI64ShrU)
+		v0 := b.NewValue0(v.Pos, ssaop.OpWasmI64Const, typ.Int64)
+		v0.AuxInt = ssa.Int64ToAuxInt(32)
+		v.AddArg2(x, v0)
+		return true
+	}
+}
+func rewriteValue_OpIsInBounds(v *ssa.Value) bool {
+	v_1 := v.Args[1]
+	v_0 := v.Args[0]
+	b := v.Block
+	config := b.Func.Config
+	typ := &b.Func.Config.Types
+	// match: (IsInBounds idx len)
+	// cond: config.PtrSize == 4
+	// result: (I64LtU (ZeroExt32to64 idx) (ZeroExt32to64 len))
+	for {
+		idx := v_0
+		len := v_1
+		if !(config.PtrSize == 4) {
+			break
+		}
+		v.Reset(ssaop.OpWasmI64LtU)
+		v0 := b.NewValue0(v.Pos, ssaop.OpZeroExt32to64, typ.UInt64)
+		v0.AddArg(idx)
+		v1 := b.NewValue0(v.Pos, ssaop.OpZeroExt32to64, typ.UInt64)
+		v1.AddArg(len)
+		v.AddArg2(v0, v1)
+		return true
+	}
+	// match: (IsInBounds idx len)
+	// result: (I64LtU idx len)
+	for {
+		idx := v_0
+		len := v_1
+		v.Reset(ssaop.OpWasmI64LtU)
+		v.AddArg2(idx, len)
+		return true
+	}
+}
+func rewriteValue_OpIsNonNil(v *ssa.Value) bool {
+	v_0 := v.Args[0]
+	b := v.Block
+	config := b.Func.Config
+	typ := &b.Func.Config.Types
+	// match: (IsNonNil p)
+	// cond: config.PtrSize == 4
+	// result: (I64Eqz (I64Eqz (ZeroExt32to64 <p.Type> p)))
+	for {
+		p := v_0
+		if !(config.PtrSize == 4) {
+			break
+		}
+		v.Reset(ssaop.OpWasmI64Eqz)
+		v0 := b.NewValue0(v.Pos, ssaop.OpWasmI64Eqz, typ.Bool)
+		v1 := b.NewValue0(v.Pos, ssaop.OpZeroExt32to64, p.Type)
+		v1.AddArg(p)
+		v0.AddArg(v1)
+		v.AddArg(v0)
+		return true
+	}
 	// match: (IsNonNil p)
 	// result: (I64Eqz (I64Eqz p))
 	for {
@@ -2101,6 +2268,39 @@ func rewriteValue_OpIsNonNil(v *ssa.Value) bool {
 		v0 := b.NewValue0(v.Pos, ssaop.OpWasmI64Eqz, typ.Bool)
 		v0.AddArg(p)
 		v.AddArg(v0)
+		return true
+	}
+}
+func rewriteValue_OpIsSliceInBounds(v *ssa.Value) bool {
+	v_1 := v.Args[1]
+	v_0 := v.Args[0]
+	b := v.Block
+	config := b.Func.Config
+	typ := &b.Func.Config.Types
+	// match: (IsSliceInBounds idx len)
+	// cond: config.PtrSize == 4
+	// result: (I64LeU (ZeroExt32to64 idx) (ZeroExt32to64 len))
+	for {
+		idx := v_0
+		len := v_1
+		if !(config.PtrSize == 4) {
+			break
+		}
+		v.Reset(ssaop.OpWasmI64LeU)
+		v0 := b.NewValue0(v.Pos, ssaop.OpZeroExt32to64, typ.UInt64)
+		v0.AddArg(idx)
+		v1 := b.NewValue0(v.Pos, ssaop.OpZeroExt32to64, typ.UInt64)
+		v1.AddArg(len)
+		v.AddArg2(v0, v1)
+		return true
+	}
+	// match: (IsSliceInBounds idx len)
+	// result: (I64LeU idx len)
+	for {
+		idx := v_0
+		len := v_1
+		v.Reset(ssaop.OpWasmI64LeU)
+		v.AddArg2(idx, len)
 		return true
 	}
 }
@@ -3297,6 +3497,38 @@ func rewriteValue_OpNeq8(v *ssa.Value) bool {
 		v1 := b.NewValue0(v.Pos, ssaop.OpZeroExt8to64, typ.UInt64)
 		v1.AddArg(y)
 		v.AddArg2(v0, v1)
+		return true
+	}
+}
+func rewriteValue_OpNeqPtr(v *ssa.Value) bool {
+	v_1 := v.Args[1]
+	v_0 := v.Args[0]
+	b := v.Block
+	config := b.Func.Config
+	// match: (NeqPtr x y)
+	// cond: config.PtrSize == 4
+	// result: (I64Ne (ZeroExt32to64 <x.Type> x) (ZeroExt32to64 <y.Type> y))
+	for {
+		x := v_0
+		y := v_1
+		if !(config.PtrSize == 4) {
+			break
+		}
+		v.Reset(ssaop.OpWasmI64Ne)
+		v0 := b.NewValue0(v.Pos, ssaop.OpZeroExt32to64, x.Type)
+		v0.AddArg(x)
+		v1 := b.NewValue0(v.Pos, ssaop.OpZeroExt32to64, y.Type)
+		v1.AddArg(y)
+		v.AddArg2(v0, v1)
+		return true
+	}
+	// match: (NeqPtr x y)
+	// result: (I64Ne x y)
+	for {
+		x := v_0
+		y := v_1
+		v.Reset(ssaop.OpWasmI64Ne)
+		v.AddArg2(x, y)
 		return true
 	}
 }
